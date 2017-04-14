@@ -2,26 +2,41 @@ package main
 
 import (
 	"flag"
-
-	"sh0k.de/plexdrive/config"
-	"sh0k.de/plexdrive/mount"
-	"sh0k.de/plexdrive/plexdrive"
+	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
 )
 
 func main() {
-	configPath := flag.String("config", "config.json", "The path to the configuration file")
-	tokenPath := flag.String("tokenpath", "token.json", "The path to store the token file")
+	user, err := user.Current()
+	if nil != err {
+		panic(fmt.Sprintf("Could not read users homedir %v\n", err))
+	}
+
+	configPath := flag.String("config", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	mountPoint := flag.String("mountpoint", "/tmp/drive", "The destination that should be used for mounting")
-	driveDir := flag.String("driveDir", "/", "The drive folder that should be mounted")
 	flag.Parse()
 
-	config := config.ReadConfig(*configPath)
+	if err := os.MkdirAll(*configPath, os.ModeDir); nil != err {
+		panic(fmt.Sprintf("Could not create configuration directory %v\n", configPath))
+	}
 
-	drive, err := plexdrive.New(config.Accounts, *tokenPath, *driveDir)
+	config := ReadConfig(filepath.Join(*configPath, "config.json"))
+
+	drive, err := NewDriveClient(config.Accounts, filepath.Join(*configPath, "token.json"))
 	if nil != err {
 		panic(err)
 	}
-	if err := mount.Mount(config, drive, *mountPoint); nil != err {
+
+	cache, err := NewDefaultCache(filepath.Join(*configPath, "cache.db"), drive)
+	if nil != err {
 		panic(err)
 	}
+
+	if err := Mount(config, cache, *mountPoint); nil != err {
+		panic(err)
+	}
+
+	cache.Close()
 }
