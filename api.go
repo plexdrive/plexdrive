@@ -17,6 +17,12 @@ type APIClient interface {
 
 	// Download opens the file handle
 	Download(id string) (io.ReadCloser, error)
+
+	// Open a file handle
+	Open(id string) error
+
+	// Release close a file handle
+	Release(id string) error
 }
 
 // APIObject is a object returned by the API

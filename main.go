@@ -34,7 +34,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := Mount(config, cache, *mountPoint); nil != err {
+	if err := Mount(config, cache, *mountPoint, true); nil != err {
 		panic(err)
 	}
 

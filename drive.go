@@ -9,7 +9,9 @@ import (
 	"log"
 	"time"
 
-	gdrive "google.golang.org/api/drive/v3"
+	gdrive "google.golang.org/api/drive/v2"
+
+	"strings"
 
 	"golang.org/x/oauth2"
 )
@@ -21,6 +23,7 @@ type Drive struct {
 	accounts        []Account
 	tokens          []oauth2.Token
 	configs         []oauth2.Config
+	maxDelay        int
 }
 
 // NewDriveClient creates a new Google Drive instance
@@ -29,6 +32,7 @@ func NewDriveClient(accounts []Account, tokenPath string) (*Drive, error) {
 		activeAccountID: 1,
 		context:         context.Background(),
 		accounts:        accounts,
+		maxDelay:        5000,
 	}
 
 	if err := drive.authorize(tokenPath); nil != err {
@@ -36,6 +40,45 @@ func NewDriveClient(accounts []Account, tokenPath string) (*Drive, error) {
 	}
 
 	return &drive, nil
+}
+
+// FileSize gets the file size
+func (d *Drive) FileSize(id string) (int64, error) {
+	client, err := d.getClient()
+	if nil != err {
+		return 0, err
+	}
+
+	httpResponse, err := client.Files.Get(id).Download()
+	if nil != err {
+		return 0, err
+	}
+
+	statusCode := httpResponse.StatusCode
+	if 200 == statusCode {
+		return httpResponse.ContentLength, nil
+	}
+
+	return 0, fmt.Errorf("Invalid status code %v", statusCode)
+}
+
+// Open a file handle
+func (d *Drive) Open(id string) error {
+	return nil
+}
+
+// Release close a file handle
+func (d *Drive) Release(id string) error {
+	return nil
+}
+
+func arrayIndex(values []string, value string) int {
+	for p, v := range values {
+		if v == value {
+			return p
+		}
+	}
+	return -1
 }
 
 // Download opens the file handle
@@ -47,38 +90,20 @@ func (d *Drive) Download(id string) (io.ReadCloser, error) {
 
 	httpResponse, err := client.Files.Get(id).Download()
 	if nil != err {
+		if strings.Contains(err.Error(), "The download quota for this file has been exceeded") {
+			log.Printf("Quota limit reached for file %v", id)
+			return nil, err
+		}
+
 		return nil, err
 	}
 
-	if httpResponse.StatusCode == 200 {
+	statusCode := httpResponse.StatusCode
+	if 200 == statusCode {
 		return httpResponse.Body, nil
 	}
 
-	return nil, fmt.Errorf("Invalid status code %v", httpResponse.StatusCode)
-}
-
-// ReadAll reads the whole content of a file
-func (d *Drive) ReadAll(id string) ([]byte, error) {
-	client, err := d.getClient()
-	if nil != err {
-		return nil, err
-	}
-
-	httpResponse, err := client.Files.Get(id).Download()
-	if nil != err {
-		return nil, err
-	}
-
-	log.Printf("HTTPResponse: %v", httpResponse)
-
-	content, err := ioutil.ReadAll(httpResponse.Body)
-	if nil != err {
-		return nil, err
-	}
-
-	log.Printf("Content: %v", content)
-
-	return content, nil
+	return nil, fmt.Errorf("Invalid status code %v", statusCode)
 }
 
 // GetObject gets one object by id
@@ -92,6 +117,15 @@ func (d *Drive) GetObject(id string) (*APIObject, error) {
 	if nil != err {
 		return nil, err
 	}
+
+	if o.FileSize == 0 {
+		fileSize, err := d.FileSize(id)
+		if nil != err {
+			fileSize = o.FileSize
+		}
+		o.FileSize = fileSize
+	}
+
 	return mapDriveToAPIObject(o), nil
 }
 
@@ -116,7 +150,7 @@ func (d *Drive) GetObjectsByParent(parentID string) ([]*APIObject, error) {
 			break
 		}
 
-		for _, file := range r.Files {
+		for _, file := range r.Items {
 			files = append(files, mapDriveToAPIObject(file))
 		}
 		pageToken = r.NextPageToken
@@ -141,8 +175,8 @@ func (d *Drive) GetFileByNameAndParent(name, parent string) (*gdrive.File, error
 		return nil, err
 	}
 
-	for _, f := range r.Files {
-		if name == f.Name {
+	for _, f := range r.Items {
+		if name == f.Title {
 			return f, nil
 		}
 	}
@@ -191,14 +225,16 @@ func (d *Drive) authorize(tokenPath string) error {
 
 func (d *Drive) getClient() (*gdrive.Service, error) {
 	client := d.configs[d.activeAccountID-1].Client(d.context, &d.tokens[d.activeAccountID-1])
-
-	// TODO: increase account id only on error
-	// if (d.activeAccountID + 1) > len(d.configs) {
-	// 	d.activeAccountID = 1
-	// } else {
-	// 	d.activeAccountID++
-	// }
 	return gdrive.New(client)
+}
+
+func (d *Drive) rotateAccounts() {
+	if (d.activeAccountID + 1) > len(d.configs) {
+		d.activeAccountID = 1
+	} else {
+		d.activeAccountID++
+	}
+	log.Printf("Usage limit exceeded, rotating accounts to account #%v", d.activeAccountID)
 }
 
 func getTokens(tokenPath string) []oauth2.Token {
@@ -240,17 +276,22 @@ func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 }
 
 func mapDriveToAPIObject(file *gdrive.File) *APIObject {
-	mtime, err := time.Parse(time.RFC3339, file.ModifiedTime)
+	mtime, err := time.Parse(time.RFC3339, file.ModifiedDate)
 	if nil != err {
 		mtime = time.Now()
 	}
 
+	var parents []string
+	for _, parent := range file.Parents {
+		parents = append(parents, parent.Id)
+	}
+
 	return &APIObject{
 		ID:      file.Id,
-		Parents: file.Parents,
-		Name:    file.Name,
+		Parents: parents,
+		Name:    file.Title,
 		IsDir:   file.MimeType == "application/vnd.google-apps.folder",
-		Size:    uint64(file.Size),
+		Size:    uint64(file.FileSize),
 		MTime:   mtime,
 	}
 }

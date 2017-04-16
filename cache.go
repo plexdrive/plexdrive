@@ -7,8 +7,6 @@ import (
 
 	"encoding/json"
 
-	"io"
-
 	"github.com/boltdb/bolt"
 )
 
@@ -36,7 +34,13 @@ type Cache interface {
 	Close()
 
 	// Download opens the file handle
-	Download(id string) (io.ReadCloser, error)
+	Download(id string) (*Buffer, error)
+
+	// Open a file handle
+	Open(id string) error
+
+	// Release close a file handle
+	Release(id string) error
 }
 
 // DefaultCache is the default cache
@@ -80,9 +84,24 @@ func (c *DefaultCache) Close() {
 	c.db.Close()
 }
 
+// Open a file handle
+func (c *DefaultCache) Open(id string) error {
+	return c.client.Open(id)
+}
+
+// Release close a file handle
+func (c *DefaultCache) Release(id string) error {
+	return c.client.Release(id)
+}
+
 // Download opens the file handle
-func (c *DefaultCache) Download(id string) (io.ReadCloser, error) {
-	return c.client.Download(id)
+func (c *DefaultCache) Download(id string) (*Buffer, error) {
+	reader, err := c.client.Download(id)
+	if nil != err {
+		log.Printf("Download error: %v", err)
+		return nil, err
+	}
+	return NewBuffer(reader)
 }
 
 // GetRootID gets the root id

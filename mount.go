@@ -7,15 +7,25 @@ import (
 
 	"fmt"
 
+	"io"
+
+	"log"
+
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 )
 
 // Mount the fuse volume
-func Mount(config *Config, cache Cache, mountpoint string) error {
+func Mount(config *Config, cache Cache, mountpoint string, debug bool) error {
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
 		if err := os.MkdirAll(mountpoint, os.ModeDir); nil != err {
 			return fmt.Errorf("Could not create directory %v", mountpoint)
+		}
+	}
+
+	if debug {
+		fuse.Debug = func(msg interface{}) {
+			log.Printf("FUSE DEBUG %v", msg)
 		}
 	}
 
@@ -26,7 +36,8 @@ func Mount(config *Config, cache Cache, mountpoint string) error {
 	defer c.Close()
 
 	filesys := &FS{
-		cache: cache,
+		cache:     cache,
+		blockSize: 500 * 1024 * 1024,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -43,7 +54,8 @@ func Mount(config *Config, cache Cache, mountpoint string) error {
 
 // FS the fuse filesystem
 type FS struct {
-	cache Cache
+	cache     Cache
+	blockSize uint32
 }
 
 // Root returns the root path
@@ -58,10 +70,19 @@ func (f *FS) Root() (fs.Node, error) {
 	}, nil
 }
 
+// Statfs returns the filesystem stats such as block size
+func (f *FS) Statfs(ctx context.Context, req *fuse.StatfsRequest, resp *fuse.StatfsResponse) error {
+	resp.Bsize = f.blockSize
+	resp.Bfree = 999 * 1024 * 1024 * 1024 * 1024
+	resp.Bavail = resp.Bfree
+	return nil
+}
+
 // Object represents one drive object
 type Object struct {
 	cache  Cache
 	fileID string
+	buffer *Buffer
 }
 
 // Attr returns the attributes for a directory
@@ -72,11 +93,11 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 	}
 
 	if f.IsDir {
-		attr.Mode = os.ModeDir | 0555
+		attr.Mode = os.ModeDir | 0755
 		attr.Size = 0
 	} else {
-		attr.Mode = 0444
-		attr.Size = uint64(f.Size)
+		attr.Mode = 0644
+		attr.Size = f.Size
 	}
 
 	attr.Mtime = f.MTime
@@ -115,37 +136,35 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	return dirs, nil
 }
 
-// Open opens a file handle
-// func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
-// 	handle, err := o.cache.Download(o.fileID)
-// 	if nil != err {
-// 		return nil, err
-// 	}
+// Release releases the file
+func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+	o.cache.Release(o.fileID)
+	if nil != o.buffer {
+		if err := o.buffer.Close(); nil != err {
+			return err
+		}
+		o.buffer = nil
+	}
+	return nil
+}
 
-// 	resp.Flags |= fuse.OpenNonSeekable
+// Read reads some bytes or the whole file
+func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	if nil == o.buffer {
+		o.cache.Open(o.fileID)
+		handle, err := o.cache.Download(o.fileID)
+		if nil != err {
+			return err
+		}
+		o.buffer = handle
+	}
 
-// 	return &FileHandle{
-// 		handle: handle,
-// 	}, nil
-// }
+	buf := make([]byte, req.Size)
+	n, err := io.ReadAtLeast(o.buffer, buf, req.Size)
+	if err == io.ErrUnexpectedEOF || err == io.EOF {
+		err = nil
+	}
+	resp.Data = buf[:n]
 
-// // FileHandle handles the open files
-// type FileHandle struct {
-// 	handle io.ReadCloser
-// }
-
-// // Release releases the file
-// func (h *FileHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-// 	return h.handle.Close()
-// }
-
-// // Read reads some bytes or the whole file
-// func (h *FileHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-// 	buf := make([]byte, req.Size)
-// 	n, err := io.ReadFull(h.handle, buf)
-// 	if err == io.ErrUnexpectedEOF || err == io.EOF {
-// 		err = nil
-// 	}
-// 	resp.Data = buf[:n]
-// 	return err
-// }
+	return nil
+}
