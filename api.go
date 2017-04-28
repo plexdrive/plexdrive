@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"time"
 )
 
@@ -13,25 +12,18 @@ type APIClient interface {
 	// GetObjectsByParent gets all files under a parent folder
 	GetObjectsByParent(parentID string) ([]*APIObject, error)
 
-	// TODO: add GetObjectsSince()
-
-	// Download opens the file handle
-	Download(id string) (io.ReadCloser, error)
-
 	// Open a file handle
-	Open(id string) error
-
-	// Release close a file handle
-	Release(id string) error
+	Open(object *APIObject, chunkSize int64) (*Buffer, error)
 }
 
 // APIObject is a object returned by the API
 type APIObject struct {
-	InternalID int
-	ID         string
-	Parents    []string
-	Name       string
-	IsDir      bool
-	Size       uint64
-	MTime      time.Time
+	InternalID  int
+	ID          string
+	Parents     []string
+	Name        string
+	IsDir       bool
+	Size        uint64
+	MTime       time.Time
+	DownloadURL string
 }

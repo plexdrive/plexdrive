@@ -7,8 +7,6 @@ import (
 
 	"fmt"
 
-	"io"
-
 	"log"
 
 	"bazil.org/fuse"
@@ -16,7 +14,7 @@ import (
 )
 
 // Mount the fuse volume
-func Mount(config *Config, cache Cache, mountpoint string, debug bool) error {
+func Mount(config *Config, cache Cache, mountpoint string, debug bool, chunkSize int64) error {
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
 		if err := os.MkdirAll(mountpoint, os.ModeDir); nil != err {
 			return fmt.Errorf("Could not create directory %v", mountpoint)
@@ -37,7 +35,7 @@ func Mount(config *Config, cache Cache, mountpoint string, debug bool) error {
 
 	filesys := &FS{
 		cache:     cache,
-		blockSize: 500 * 1024 * 1024,
+		chunkSize: chunkSize,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -55,7 +53,7 @@ func Mount(config *Config, cache Cache, mountpoint string, debug bool) error {
 // FS the fuse filesystem
 type FS struct {
 	cache     Cache
-	blockSize uint32
+	chunkSize int64
 }
 
 // Root returns the root path
@@ -65,29 +63,24 @@ func (f *FS) Root() (fs.Node, error) {
 		return nil, err
 	}
 	return &Object{
-		cache:  f.cache,
-		fileID: rootID,
+		cache:     f.cache,
+		id:        rootID,
+		chunkSize: f.chunkSize,
 	}, nil
-}
-
-// Statfs returns the filesystem stats such as block size
-func (f *FS) Statfs(ctx context.Context, req *fuse.StatfsRequest, resp *fuse.StatfsResponse) error {
-	resp.Bsize = f.blockSize
-	resp.Bfree = 999 * 1024 * 1024 * 1024 * 1024
-	resp.Bavail = resp.Bfree
-	return nil
 }
 
 // Object represents one drive object
 type Object struct {
-	cache  Cache
-	fileID string
-	buffer *Buffer
+	cache     Cache
+	id        string
+	apiObject *APIObject
+	buffer    *Buffer
+	chunkSize int64
 }
 
 // Attr returns the attributes for a directory
 func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
-	f, err := o.cache.GetObject(o.fileID)
+	f, err := o.cache.GetObject(o.id, false)
 	if nil != err {
 		return err
 	}
@@ -109,21 +102,22 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 // Lookup tests if a file is existent in the current directory
 func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	file, err := o.cache.GetObjectByNameAndParent(name, o.fileID)
+	file, err := o.cache.GetObjectByNameAndParent(name, o.id)
 	if nil != err {
 		return nil, err
 	}
 
 	return &Object{
-		cache:  o.cache,
-		fileID: file.ID,
+		cache:     o.cache,
+		id:        file.ID,
+		apiObject: file,
 	}, nil
 }
 
 // ReadDirAll shows all files in the current directory
 func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	dirs := []fuse.Dirent{}
-	files, err := o.cache.GetObjectsByParent(o.fileID)
+	files, err := o.cache.GetObjectsByParent(o.id, false)
 	if nil != err {
 		return nil, err
 	}
@@ -136,35 +130,40 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	return dirs, nil
 }
 
-// Release releases the file
+// Open opens a file for reading
+func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+	if req.Dir {
+		return o, nil
+	}
+
+	buffer, err := o.cache.Open(o.apiObject, o.chunkSize)
+	if nil != err {
+		log.Printf("Could not open file for reading %v", err)
+		return o, fuse.ENOENT
+	}
+	o.buffer = buffer
+
+	return o, nil
+}
+
+// Release a stream
 func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-	o.cache.Release(o.fileID)
 	if nil != o.buffer {
 		if err := o.buffer.Close(); nil != err {
-			return err
+			log.Printf("Could not close file %v", err)
 		}
-		o.buffer = nil
 	}
 	return nil
 }
 
 // Read reads some bytes or the whole file
 func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	if nil == o.buffer {
-		o.cache.Open(o.fileID)
-		handle, err := o.cache.Download(o.fileID)
-		if nil != err {
-			return err
-		}
-		o.buffer = handle
+	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size))
+	if nil != err {
+		log.Printf("Could not read bytes %v", err)
+		return err
 	}
 
-	buf := make([]byte, req.Size)
-	n, err := io.ReadAtLeast(o.buffer, buf, req.Size)
-	if err == io.ErrUnexpectedEOF || err == io.EOF {
-		err = nil
-	}
-	resp.Data = buf[:n]
-
+	resp.Data = buf[:]
 	return nil
 }

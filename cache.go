@@ -22,25 +22,21 @@ type Cache interface {
 	GetRootID() (string, error)
 
 	// GetObject gets the file by id
-	GetObject(id string) (*APIObject, error)
+	GetObject(id string, forceRefresh bool) (*APIObject, error)
 
 	// GetObjectByNameAndParent gets a file by parent id and name
 	GetObjectByNameAndParent(parentID, name string) (*APIObject, error)
 
 	// GetObjectsByParent get all files by parent id
-	GetObjectsByParent(parentID string) ([]*APIObject, error)
+	GetObjectsByParent(parentID string, forceRefresh bool) ([]*APIObject, error)
 
 	// Close closes the database
 	Close()
 
-	// Download opens the file handle
-	Download(id string) (*Buffer, error)
-
 	// Open a file handle
-	Open(id string) error
+	Open(object *APIObject, chunkSize int64) (*Buffer, error)
 
-	// Release close a file handle
-	Release(id string) error
+	Store(object *APIObject) error
 }
 
 // DefaultCache is the default cache
@@ -85,23 +81,8 @@ func (c *DefaultCache) Close() {
 }
 
 // Open a file handle
-func (c *DefaultCache) Open(id string) error {
-	return c.client.Open(id)
-}
-
-// Release close a file handle
-func (c *DefaultCache) Release(id string) error {
-	return c.client.Release(id)
-}
-
-// Download opens the file handle
-func (c *DefaultCache) Download(id string) (*Buffer, error) {
-	reader, err := c.client.Download(id)
-	if nil != err {
-		log.Printf("Download error: %v", err)
-		return nil, err
-	}
-	return NewBuffer(reader)
+func (c *DefaultCache) Open(object *APIObject, chunkSize int64) (*Buffer, error) {
+	return c.client.Open(object, chunkSize)
 }
 
 // GetRootID gets the root id
@@ -110,23 +91,24 @@ func (c *DefaultCache) GetRootID() (string, error) {
 }
 
 // GetObject gets the file by id
-func (c *DefaultCache) GetObject(id string) (*APIObject, error) {
+func (c *DefaultCache) GetObject(id string, forceRefresh bool) (*APIObject, error) {
 	var object *APIObject
-	err := c.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(BUCKET)
+	if !forceRefresh {
+		err := c.db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(BUCKET)
 
-		val := bucket.Get([]byte(id))
-		json.Unmarshal(val, &object)
+			val := bucket.Get([]byte(id))
+			json.Unmarshal(val, &object)
 
-		return nil
-	})
+			return nil
+		})
 
-	if nil != err {
-		return nil, err
+		if nil != err {
+			return nil, err
+		}
 	}
 
 	if nil == object {
-		log.Printf("Could not find object %v in cache", id)
 		var err error
 		object, err = c.client.GetObject(id)
 		if nil != err {
@@ -151,7 +133,7 @@ func (c *DefaultCache) GetObject(id string) (*APIObject, error) {
 
 // GetObjectByNameAndParent gets a file by parent id and name
 func (c *DefaultCache) GetObjectByNameAndParent(name, parentID string) (*APIObject, error) {
-	objects, err := c.GetObjectsByParent(parentID)
+	objects, err := c.GetObjectsByParent(parentID, false)
 	if nil != err {
 		return nil, err
 	}
@@ -166,27 +148,29 @@ func (c *DefaultCache) GetObjectByNameAndParent(name, parentID string) (*APIObje
 }
 
 // GetObjectsByParent get all files by parent id
-func (c *DefaultCache) GetObjectsByParent(parentID string) ([]*APIObject, error) {
+func (c *DefaultCache) GetObjectsByParent(parentID string, forceRefresh bool) ([]*APIObject, error) {
 	var results []*APIObject
 	var childIds []string
-	err := c.db.View(func(tx *bolt.Tx) error {
-		parent := tx.Bucket(PARENT)
+	if !forceRefresh {
+		err := c.db.View(func(tx *bolt.Tx) error {
+			parent := tx.Bucket(PARENT)
 
-		err := json.Unmarshal(parent.Get([]byte(parentID)), &childIds)
-		if nil != err {
+			err := json.Unmarshal(parent.Get([]byte(parentID)), &childIds)
+			if nil != err {
+				return nil
+			}
+
 			return nil
+		})
+
+		if nil != err {
+			log.Println(err)
 		}
-
-		return nil
-	})
-
-	if nil != err {
-		log.Println(err)
 	}
 
 	if len(childIds) > 0 {
 		for _, id := range childIds {
-			obj, err := c.GetObject(id)
+			obj, err := c.GetObject(id, false)
 			if nil != err {
 				log.Printf("Could not resolve child id %v\n", id)
 				continue
@@ -194,7 +178,6 @@ func (c *DefaultCache) GetObjectsByParent(parentID string) ([]*APIObject, error)
 			results = append(results, obj)
 		}
 	} else {
-		log.Printf("Could not find children for %v in cache", parentID)
 		var err error
 		results, err = c.client.GetObjectsByParent(parentID)
 		if nil != err {
@@ -207,15 +190,35 @@ func (c *DefaultCache) GetObjectsByParent(parentID string) ([]*APIObject, error)
 	return results, nil
 }
 
-func (c *DefaultCache) storeChildren(parentID string, objects []*APIObject) error {
-	log.Printf("Caching children for %v", parentID)
+// Store a object and link its parents
+func (c *DefaultCache) Store(object *APIObject) error {
+	err := c.store(object)
+	if nil != err {
+		return err
+	}
 
+	parents := object.Parents
+
+	for _, parent := range parents {
+		o, err := c.GetObject(parent, true)
+		if nil != err {
+			return fmt.Errorf("Could not update parent %v of %v", parent, object.ID)
+		}
+		_, err = c.GetObjectsByParent(parent, true)
+		if nil != err {
+			return fmt.Errorf("Could not refresh children of parent %v", parent)
+		}
+		parents = append(parents, o.Parents...)
+	}
+
+	return nil
+}
+
+func (c *DefaultCache) storeChildren(parentID string, objects []*APIObject) error {
 	var objIds []string
 	for _, object := range objects {
 		objIds = append(objIds, object.ID)
 	}
-
-	log.Printf("Storing children ids: %v", objIds)
 
 	return c.db.Update(func(tx *bolt.Tx) error {
 		parent := tx.Bucket(PARENT)
@@ -231,8 +234,6 @@ func (c *DefaultCache) storeChildren(parentID string, objects []*APIObject) erro
 }
 
 func (c *DefaultCache) store(obj *APIObject) error {
-	log.Printf("Caching object %v (%v)", obj.ID, obj)
-
 	return c.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(BUCKET)
 

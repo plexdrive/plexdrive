@@ -4,42 +4,87 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"time"
 
 	gdrive "google.golang.org/api/drive/v2"
 
-	"strings"
+	"net/http"
 
 	"golang.org/x/oauth2"
 )
 
 // Drive holds the Google Drive API connection(s)
 type Drive struct {
+	Cache           Cache
 	context         context.Context
 	activeAccountID int
 	accounts        []Account
 	tokens          []oauth2.Token
 	configs         []oauth2.Config
 	maxDelay        int
+	chunkDir        string
 }
 
 // NewDriveClient creates a new Google Drive instance
-func NewDriveClient(accounts []Account, tokenPath string) (*Drive, error) {
+func NewDriveClient(accounts []Account, tokenPath string, chunkDir string) (*Drive, error) {
 	drive := Drive{
 		activeAccountID: 1,
 		context:         context.Background(),
 		accounts:        accounts,
 		maxDelay:        5000,
+		chunkDir:        chunkDir,
 	}
 
 	if err := drive.authorize(tokenPath); nil != err {
 		return nil, err
 	}
 
+	go drive.startAutoRefresh()
+
 	return &drive, nil
+}
+
+func (d *Drive) startAutoRefresh() {
+	client, err := d.getClient()
+	if nil != err {
+		log.Printf("Could not get client for auto refreshing")
+		return
+	}
+	lastCheck := time.Now()
+
+	for _ = range time.Tick(10 * time.Minute) {
+		log.Printf("Checking for updates...")
+		checkDate := lastCheck.Format(time.RFC3339)
+		lastCheck = time.Now()
+		pageToken := ""
+		for {
+			query := client.Files.List().Q(fmt.Sprintf("modifiedTime > '%v'", checkDate))
+
+			if "" != pageToken {
+				query = query.PageToken(pageToken)
+			}
+
+			r, err := query.Do()
+			if nil != err {
+				break
+			}
+
+			for _, file := range r.Items {
+				object := mapDriveToAPIObject(file)
+				log.Printf("Updated file %v (%v)", object.ID, object.Name)
+				if err := d.Cache.Store(object); nil != err {
+					log.Printf("Could not refresh %v", object.ID)
+				}
+			}
+			pageToken = r.NextPageToken
+
+			if "" == pageToken {
+				break
+			}
+		}
+	}
 }
 
 // FileSize gets the file size
@@ -62,16 +107,6 @@ func (d *Drive) FileSize(id string) (int64, error) {
 	return 0, fmt.Errorf("Invalid status code %v", statusCode)
 }
 
-// Open a file handle
-func (d *Drive) Open(id string) error {
-	return nil
-}
-
-// Release close a file handle
-func (d *Drive) Release(id string) error {
-	return nil
-}
-
 func arrayIndex(values []string, value string) int {
 	for p, v := range values {
 		if v == value {
@@ -81,29 +116,10 @@ func arrayIndex(values []string, value string) int {
 	return -1
 }
 
-// Download opens the file handle
-func (d *Drive) Download(id string) (io.ReadCloser, error) {
-	client, err := d.getClient()
-	if nil != err {
-		return nil, err
-	}
-
-	httpResponse, err := client.Files.Get(id).Download()
-	if nil != err {
-		if strings.Contains(err.Error(), "The download quota for this file has been exceeded") {
-			log.Printf("Quota limit reached for file %v", id)
-			return nil, err
-		}
-
-		return nil, err
-	}
-
-	statusCode := httpResponse.StatusCode
-	if 200 == statusCode {
-		return httpResponse.Body, nil
-	}
-
-	return nil, fmt.Errorf("Invalid status code %v", statusCode)
+// Open a file
+func (d *Drive) Open(object *APIObject, chunkSize int64) (*Buffer, error) {
+	nativeClient := d.getNativeClient()
+	return GetBufferInstance(nativeClient, object, chunkSize, d.chunkDir)
 }
 
 // GetObject gets one object by id
@@ -228,6 +244,10 @@ func (d *Drive) getClient() (*gdrive.Service, error) {
 	return gdrive.New(client)
 }
 
+func (d *Drive) getNativeClient() *http.Client {
+	return oauth2.NewClient(d.context, d.configs[d.activeAccountID-1].TokenSource(d.context, &d.tokens[d.activeAccountID-1]))
+}
+
 func (d *Drive) rotateAccounts() {
 	if (d.activeAccountID + 1) > len(d.configs) {
 		d.activeAccountID = 1
@@ -287,11 +307,12 @@ func mapDriveToAPIObject(file *gdrive.File) *APIObject {
 	}
 
 	return &APIObject{
-		ID:      file.Id,
-		Parents: parents,
-		Name:    file.Title,
-		IsDir:   file.MimeType == "application/vnd.google-apps.folder",
-		Size:    uint64(file.FileSize),
-		MTime:   mtime,
+		ID:          file.Id,
+		Parents:     parents,
+		Name:        file.Title,
+		IsDir:       file.MimeType == "application/vnd.google-apps.folder",
+		Size:        uint64(file.FileSize),
+		MTime:       mtime,
+		DownloadURL: file.DownloadUrl,
 	}
 }
