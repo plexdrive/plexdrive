@@ -6,6 +6,8 @@ import (
 
 	gdrive "google.golang.org/api/drive/v2"
 
+	"time"
+
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
 )
@@ -16,12 +18,15 @@ type Drive struct {
 	context context.Context
 	token   *oauth2.Token
 	config  *oauth2.Config
-	// activeAccountID int
-	// accounts        []Account
-	// tokens          []oauth2.Token
-	// configs         []oauth2.Config
-	// maxDelay        int
-	// chunkDir        string
+}
+
+// APIObject is a Google Drive file object
+type APIObject struct {
+	ID           string
+	IsDir        bool
+	Size         uint64
+	LastModified time.Time
+	DownloadURL  string
 }
 
 // NewDriveClient creates a new Google Drive client
@@ -88,85 +93,78 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 	return tok, err
 }
 
-// // NewDriveClient creates a new Google Drive instance
-// func NewDriveClient(accounts []Account, tokenPath string, chunkDir string) (*Drive, error) {
-// 	drive := Drive{
-// 		activeAccountID: 1,
-// 		context:         context.Background(),
-// 		accounts:        accounts,
-// 		maxDelay:        5000,
-// 		chunkDir:        chunkDir,
-// 	}
+// getClient gets a new Google Drive client
+func (d *Drive) getClient() (*gdrive.Service, error) {
+	return gdrive.New(d.config.Client(d.context, d.token))
+}
 
-// 	if err := drive.authorize(tokenPath); nil != err {
-// 		return nil, err
-// 	}
+// GetObject gets an object by id
+func (d *Drive) GetObject(id string) (*APIObject, error) {
+	getFunc := func(id string) (*APIObject, error) {
+		client, err := d.getClient()
+		if nil != err {
+			Log.Debugf("%v", err)
+			return nil, fmt.Errorf("Could not get Google Drive client")
+		}
 
-// 	go drive.startAutoRefresh()
+		file, err := client.Files.Get(id).Do()
+		if nil != err {
+			Log.Debugf("%v", err)
+			return nil, fmt.Errorf("Could not get object %v from API", id)
+		}
 
-// 	return &drive, nil
-// }
+		// getting file size
+		if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.FileSize {
+			res, err := client.Files.Get(id).Download()
+			if nil != err {
+				Log.Debugf("%v", err)
+				return nil, fmt.Errorf("Could not get file size for object %v", id)
+			}
+			file.FileSize = res.ContentLength
+		}
 
-// func (d *Drive) startAutoRefresh() {
-// 	client, err := d.getClient()
-// 	if nil != err {
-// 		log.Printf("Could not get client for auto refreshing")
-// 		return
-// 	}
-// 	lastCheck := time.Now()
+		return mapFileToObject(file)
+	}
 
-// 	for _ = range time.Tick(10 * time.Minute) {
-// 		log.Printf("Checking for updates...")
-// 		checkDate := lastCheck.Format(time.RFC3339)
-// 		lastCheck = time.Now()
-// 		pageToken := ""
-// 		for {
-// 			query := client.Files.List().Q(fmt.Sprintf("modifiedTime > '%v'", checkDate))
+	return d.cache.GetObject(id, getFunc)
+}
 
-// 			if "" != pageToken {
-// 				query = query.PageToken(pageToken)
-// 			}
+// FileSize gets the file size
+func (d *Drive) FileSize(id string) (int64, error) {
+	client, err := d.getClient()
+	if nil != err {
+		return 0, err
+	}
 
-// 			r, err := query.Do()
-// 			if nil != err {
-// 				break
-// 			}
+	httpResponse, err := client.Files.Get(id).Download()
+	if nil != err {
+		return 0, err
+	}
 
-// 			for _, file := range r.Items {
-// 				object := mapDriveToAPIObject(file)
-// 				log.Printf("Updated file %v (%v)", object.ID, object.Name)
-// 				if err := d.Cache.Store(object); nil != err {
-// 					log.Printf("Could not refresh %v", object.ID)
-// 				}
-// 			}
-// 			pageToken = r.NextPageToken
+	statusCode := httpResponse.StatusCode
+	if 200 == statusCode {
+		return httpResponse.ContentLength, nil
+	}
 
-// 			if "" == pageToken {
-// 				break
-// 			}
-// 		}
-// 	}
-// }
+	return 0, fmt.Errorf("Invalid status code %v", statusCode)
+}
 
-// // FileSize gets the file size
-// func (d *Drive) FileSize(id string) (int64, error) {
-// 	client, err := d.getClient()
-// 	if nil != err {
-// 		return 0, err
-// 	}
+// mapFileToObject maps a Google Drive file to APIObject
+func mapFileToObject(file *gdrive.File) (*APIObject, error) {
+	lastModified, err := time.Parse(time.RFC3339, file.ModifiedDate)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not parse last modified date")
+	}
 
-// 	httpResponse, err := client.Files.Get(id).Download()
-// 	if nil != err {
-// 		return 0, err
-// 	}
-
-// 	statusCode := httpResponse.StatusCode
-// 	if 200 == statusCode {
-// 		return httpResponse.ContentLength, nil
-// 	}
-
-// 	return 0, fmt.Errorf("Invalid status code %v", statusCode)
-// }
+	return &APIObject{
+		ID:           file.Id,
+		IsDir:        file.MimeType == "application/vnd.google-apps.folder",
+		LastModified: lastModified,
+		Size:         uint64(file.FileSize),
+		DownloadURL:  file.DownloadUrl,
+	}, nil
+}
 
 // func arrayIndex(values []string, value string) int {
 // 	for p, v := range values {
@@ -258,11 +256,6 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 // 		}
 // 	}
 // 	return nil, fmt.Errorf("Could not find %s in directory %v", name, parent)
-// }
-
-// func (d *Drive) getClient() (*gdrive.Service, error) {
-// 	client := d.configs[d.activeAccountID-1].Client(d.context, &d.tokens[d.activeAccountID-1])
-// 	return gdrive.New(client)
 // }
 
 // func (d *Drive) getNativeClient() *http.Client {

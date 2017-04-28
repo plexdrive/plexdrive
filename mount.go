@@ -8,6 +8,7 @@ import (
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	. "github.com/claudetech/loggo/default"
+	"golang.org/x/net/context"
 )
 
 // Mount the fuse volume
@@ -69,30 +70,25 @@ func (f *FS) Root() (fs.Node, error) {
 // Object represents one drive object
 type Object struct {
 	client *Drive
-	id     *APIObject
+	object *APIObject
 }
 
-// // Attr returns the attributes for a directory
-// func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
-// 	f, err := o.cache.GetObject(o.id, false)
-// 	if nil != err {
-// 		return err
-// 	}
+// Attr returns the attributes for a directory
+func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
+	if o.object.IsDir {
+		attr.Mode = os.ModeDir | 0755
+		attr.Size = 0
+	} else {
+		attr.Mode = 0644
+		attr.Size = o.object.Size
+	}
 
-// 	if f.IsDir {
-// 		attr.Mode = os.ModeDir | 0755
-// 		attr.Size = 0
-// 	} else {
-// 		attr.Mode = 0644
-// 		attr.Size = f.Size
-// 	}
+	attr.Mtime = o.object.LastModified
+	attr.Crtime = o.object.LastModified
+	attr.Ctime = o.object.LastModified
 
-// 	attr.Mtime = f.MTime
-// 	attr.Crtime = f.MTime
-// 	attr.Ctime = f.MTime
-
-// 	return nil
-// }
+	return nil
+}
 
 // // Lookup tests if a file is existent in the current directory
 // func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
