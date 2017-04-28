@@ -19,6 +19,10 @@ type Cache struct {
 	tokens  *db.Col
 }
 
+// APIObject is a Google Drive file object
+type APIObject struct {
+}
+
 // NewCache creates a new cache instance
 func NewCache(cachePath string) (*Cache, error) {
 	Log.Debugf("Opening database connection")

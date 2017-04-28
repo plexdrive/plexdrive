@@ -1,82 +1,76 @@
 package main
 
-// import (
-// 	"os"
+import (
+	"os"
 
-// 	"golang.org/x/net/context"
+	"fmt"
 
-// 	"fmt"
+	"bazil.org/fuse"
+	"bazil.org/fuse/fs"
+	. "github.com/claudetech/loggo/default"
+)
 
-// 	"log"
+// Mount the fuse volume
+func Mount(client *Drive, mountpoint string) error {
+	Log.Debugf("Mounting path %v", mountpoint)
 
-// 	"bazil.org/fuse"
-// 	"bazil.org/fuse/fs"
-// )
+	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
+		Log.Debugf("Mountpoint doesn't exist, creating...")
+		if err := os.MkdirAll(mountpoint, 0644); nil != err {
+			Log.Debugf("%v", err)
+			return fmt.Errorf("Could not create mount directory %v", mountpoint)
+		}
+	}
 
-// // Mount the fuse volume
-// func Mount(config *Config, cache Cache, mountpoint string, debug bool, chunkSize int64) error {
-// 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
-// 		if err := os.MkdirAll(mountpoint, os.ModeDir); nil != err {
-// 			return fmt.Errorf("Could not create directory %v", mountpoint)
-// 		}
-// 	}
+	fuse.Debug = func(msg interface{}) {
+		Log.Tracef("FUSE %v", msg)
+	}
 
-// 	if debug {
-// 		fuse.Debug = func(msg interface{}) {
-// 			log.Printf("FUSE DEBUG %v", msg)
-// 		}
-// 	}
+	c, err := fuse.Mount(mountpoint)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
 
-// 	c, err := fuse.Mount(mountpoint)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer c.Close()
+	filesys := &FS{
+		client: client,
+	}
+	if err := fs.Serve(c, filesys); err != nil {
+		return err
+	}
 
-// 	filesys := &FS{
-// 		cache:     cache,
-// 		chunkSize: chunkSize,
-// 	}
-// 	if err := fs.Serve(c, filesys); err != nil {
-// 		return err
-// 	}
+	// check if the mount process has an error to report
+	<-c.Ready
+	if err := c.MountError; err != nil {
+		return err
+	}
 
-// 	// check if the mount process has an error to report
-// 	<-c.Ready
-// 	if err := c.MountError; err != nil {
-// 		return err
-// 	}
+	return nil
+}
 
-// 	return nil
-// }
+// FS the fuse filesystem
+type FS struct {
+	client *Drive
+}
 
-// // FS the fuse filesystem
-// type FS struct {
-// 	cache     Cache
-// 	chunkSize int64
-// }
+// Root returns the root path
+func (f *FS) Root() (fs.Node, error) {
+	object, err := f.client.GetObject("root")
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not get root object")
+	}
+	return &Object{
+		client: f.client,
+		object: object,
+	}, nil
+}
 
-// // Root returns the root path
-// func (f *FS) Root() (fs.Node, error) {
-// 	rootID, err := f.cache.GetRootID()
-// 	if nil != err {
-// 		return nil, err
-// 	}
-// 	return &Object{
-// 		cache:     f.cache,
-// 		id:        rootID,
-// 		chunkSize: f.chunkSize,
-// 	}, nil
-// }
-
-// // Object represents one drive object
-// type Object struct {
-// 	cache     Cache
-// 	id        string
-// 	apiObject *APIObject
-// 	buffer    *Buffer
-// 	chunkSize int64
-// }
+// Object represents one drive object
+type Object struct {
+	client *Drive
+	id     *APIObject
+}
 
 // // Attr returns the attributes for a directory
 // func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {

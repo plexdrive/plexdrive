@@ -25,6 +25,8 @@ func main() {
 	argChunkSize := flag.Int64("chunk-size", 5120, "The size of each chunk that is downloaded (in kb)")
 	flag.Parse()
 
+	// TODO: chunksize is not used yet
+
 	// check if mountpoint is specified
 	argMountPoint := flag.Arg(0)
 	if "" == argMountPoint {
@@ -83,19 +85,17 @@ func main() {
 	}
 	defer cache.Close()
 
-	_, err = NewDriveClient(config, cache)
+	drive, err := NewDriveClient(config, cache)
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
 		Log.Debugf("%v", err)
 		os.Exit(5)
 	}
 
-	// drive.Cache = cache
-
-	// go CleanChunkDir(chunkDir)
-	// if err := Mount(config, cache, *mountPoint, *debug, *chunkSize*1024); nil != err {
-	// 	panic(err)
-	// }
-
-	// cache.Close()
+	go CleanChunkDir(chunkPath)
+	if err := Mount(drive, argMountPoint); nil != err {
+		Log.Errorf("Could not mount path %v", argMountPoint)
+		Log.Debugf("%v", err)
+		os.Exit(6)
+	}
 }
