@@ -8,6 +8,8 @@ import (
 
 	"time"
 
+	"strings"
+
 	"github.com/HouzuoGuo/tiedot/db"
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
@@ -115,7 +117,7 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 // GetObject gets an object by id
 func (c *Cache) GetObject(id string, loadFromAPI func(string) (*APIObject, error)) (*APIObject, error) {
 	var query interface{}
-	json.Unmarshal([]byte(fmt.Sprintf(`[{"eq": "%v", "in": ["ID"]}]`, id)), &query)
+	json.Unmarshal([]byte(fmt.Sprintf(`{"in": ["ID"], "eq": "%v", "limit": 1}`, id)), &query)
 	Log.Tracef("Query: %v", query)
 
 	ids := make(map[int]struct{})
@@ -123,6 +125,7 @@ func (c *Cache) GetObject(id string, loadFromAPI func(string) (*APIObject, error
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not evaluate cache query")
 	}
+	Log.Tracef("Got object ids from cache %v", ids)
 
 	var object *APIObject
 	for dbID := range ids {
@@ -142,10 +145,12 @@ func (c *Cache) GetObject(id string, loadFromAPI func(string) (*APIObject, error
 
 		object = &APIObject{
 			ID:           r["ID"].(string),
+			Name:         r["Name"].(string),
 			IsDir:        r["IsDir"].(bool),
 			LastModified: time.Unix(lastModified, 0),
-			Size:         r["Size"].(uint64),
+			Size:         uint64(r["Size"].(float64)),
 			DownloadURL:  r["DownloadURL"].(string),
+			Parents:      strings.Split(r["Parents"].(string), "|"),
 		}
 
 		break
@@ -164,22 +169,29 @@ func (c *Cache) GetObject(id string, loadFromAPI func(string) (*APIObject, error
 		Log.Debugf("Storing object %v to cache", id)
 		_, err = c.objects.Insert(map[string]interface{}{
 			"ID":           object.ID,
+			"Name":         object.Name,
 			"IsDir":        object.IsDir,
 			"LastModified": strconv.FormatInt(object.LastModified.Unix(), 10),
-			"Size":         object.Size,
+			"Size":         float64(object.Size),
 			"DownloadURL":  object.DownloadURL,
+			"Parents":      strings.Join(object.Parents, "|"),
 		})
 
 		if nil != err {
 			Log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not store object %v in cache", id)
 		}
-
 	} else {
 		Log.Debugf("Loaded object %v from cache", id)
 	}
 
+	Log.Tracef("Object %v", object)
+
 	return object, nil
+}
+
+func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]*APIObject, error)) ([]*APIObject, error) {
+
 }
 
 // // Open a file handle

@@ -33,8 +33,15 @@ func Mount(client *Drive, mountpoint string) error {
 	}
 	defer c.Close()
 
+	object, err := client.GetObject("root")
+	if nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not get root node")
+	}
+
 	filesys := &FS{
 		client: client,
+		rootID: object.ID,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -52,11 +59,12 @@ func Mount(client *Drive, mountpoint string) error {
 // FS the fuse filesystem
 type FS struct {
 	client *Drive
+	rootID string
 }
 
 // Root returns the root path
 func (f *FS) Root() (fs.Node, error) {
-	object, err := f.client.GetObject("root")
+	object, err := f.client.GetObject(f.rootID)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get root object")
@@ -90,6 +98,22 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 	return nil
 }
 
+// ReadDirAll shows all files in the current directory
+func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
+	dirs := []fuse.Dirent{}
+	files, err := o.client.GetObjectsByParent(o.id)
+	if nil != err {
+		return nil, err
+	}
+	for _, file := range files {
+		dirs = append(dirs, fuse.Dirent{
+			Name: file.Name,
+			Type: fuse.DT_File,
+		})
+	}
+	return dirs, nil
+}
+
 // // Lookup tests if a file is existent in the current directory
 // func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 // 	file, err := o.cache.GetObjectByNameAndParent(name, o.id)
@@ -102,22 +126,6 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 // 		id:        file.ID,
 // 		apiObject: file,
 // 	}, nil
-// }
-
-// // ReadDirAll shows all files in the current directory
-// func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-// 	dirs := []fuse.Dirent{}
-// 	files, err := o.cache.GetObjectsByParent(o.id, false)
-// 	if nil != err {
-// 		return nil, err
-// 	}
-// 	for _, file := range files {
-// 		dirs = append(dirs, fuse.Dirent{
-// 			Name: file.Name,
-// 			Type: fuse.DT_File,
-// 		})
-// 	}
-// 	return dirs, nil
 // }
 
 // // Open opens a file for reading
