@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	gdrive "google.golang.org/api/drive/v2"
 
@@ -13,6 +14,19 @@ import (
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
 )
+
+// BlackListObjects is a list of blacklisted items that will not be
+// fetched from cache or the API
+var BlackListObjects map[string]bool
+
+// init initializes the global configurations
+func init() {
+	BlackListObjects = make(map[string]bool)
+	BlackListObjects[".git"] = true
+	BlackListObjects["HEAD"] = true
+	BlackListObjects[".Trash"] = true
+	BlackListObjects[".Trash-1000"] = true
+}
 
 // Drive holds the Google Drive API connection(s)
 type Drive struct {
@@ -89,6 +103,11 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 // getClient gets a new Google Drive client
 func (d *Drive) getClient() (*gdrive.Service, error) {
 	return gdrive.New(d.config.Client(d.context, d.token))
+}
+
+// getNativeClient gets a native http client
+func (d *Drive) getNativeClient() *http.Client {
+	return oauth2.NewClient(d.context, d.config.TokenSource(d.context, d.token))
 }
 
 // GetObject gets an object by id
@@ -169,6 +188,10 @@ func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
 
 // GetObjectByParentAndName finds a child element by name and its parent id
 func (d *Drive) GetObjectByParentAndName(parent, name string) (APIObject, error) {
+	if _, exists := BlackListObjects[name]; exists {
+		return APIObject{}, fmt.Errorf("Object %v is blacklisted and will not be returned", name)
+	}
+
 	getFunc := func(parent, name string) (APIObject, error) {
 		client, err := d.getClient()
 		if nil != err {
@@ -194,6 +217,12 @@ func (d *Drive) GetObjectByParentAndName(parent, name string) (APIObject, error)
 	return d.cache.GetObjectByParentAndName(parent, name, getFunc)
 }
 
+// Open a file
+func (d *Drive) Open(object *APIObject) (*Buffer, error) {
+	nativeClient := d.getNativeClient()
+	return GetBufferInstance(nativeClient, object)
+}
+
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedDate)
@@ -217,64 +246,3 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
 		Parents:      fmt.Sprintf("|%v|", strings.Join(parents, "|")),
 	}, nil
 }
-
-// // Open a file
-// func (d *Drive) Open(object *APIObject, chunkSize int64) (*Buffer, error) {
-// 	nativeClient := d.getNativeClient()
-// 	return GetBufferInstance(nativeClient, object, chunkSize, d.chunkDir)
-// }
-
-// // GetFileByNameAndParent gets a file
-// func (d *Drive) GetFileByNameAndParent(name, parent string) (*gdrive.File, error) {
-// 	client, err := d.getClient()
-// 	if nil != err {
-// 		return nil, err
-// 	}
-
-// 	r, err := client.Files.List().Q(fmt.Sprintf("'%v' in parents AND name = '%v' AND trashed = false", parent, name)).Do()
-// 	if nil != err {
-// 		return nil, err
-// 	}
-
-// 	for _, f := range r.Items {
-// 		if name == f.Title {
-// 			return f, nil
-// 		}
-// 	}
-// 	return nil, fmt.Errorf("Could not find %s in directory %v", name, parent)
-// }
-
-// func (d *Drive) getNativeClient() *http.Client {
-// 	return oauth2.NewClient(d.context, d.configs[d.activeAccountID-1].TokenSource(d.context, &d.tokens[d.activeAccountID-1]))
-// }
-
-// func (d *Drive) rotateAccounts() {
-// 	if (d.activeAccountID + 1) > len(d.configs) {
-// 		d.activeAccountID = 1
-// 	} else {
-// 		d.activeAccountID++
-// 	}
-// 	log.Printf("Usage limit exceeded, rotating accounts to account #%v", d.activeAccountID)
-// }
-
-// func mapDriveToAPIObject(file *gdrive.File) *APIObject {
-// 	mtime, err := time.Parse(time.RFC3339, file.ModifiedDate)
-// 	if nil != err {
-// 		mtime = time.Now()
-// 	}
-
-// 	var parents []string
-// 	for _, parent := range file.Parents {
-// 		parents = append(parents, parent.Id)
-// 	}
-
-// 	return &APIObject{
-// 		ID:          file.Id,
-// 		Parents:     parents,
-// 		Name:        file.Title,
-// 		IsDir:       file.MimeType == "application/vnd.google-apps.folder",
-// 		Size:        uint64(file.FileSize),
-// 		MTime:       mtime,
-// 		DownloadURL: file.DownloadUrl,
-// 	}
-// }

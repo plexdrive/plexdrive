@@ -1,136 +1,161 @@
 package main
 
-// import (
-// 	"fmt"
-// 	"io/ioutil"
-// 	"math"
-// 	"net/http"
-// 	"os"
-// 	"path/filepath"
-// 	"strconv"
+import (
+	"fmt"
+	"io/ioutil"
+	"math"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 
-// 	"github.com/orcaman/concurrent-map"
-// )
+	. "github.com/claudetech/loggo/default"
+	"github.com/orcaman/concurrent-map"
+)
 
-// var instances cmap.ConcurrentMap
+var instances cmap.ConcurrentMap
+var chunkPath string
+var chunkSize int64
 
-// func init() {
-// 	instances = cmap.New()
-// }
+func init() {
+	instances = cmap.New()
+}
 
-// // Buffer is a buffered stream
-// type Buffer struct {
-// 	numberOfInstances int
-// 	client            *http.Client
-// 	object            *APIObject
-// 	tempDir           string
-// 	chunkSize         int64
-// 	preload           bool
-// 	chunkDir          string
-// }
+// Buffer is a buffered stream
+type Buffer struct {
+	numberOfInstances int
+	client            *http.Client
+	object            *APIObject
+	tempDir           string
+	chunkSize         int64
+	preload           bool
+	chunkDir          string
+}
 
-// // GetBufferInstance gets a singleton instance of buffer
-// func GetBufferInstance(client *http.Client, object *APIObject, chunkSize int64, chunkDir string) (*Buffer, error) {
-// 	if !instances.Has(object.ID) {
-// 		i, err := newBuffer(client, object, chunkSize, chunkDir)
-// 		if nil != err {
-// 			return nil, err
-// 		}
+// GetBufferInstance gets a singleton instance of buffer
+func GetBufferInstance(client *http.Client, object *APIObject) (*Buffer, error) {
+	if !instances.Has(object.ObjectID) {
+		i, err := newBuffer(client, object)
+		if nil != err {
+			return nil, err
+		}
 
-// 		instances.Set(object.ID, i)
-// 	}
+		instances.Set(object.ObjectID, i)
+	}
 
-// 	instance, _ := instances.Get(object.ID)
-// 	instance.(*Buffer).numberOfInstances++
-// 	return instance.(*Buffer), nil
-// }
+	instance, _ := instances.Get(object.ObjectID)
+	instance.(*Buffer).numberOfInstances++
+	return instance.(*Buffer), nil
+}
 
-// // NewBuffer creates a new buffer instance
-// func newBuffer(client *http.Client, object *APIObject, chunkSize int64, chunkDir string) (*Buffer, error) {
-// 	tempDir := filepath.Join(chunkDir, object.ID)
-// 	if err := os.MkdirAll(tempDir, 0777); nil != err {
-// 		return nil, err
-// 	}
+// SetChunkPath sets the global chunk path
+func SetChunkPath(path string) {
+	chunkPath = path
+}
 
-// 	if chunkSize == 0 {
-// 		chunkSize = 5 * 1024 * 1024
-// 	}
+// SetChunkSize sets the global chunk size
+func SetChunkSize(size int64) {
+	chunkSize = size
+}
 
-// 	buffer := Buffer{
-// 		numberOfInstances: 0,
-// 		client:            client,
-// 		object:            object,
-// 		tempDir:           tempDir,
-// 		chunkSize:         chunkSize,
-// 		preload:           true,
-// 	}
+// NewBuffer creates a new buffer instance
+func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
+	Log.Debugf("Creating buffer for object %v", object.ObjectID)
 
-// 	return &buffer, nil
-// }
+	tempDir := filepath.Join(chunkPath, object.ObjectID)
+	if err := os.MkdirAll(tempDir, 0777); nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create temp path for object %v", object.ObjectID)
+	}
 
-// // Close all handles
-// func (b *Buffer) Close() error {
-// 	b.numberOfInstances--
-// 	if b.numberOfInstances == 0 {
-// 		b.preload = false
-// 		instances.Remove(b.object.ID)
-// 	}
-// 	return nil
-// }
+	if 0 == chunkSize {
+		Log.Debugf("ChunkSize was 0, setting to default (5 MB)")
+		chunkSize = 5 * 1024 * 1024
+	}
 
-// // ReadBytes on a specific location
-// func (b *Buffer) ReadBytes(start, size int64) ([]byte, error) {
-// 	fOffset := start % b.chunkSize
-// 	offset := start - fOffset
-// 	offsetEnd := offset + b.chunkSize
+	buffer := Buffer{
+		numberOfInstances: 0,
+		client:            client,
+		object:            object,
+		tempDir:           tempDir,
+		chunkSize:         chunkSize,
+		preload:           true,
+	}
 
-// 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
+	return &buffer, nil
+}
 
-// 	if f, err := os.Open(filename); nil == err {
-// 		defer f.Close()
-// 		buf := make([]byte, size)
-// 		if _, err := f.ReadAt(buf, fOffset); nil == err {
-// 			return buf[:size], nil
-// 		}
-// 	}
+// Close all handles
+func (b *Buffer) Close() error {
+	b.numberOfInstances--
+	if 0 == b.numberOfInstances {
+		Log.Debugf("Stop buffering for object %v", b.object.ObjectID)
 
-// 	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
-// 	if nil != err {
-// 		return nil, err
-// 	}
+		b.preload = false
+		instances.Remove(b.object.ObjectID)
+	}
+	return nil
+}
 
-// 	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", offset, offsetEnd))
+// ReadBytes on a specific location
+func (b *Buffer) ReadBytes(start, size int64) ([]byte, error) {
+	fOffset := start % b.chunkSize
+	offset := start - fOffset
+	offsetEnd := offset + b.chunkSize
 
-// 	res, err := b.client.Do(req)
-// 	if nil != err {
-// 		return nil, err
-// 	}
+	Log.Debugf("Getting object %v bytes %v - %v", b.object.ObjectID, offset, offsetEnd)
 
-// 	if res.StatusCode != 206 {
-// 		return nil, fmt.Errorf("Wrong status code %v", res)
-// 	}
+	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 
-// 	bytes, err := ioutil.ReadAll(res.Body)
-// 	if nil != err {
-// 		return nil, err
-// 	}
+	if f, err := os.Open(filename); nil == err {
+		defer f.Close()
+		buf := make([]byte, size)
+		if _, err := f.ReadAt(buf, fOffset); nil == err {
+			Log.Debugf("Found object %v bytes %v - %v in cache", b.object.ObjectID, offset, offsetEnd)
+			return buf[:size], nil
+		}
+	}
 
-// 	f, err := os.Create(filename)
-// 	if nil != err {
-// 		return nil, err
-// 	}
-// 	defer f.Close()
+	Log.Debugf("Requesting object %v bytes %v - %v from API", b.object.ObjectID, offset, offsetEnd)
+	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
+	if nil != err {
+		return nil, err
+	}
 
-// 	_, err = f.Write(bytes)
-// 	if nil != err {
-// 		return nil, err
-// 	}
+	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", offset, offsetEnd))
 
-// 	if b.preload && uint64(offsetEnd) < b.object.Size {
-// 		go func() {
-// 			b.ReadBytes(offsetEnd+1, size)
-// 		}()
-// 	}
+	Log.Tracef("Sending HTTP Request %v", req)
 
-// 	return bytes[fOffset:int64(math.Min(float64(start+size), float64(len(bytes))))], nil
-// }
+	res, err := b.client.Do(req)
+	if nil != err {
+		return nil, err
+	}
+
+	if res.StatusCode != 206 {
+		return nil, fmt.Errorf("Wrong status code %v", res)
+	}
+
+	bytes, err := ioutil.ReadAll(res.Body)
+	if nil != err {
+		return nil, err
+	}
+
+	f, err := os.Create(filename)
+	if nil != err {
+		return nil, err
+	}
+	defer f.Close()
+
+	_, err = f.Write(bytes)
+	if nil != err {
+		return nil, err
+	}
+
+	if b.preload && uint64(offsetEnd) < b.object.Size {
+		go func() {
+			b.ReadBytes(offsetEnd+1, size)
+		}()
+	}
+
+	return bytes[fOffset:int64(math.Min(float64(start+size), float64(len(bytes))))], nil
+}

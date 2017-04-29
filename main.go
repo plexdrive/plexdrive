@@ -22,7 +22,8 @@ func main() {
 	argLogLevel := flag.Int("log-level", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
 	argConfigPath := flag.String("config", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.String("temp", os.TempDir(), "Path to a temporary directory to store temporary data")
-	argChunkSize := flag.Int64("chunk-size", 5120, "The size of each chunk that is downloaded (in kb)")
+	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in kb)")
+	// TODO: add clear cache option
 	flag.Parse()
 
 	// TODO: chunksize is not used yet
@@ -57,17 +58,21 @@ func main() {
 	Log.Debugf("chunk-size : %v", *argChunkSize)
 
 	// create all directories
-	if err := os.MkdirAll(*argConfigPath, 0644); nil != err {
+	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
 		Log.Errorf("Could not create configuration directory")
 		Log.Debugf("%v", err)
 		os.Exit(1)
 	}
 	chunkPath := filepath.Join(*argTempPath, "chunks")
-	if err := os.MkdirAll(chunkPath, 0644); nil != err {
+	if err := os.MkdirAll(chunkPath, 0777); nil != err {
 		Log.Errorf("Could not create temp chunk directory")
 		Log.Debugf("%v", err)
 		os.Exit(2)
 	}
+
+	// set the global buffer configuration
+	SetChunkPath(chunkPath)
+	SetChunkSize(*argChunkSize)
 
 	// read the configuration
 	config, err := ReadConfig(filepath.Join(*argConfigPath, "config.json"))

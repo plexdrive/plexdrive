@@ -66,7 +66,7 @@ type FS struct {
 func (f *FS) Root() (fs.Node, error) {
 	object, err := f.client.GetObject(f.rootID)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Warningf("%v", err)
 		return nil, fmt.Errorf("Could not get root object")
 	}
 	return &Object{
@@ -79,6 +79,7 @@ func (f *FS) Root() (fs.Node, error) {
 type Object struct {
 	client *Drive
 	object *APIObject
+	buffer *Buffer
 }
 
 // Attr returns the attributes for a directory
@@ -102,6 +103,7 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	objects, err := o.client.GetObjectsByParent(o.object.ObjectID)
 	if nil != err {
+		Log.Warningf("%v", err)
 		return nil, err
 	}
 
@@ -119,6 +121,7 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	object, err := o.client.GetObjectByParentAndName(o.object.ObjectID, name)
 	if nil != err {
+		Log.Warningf("%v", err)
 		return nil, err
 	}
 
@@ -128,40 +131,41 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	}, nil
 }
 
-// // Open opens a file for reading
-// func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
-// 	if req.Dir {
-// 		return o, nil
-// 	}
+// Open opens a file for reading
+func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+	if req.Dir {
+		return o, nil
+	}
 
-// 	buffer, err := o.cache.Open(o.apiObject, o.chunkSize)
-// 	if nil != err {
-// 		log.Printf("Could not open file for reading %v", err)
-// 		return o, fuse.ENOENT
-// 	}
-// 	o.buffer = buffer
+	buffer, err := o.client.Open(o.object)
+	if nil != err {
+		Log.Warningf("%v", err)
+		return o, fuse.ENOENT
+	}
+	o.buffer = buffer
 
-// 	return o, nil
-// }
+	return o, nil
+}
 
-// // Release a stream
-// func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-// 	if nil != o.buffer {
-// 		if err := o.buffer.Close(); nil != err {
-// 			log.Printf("Could not close file %v", err)
-// 		}
-// 	}
-// 	return nil
-// }
+// Release a stream
+func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+	if nil != o.buffer {
+		if err := o.buffer.Close(); nil != err {
+			Log.Debugf("%v", err)
+			Log.Warningf("Could not close buffer stream")
+		}
+	}
+	return nil
+}
 
-// // Read reads some bytes or the whole file
-// func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-// 	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size))
-// 	if nil != err {
-// 		log.Printf("Could not read bytes %v", err)
-// 		return err
-// 	}
+// Read reads some bytes or the whole file
+func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size))
+	if nil != err {
+		Log.Warningf("%v", err)
+		return err
+	}
 
-// 	resp.Data = buf[:]
-// 	return nil
-// }
+	resp.Data = buf[:]
+	return nil
+}

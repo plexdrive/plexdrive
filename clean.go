@@ -2,16 +2,19 @@ package main
 
 import (
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	. "github.com/claudetech/loggo/default"
 )
 
 // CleanChunkDir check frequently the temporary directory and
 // cleans old stuff
 func CleanChunkDir(chunkDir string) {
 	for _ = range time.Tick(1 * time.Minute) {
+		Log.Debugf("Cleaning chunk directory %v", chunkDir)
+
 		filepath.Walk(chunkDir, func(path string, f os.FileInfo, err error) error {
 			if path == chunkDir {
 				return nil
@@ -21,13 +24,13 @@ func CleanChunkDir(chunkDir string) {
 			if !f.IsDir() {
 				if now.Sub(f.ModTime()) > 10*time.Minute {
 					if err := os.Remove(path); nil != err {
-						log.Printf("Could not delete temp file %v", path)
+						Log.Warningf("Could not delete temp file %v", path)
 					}
 				}
 			} else {
 				if empty, err := isEmptyDir(path); nil == err && empty {
 					if err := os.RemoveAll(path); nil != err {
-						log.Printf("Could not delete temp dir %v", path)
+						Log.Warningf("Could not delete temp dir %v", path)
 					}
 				}
 			}
