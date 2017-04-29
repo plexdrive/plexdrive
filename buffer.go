@@ -60,6 +60,7 @@ func SetChunkSize(size int64) {
 
 // NewBuffer creates a new buffer instance
 func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
+	Log.Infof("Starting playback of %v", object.Name)
 	Log.Debugf("Creating buffer for object %v", object.ObjectID)
 
 	tempDir := filepath.Join(chunkPath, object.ObjectID)
@@ -89,6 +90,7 @@ func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
 func (b *Buffer) Close() error {
 	b.numberOfInstances--
 	if 0 == b.numberOfInstances {
+		Log.Infof("Stopping playback of %v", b.object.Name)
 		Log.Debugf("Stop buffering for object %v", b.object.ObjectID)
 
 		b.preload = false

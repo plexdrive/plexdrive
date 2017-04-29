@@ -38,6 +38,8 @@ func main() {
 	// initialize the logger with the specific log level
 	var logLevel loggo.Level
 	switch *argLogLevel {
+	case 0:
+		logLevel = loggo.Error
 	case 1:
 		logLevel = loggo.Warning
 	case 2:
@@ -47,7 +49,7 @@ func main() {
 	case 4:
 		logLevel = loggo.Trace
 	default:
-		logLevel = loggo.Error
+		logLevel = loggo.Warning
 	}
 	Log.SetLevel(logLevel)
 

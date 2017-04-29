@@ -13,7 +13,7 @@ import (
 
 // Mount the fuse volume
 func Mount(client *Drive, mountpoint string) error {
-	Log.Debugf("Mounting path %v", mountpoint)
+	Log.Infof("Mounting path %v", mountpoint)
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
 		Log.Debugf("Mountpoint doesn't exist, creating...")
@@ -52,6 +52,7 @@ func Mount(client *Drive, mountpoint string) error {
 	if err := c.MountError; err != nil {
 		return err
 	}
+	Log.Infof("Unmounting path %v", mountpoint)
 
 	return nil
 }
