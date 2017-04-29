@@ -122,50 +122,77 @@ func (d *Drive) GetObject(id string) (APIObject, error) {
 	return d.cache.GetObject(id, getFunc)
 }
 
-// // GetObjectsByParent get all objects under parent id
-// func (d *Drive) GetObjectsByParent(parent string) ([]*APIObject, error) {
-// 	getFunc := func(parent string) ([]*APIObject, error) {
-// 		client, err := d.getClient()
-// 		if nil != err {
-// 			Log.Debugf("%v", err)
-// 			return nil, fmt.Errorf("Could not get Google Drive client")
-// 		}
+// GetObjectsByParent get all objects under parent id
+func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
+	getFunc := func(parent string) ([]APIObject, error) {
+		client, err := d.getClient()
+		if nil != err {
+			Log.Debugf("%v", err)
+			return nil, fmt.Errorf("Could not get Google Drive client")
+		}
 
-// 		var objects []*APIObject
-// 		pageToken := ""
-// 		for {
-// 			query := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents", parent))
+		var objects []APIObject
+		pageToken := ""
+		for {
+			query := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents", parent))
 
-// 			if "" != pageToken {
-// 				query = query.PageToken(pageToken)
-// 			}
+			if "" != pageToken {
+				query = query.PageToken(pageToken)
+			}
 
-// 			results, err := query.Do()
-// 			if nil != err {
-// 				Log.Debugf("%v", err)
-// 				return nil, fmt.Errorf("Could not list objects in parent %v", parent)
-// 			}
+			results, err := query.Do()
+			if nil != err {
+				Log.Debugf("%v", err)
+				return nil, fmt.Errorf("Could not list objects in parent %v", parent)
+			}
 
-// 			for _, file := range results.Items {
-// 				object, err := mapFileToObject(file)
-// 				if nil != err {
-// 					Log.Debugf("%v", err)
-// 					return nil, fmt.Errorf("Could not map Google Drive file to object")
-// 				}
-// 				objects = append(objects, object)
-// 			}
+			for _, file := range results.Items {
+				object, err := d.mapFileToObject(file)
+				if nil != err {
+					Log.Debugf("%v", err)
+					return nil, fmt.Errorf("Could not map Google Drive file to object")
+				}
+				objects = append(objects, object)
+			}
 
-// 			pageToken = results.NextPageToken
-// 			if "" == pageToken {
-// 				break
-// 			}
-// 		}
+			pageToken = results.NextPageToken
+			if "" == pageToken {
+				break
+			}
+		}
 
-// 		return objects, nil
-// 	}
+		return objects, nil
+	}
 
-// 	return d.cache.GetObjectsByParent(parent, getFunc)
-// }
+	return d.cache.GetObjectsByParent(parent, getFunc)
+}
+
+// GetObjectByParentAndName finds a child element by name and its parent id
+func (d *Drive) GetObjectByParentAndName(parent, name string) (APIObject, error) {
+	getFunc := func(parent, name string) (APIObject, error) {
+		client, err := d.getClient()
+		if nil != err {
+			Log.Debugf("%v", err)
+			return APIObject{}, fmt.Errorf("Could not get Google Drive client")
+		}
+
+		results, err := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents AND name='%v'", parent, name)).Do()
+		if nil != err {
+			Log.Debugf("%v", err)
+			return APIObject{}, fmt.Errorf("Could not list objects with name %v in parent %v", name, parent)
+		}
+
+		for _, file := range results.Items {
+			if name == file.Title {
+				return d.mapFileToObject(file)
+			}
+		}
+
+		return APIObject{}, fmt.Errorf("Could not get object with name %v in parent %v", name, parent)
+	}
+
+	return d.cache.GetObjectByParentAndName(parent, name, getFunc)
+}
 
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
@@ -191,76 +218,10 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
 	}, nil
 }
 
-// func arrayIndex(values []string, value string) int {
-// 	for p, v := range values {
-// 		if v == value {
-// 			return p
-// 		}
-// 	}
-// 	return -1
-// }
-
 // // Open a file
 // func (d *Drive) Open(object *APIObject, chunkSize int64) (*Buffer, error) {
 // 	nativeClient := d.getNativeClient()
 // 	return GetBufferInstance(nativeClient, object, chunkSize, d.chunkDir)
-// }
-
-// // GetObject gets one object by id
-// func (d *Drive) GetObject(id string) (*APIObject, error) {
-// 	client, err := d.getClient()
-// 	if nil != err {
-// 		return nil, err
-// 	}
-
-// 	o, err := client.Files.Get(id).Do()
-// 	if nil != err {
-// 		return nil, err
-// 	}
-
-// 	if o.FileSize == 0 {
-// 		fileSize, err := d.FileSize(id)
-// 		if nil != err {
-// 			fileSize = o.FileSize
-// 		}
-// 		o.FileSize = fileSize
-// 	}
-
-// 	return mapDriveToAPIObject(o), nil
-// }
-
-// // GetObjectsByParent gets all files under a parent folder
-// func (d *Drive) GetObjectsByParent(parentID string) ([]*APIObject, error) {
-// 	client, err := d.getClient()
-// 	if nil != err {
-// 		return nil, err
-// 	}
-
-// 	var files []*APIObject
-// 	pageToken := ""
-// 	for {
-// 		query := client.Files.List().Q(fmt.Sprintf("'%v' in parents AND trashed = false", parentID))
-
-// 		if "" != pageToken {
-// 			query = query.PageToken(pageToken)
-// 		}
-
-// 		r, err := query.Do()
-// 		if nil != err {
-// 			break
-// 		}
-
-// 		for _, file := range r.Items {
-// 			files = append(files, mapDriveToAPIObject(file))
-// 		}
-// 		pageToken = r.NextPageToken
-
-// 		if "" == pageToken {
-// 			break
-// 		}
-// 	}
-
-// 	return files, nil
 // }
 
 // // GetFileByNameAndParent gets a file

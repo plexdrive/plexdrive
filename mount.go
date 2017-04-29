@@ -99,34 +99,34 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 }
 
 // ReadDirAll shows all files in the current directory
-// func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-// 	dirs := []fuse.Dirent{}
-// 	files, err := o.client.GetObjectsByParent(o.id)
-// 	if nil != err {
-// 		return nil, err
-// 	}
-// 	for _, file := range files {
-// 		dirs = append(dirs, fuse.Dirent{
-// 			Name: file.Name,
-// 			Type: fuse.DT_File,
-// 		})
-// 	}
-// 	return dirs, nil
-// }
+func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
+	objects, err := o.client.GetObjectsByParent(o.object.ObjectID)
+	if nil != err {
+		return nil, err
+	}
 
-// // Lookup tests if a file is existent in the current directory
-// func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
-// 	file, err := o.cache.GetObjectByNameAndParent(name, o.id)
-// 	if nil != err {
-// 		return nil, err
-// 	}
+	dirs := []fuse.Dirent{}
+	for _, object := range objects {
+		dirs = append(dirs, fuse.Dirent{
+			Name: object.Name,
+			Type: fuse.DT_File,
+		})
+	}
+	return dirs, nil
+}
 
-// 	return &Object{
-// 		cache:     o.cache,
-// 		id:        file.ID,
-// 		apiObject: file,
-// 	}, nil
-// }
+// Lookup tests if a file is existent in the current directory
+func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
+	object, err := o.client.GetObjectByParentAndName(o.object.ObjectID, name)
+	if nil != err {
+		return nil, err
+	}
+
+	return &Object{
+		client: o.client,
+		object: &object,
+	}, nil
+}
 
 // // Open opens a file for reading
 // func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {

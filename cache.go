@@ -106,7 +106,7 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 
 // GetObject gets an object by id
 func (c *Cache) GetObject(id string, loadFromAPI func(string) (APIObject, error)) (APIObject, error) {
-	Log.Debugf("Getting object with id %v", id)
+	Log.Debugf("Getting object %v", id)
 
 	var object APIObject
 	c.db.Where(&APIObject{ObjectID: id}).First(&object)
@@ -132,18 +132,59 @@ func (c *Cache) GetObject(id string, loadFromAPI func(string) (APIObject, error)
 	return o, nil
 }
 
-// func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]*APIObject, error)) ([]*APIObject, error) {
-// 	var query interface{}
-// 	json.Unmarshal([]byte(fmt.Sprintf(`{"in": ["Parents"], "eq": "%v", "limit": 1}`, id)), &query)
-// 	Log.Tracef("Query: %v", query)
+// GetObjectsByParent get all objects under parent id
+func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]APIObject, error)) ([]APIObject, error) {
+	Log.Debugf("Getting children for %v", parent)
 
-// 	ids := make(map[int]struct{})
-// 	if err := db.EvalQuery(query, c.objects, &ids); nil != err {
-// 		Log.Debugf("%v", err)
-// 		return nil, fmt.Errorf("Could not evaluate cache query")
-// 	}
-// 	Log.Tracef("Got object ids from cache %v", ids)
-// }
+	var objects []APIObject
+	c.db.Where("parents LIKE ?", fmt.Sprintf("%%|%v|%%", parent)).Find(&objects)
+
+	Log.Tracef("Got objects from cache %v", objects)
+
+	if 0 != len(objects) {
+		return objects, nil
+	}
+
+	Log.Debugf("Could not find children for parent %v in cache, loading from API", parent)
+	o, err := loadFromAPI(parent)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return []APIObject{}, fmt.Errorf("Could not load children for %v from API", parent)
+	}
+
+	for _, object := range o {
+		Log.Debugf("Storing object %v in cache", object.ObjectID)
+		c.db.Create(&object)
+	}
+
+	return o, nil
+}
+
+// GetObjectByParentAndName finds a child element by name and its parent id
+func (c *Cache) GetObjectByParentAndName(parent, name string, loadFromAPI func(string, string) (APIObject, error)) (APIObject, error) {
+	Log.Debugf("Getting object with name %v in parent %v", name, parent)
+
+	var object APIObject
+	c.db.Where("parents LIKE ? AND name = ?", fmt.Sprintf("%%|%v|%%", parent), name).First(&object)
+
+	Log.Tracef("Got object from cache %v", object)
+
+	if "" != object.ObjectID {
+		return object, nil
+	}
+
+	Log.Debugf("Could not find object with name %v in parent %v, loading from API", name, parent)
+	o, err := loadFromAPI(parent, name)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return APIObject{}, fmt.Errorf("Could not load object with name %v in parent %v from API", name, parent)
+	}
+
+	Log.Debugf("Storing object %v in cache", o.ObjectID)
+	c.db.Create(&o)
+
+	return o, nil
+}
 
 // // Open a file handle
 // func (c *DefaultCache) Open(object *APIObject, chunkSize int64) (*Buffer, error) {
