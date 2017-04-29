@@ -153,7 +153,7 @@ func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
 		var objects []APIObject
 		pageToken := ""
 		for {
-			query := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents", parent))
+			query := client.Files.List().Q(fmt.Sprintf("trashed = false AND '%v' in parents", parent))
 
 			if "" != pageToken {
 				query = query.PageToken(pageToken)
@@ -192,29 +192,19 @@ func (d *Drive) GetObjectByParentAndName(parent, name string) (APIObject, error)
 		return APIObject{}, fmt.Errorf("Object %v is blacklisted and will not be returned", name)
 	}
 
-	getFunc := func(parent, name string) (APIObject, error) {
-		client, err := d.getClient()
-		if nil != err {
-			Log.Debugf("%v", err)
-			return APIObject{}, fmt.Errorf("Could not get Google Drive client")
-		}
-
-		results, err := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents AND name='%v'", parent, name)).Do()
-		if nil != err {
-			Log.Debugf("%v", err)
-			return APIObject{}, fmt.Errorf("Could not list objects with name %v in parent %v", name, parent)
-		}
-
-		for _, file := range results.Items {
-			if name == file.Title {
-				return d.mapFileToObject(file)
-			}
-		}
-
-		return APIObject{}, fmt.Errorf("Could not get object with name %v in parent %v", name, parent)
+	children, err := d.GetObjectsByParent(parent)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return APIObject{}, fmt.Errorf("Could not get children of parent %v", parent)
 	}
 
-	return d.cache.GetObjectByParentAndName(parent, name, getFunc)
+	for _, child := range children {
+		if name == child.Name {
+			return child, nil
+		}
+	}
+
+	return APIObject{}, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 }
 
 // Open a file

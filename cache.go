@@ -159,29 +159,3 @@ func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]AP
 
 	return o, nil
 }
-
-// GetObjectByParentAndName finds a child element by name and its parent id
-func (c *Cache) GetObjectByParentAndName(parent, name string, loadFromAPI func(string, string) (APIObject, error)) (APIObject, error) {
-	Log.Debugf("Getting object with name %v in parent %v", name, parent)
-
-	var object APIObject
-	c.db.Where("parents LIKE ? AND name = ?", fmt.Sprintf("%%|%v|%%", parent), name).First(&object)
-
-	Log.Tracef("Got object from cache %v", object)
-
-	if "" != object.ObjectID {
-		return object, nil
-	}
-
-	Log.Debugf("Could not find object with name %v in parent %v, loading from API", name, parent)
-	o, err := loadFromAPI(parent, name)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return APIObject{}, fmt.Errorf("Could not load object with name %v in parent %v from API", name, parent)
-	}
-
-	Log.Debugf("Storing object %v in cache", o.ObjectID)
-	c.db.Create(&o)
-
-	return o, nil
-}
