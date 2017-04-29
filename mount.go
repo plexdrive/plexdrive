@@ -41,7 +41,7 @@ func Mount(client *Drive, mountpoint string) error {
 
 	filesys := &FS{
 		client: client,
-		rootID: object.ID,
+		rootID: object.ObjectID,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -71,7 +71,7 @@ func (f *FS) Root() (fs.Node, error) {
 	}
 	return &Object{
 		client: f.client,
-		object: object,
+		object: &object,
 	}, nil
 }
 
@@ -99,20 +99,20 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 }
 
 // ReadDirAll shows all files in the current directory
-func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	dirs := []fuse.Dirent{}
-	files, err := o.client.GetObjectsByParent(o.id)
-	if nil != err {
-		return nil, err
-	}
-	for _, file := range files {
-		dirs = append(dirs, fuse.Dirent{
-			Name: file.Name,
-			Type: fuse.DT_File,
-		})
-	}
-	return dirs, nil
-}
+// func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
+// 	dirs := []fuse.Dirent{}
+// 	files, err := o.client.GetObjectsByParent(o.id)
+// 	if nil != err {
+// 		return nil, err
+// 	}
+// 	for _, file := range files {
+// 		dirs = append(dirs, fuse.Dirent{
+// 			Name: file.Name,
+// 			Type: fuse.DT_File,
+// 		})
+// 	}
+// 	return dirs, nil
+// }
 
 // // Lookup tests if a file is existent in the current directory
 // func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {

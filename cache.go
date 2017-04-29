@@ -1,50 +1,57 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-
-	"strconv"
 
 	"time"
 
-	"strings"
-
-	"github.com/HouzuoGuo/tiedot/db"
 	. "github.com/claudetech/loggo/default"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"golang.org/x/oauth2"
 )
 
 // Cache is the cache
 type Cache struct {
-	db      *db.DB
-	objects *db.Col
-	tokens  *db.Col
+	db *gorm.DB
+}
+
+// APIObject is a Google Drive file object
+type APIObject struct {
+	gorm.Model
+	ObjectID     string
+	Name         string
+	IsDir        bool
+	Size         uint64
+	LastModified time.Time
+	DownloadURL  string
+	Parents      string
+}
+
+// OAuth2Token is the internal gorm structure for the access token
+type OAuth2Token struct {
+	gorm.Model
+	AccessToken  string
+	Expiry       time.Time
+	RefreshToken string
+	TokenType    string
 }
 
 // NewCache creates a new cache instance
 func NewCache(cachePath string) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
-	database, err := db.OpenDB(cachePath)
+	db, err := gorm.Open("sqlite3", cachePath)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not open cache database")
 	}
 
-	Log.Debugf("Creating object collection in cache")
-	database.Create("objects")
-	Log.Debugf("Creating tokens collection in cache")
-	database.Create("tokens")
-
-	objectDB := database.Use("objects")
-	tokenDB := database.Use("tokens")
-
-	objectDB.Index([]string{"ID"})
+	Log.Debugf("Migrating cache schema")
+	db.AutoMigrate(&OAuth2Token{})
+	db.AutoMigrate(&APIObject{})
 
 	return &Cache{
-		db:      database,
-		objects: objectDB,
-		tokens:  tokenDB,
+		db: db,
 	}, nil
 }
 
@@ -63,136 +70,80 @@ func (c *Cache) Close() error {
 func (c *Cache) LoadToken() (*oauth2.Token, error) {
 	Log.Debugf("Loading token from cache")
 
-	results := make(map[int]struct{})
-	if err := db.EvalAllIDs(c.tokens, &results); nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not get token id from cache")
-	}
-	Log.Tracef("Got token ids from cache %v", results)
+	var token OAuth2Token
+	c.db.First(&token)
 
-	for id := range results {
-		r, err := c.tokens.Read(id)
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not read token from cache")
-		}
-		Log.Tracef("Got token result from cache %v", r)
+	Log.Tracef("Got token from cache %v", token)
 
-		expiry, err := strconv.ParseInt(r["Expiry"].(string), 10, 64)
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not parse expiry date")
-		}
-
-		return &oauth2.Token{
-			AccessToken:  r["AccessToken"].(string),
-			Expiry:       time.Unix(expiry, 0),
-			RefreshToken: r["RefreshToken"].(string),
-			TokenType:    r["TokenType"].(string),
-		}, nil
+	if "" == token.AccessToken {
+		return nil, fmt.Errorf("Token not found in cache")
 	}
 
-	return nil, fmt.Errorf("Token not found in cache")
+	return &oauth2.Token{
+		AccessToken:  token.AccessToken,
+		Expiry:       token.Expiry,
+		RefreshToken: token.RefreshToken,
+		TokenType:    token.TokenType,
+	}, nil
 }
 
 // StoreToken stores a token in the cache or updates the existing token element
 func (c *Cache) StoreToken(token *oauth2.Token) error {
 	Log.Debugf("Storing token to cache")
 
-	_, err := c.tokens.Insert(map[string]interface{}{
-		"AccessToken":  token.AccessToken,
-		"Expiry":       strconv.FormatInt(token.Expiry.Unix(), 10),
-		"RefreshToken": token.RefreshToken,
-		"TokenType":    token.TokenType,
-	})
-
-	if nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not store token in cache")
+	c.db.Delete(&OAuth2Token{})
+	t := OAuth2Token{
+		AccessToken:  token.AccessToken,
+		Expiry:       token.Expiry,
+		RefreshToken: token.RefreshToken,
+		TokenType:    token.TokenType,
 	}
+
+	c.db.Create(&t)
 
 	return nil
 }
 
 // GetObject gets an object by id
-func (c *Cache) GetObject(id string, loadFromAPI func(string) (*APIObject, error)) (*APIObject, error) {
-	var query interface{}
-	json.Unmarshal([]byte(fmt.Sprintf(`{"in": ["ID"], "eq": "%v", "limit": 1}`, id)), &query)
-	Log.Tracef("Query: %v", query)
+func (c *Cache) GetObject(id string, loadFromAPI func(string) (APIObject, error)) (APIObject, error) {
+	Log.Debugf("Getting object with id %v", id)
 
-	ids := make(map[int]struct{})
-	if err := db.EvalQuery(query, c.objects, &ids); nil != err {
+	var object APIObject
+	c.db.Where(&APIObject{ObjectID: id}).First(&object)
+
+	Log.Tracef("Got object from cache %v", object)
+
+	if "" != object.ObjectID {
+		return object, nil
+	}
+
+	Log.Debugf("Could not find object %v in cache, loading from API", id)
+	o, err := loadFromAPI(id)
+	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not evaluate cache query")
-	}
-	Log.Tracef("Got object ids from cache %v", ids)
-
-	var object *APIObject
-	for dbID := range ids {
-		Log.Tracef("Reading object %v from cache", id)
-
-		r, err := c.objects.Read(dbID)
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not read object from cache")
-		}
-
-		lastModified, err := strconv.ParseInt(r["LastModified"].(string), 10, 64)
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not parse last modified date")
-		}
-
-		object = &APIObject{
-			ID:           r["ID"].(string),
-			Name:         r["Name"].(string),
-			IsDir:        r["IsDir"].(bool),
-			LastModified: time.Unix(lastModified, 0),
-			Size:         uint64(r["Size"].(float64)),
-			DownloadURL:  r["DownloadURL"].(string),
-			Parents:      strings.Split(r["Parents"].(string), "|"),
-		}
-
-		break
+		return APIObject{}, fmt.Errorf("Could not load object %v from API", id)
 	}
 
-	if nil == object {
-		Log.Debugf("Could not find object %v in cache, loading from API", id)
-
-		o, err := loadFromAPI(id)
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not load object %v from API", id)
-		}
-		object = o
-
-		Log.Debugf("Storing object %v to cache", id)
-		_, err = c.objects.Insert(map[string]interface{}{
-			"ID":           object.ID,
-			"Name":         object.Name,
-			"IsDir":        object.IsDir,
-			"LastModified": strconv.FormatInt(object.LastModified.Unix(), 10),
-			"Size":         float64(object.Size),
-			"DownloadURL":  object.DownloadURL,
-			"Parents":      strings.Join(object.Parents, "|"),
-		})
-
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not store object %v in cache", id)
-		}
-	} else {
-		Log.Debugf("Loaded object %v from cache", id)
+	// do not cache root object
+	if "root" != id {
+		Log.Debugf("Storing object %v in cache", id)
+		c.db.Create(&o)
 	}
-
-	Log.Tracef("Object %v", object)
-
-	return object, nil
+	return o, nil
 }
 
-func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]*APIObject, error)) ([]*APIObject, error) {
+// func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]*APIObject, error)) ([]*APIObject, error) {
+// 	var query interface{}
+// 	json.Unmarshal([]byte(fmt.Sprintf(`{"in": ["Parents"], "eq": "%v", "limit": 1}`, id)), &query)
+// 	Log.Tracef("Query: %v", query)
 
-}
+// 	ids := make(map[int]struct{})
+// 	if err := db.EvalQuery(query, c.objects, &ids); nil != err {
+// 		Log.Debugf("%v", err)
+// 		return nil, fmt.Errorf("Could not evaluate cache query")
+// 	}
+// 	Log.Tracef("Got object ids from cache %v", ids)
+// }
 
 // // Open a file handle
 // func (c *DefaultCache) Open(object *APIObject, chunkSize int64) (*Buffer, error) {

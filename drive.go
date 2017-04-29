@@ -8,6 +8,8 @@ import (
 
 	"time"
 
+	"strings"
+
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
 )
@@ -18,17 +20,6 @@ type Drive struct {
 	context context.Context
 	token   *oauth2.Token
 	config  *oauth2.Config
-}
-
-// APIObject is a Google Drive file object
-type APIObject struct {
-	ID           string
-	Name         string
-	IsDir        bool
-	Size         uint64
-	LastModified time.Time
-	DownloadURL  string
-	Parents      []string
 }
 
 // NewDriveClient creates a new Google Drive client
@@ -101,18 +92,18 @@ func (d *Drive) getClient() (*gdrive.Service, error) {
 }
 
 // GetObject gets an object by id
-func (d *Drive) GetObject(id string) (*APIObject, error) {
-	getFunc := func(id string) (*APIObject, error) {
+func (d *Drive) GetObject(id string) (APIObject, error) {
+	getFunc := func(id string) (APIObject, error) {
 		client, err := d.getClient()
 		if nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not get Google Drive client")
+			return APIObject{}, fmt.Errorf("Could not get Google Drive client")
 		}
 
 		file, err := client.Files.Get(id).Do()
 		if nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not get object %v from API", id)
+			return APIObject{}, fmt.Errorf("Could not get object %v from API", id)
 		}
 
 		// getting file size
@@ -120,88 +111,68 @@ func (d *Drive) GetObject(id string) (*APIObject, error) {
 			res, err := client.Files.Get(id).Download()
 			if nil != err {
 				Log.Debugf("%v", err)
-				return nil, fmt.Errorf("Could not get file size for object %v", id)
+				return APIObject{}, fmt.Errorf("Could not get file size for object %v", id)
 			}
 			file.FileSize = res.ContentLength
 		}
 
-		return mapFileToObject(file)
+		return d.mapFileToObject(file)
 	}
 
 	return d.cache.GetObject(id, getFunc)
 }
 
-// GetObjectsByParent get all objects under parent id
-func (d *Drive) GetObjectsByParent(parent string) ([]*APIObject, error) {
-	getFunc := func(parent string) ([]*APIObject, error) {
-		client, err := d.getClient()
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not get Google Drive client")
-		}
+// // GetObjectsByParent get all objects under parent id
+// func (d *Drive) GetObjectsByParent(parent string) ([]*APIObject, error) {
+// 	getFunc := func(parent string) ([]*APIObject, error) {
+// 		client, err := d.getClient()
+// 		if nil != err {
+// 			Log.Debugf("%v", err)
+// 			return nil, fmt.Errorf("Could not get Google Drive client")
+// 		}
 
-		var objects []*APIObject
-		pageToken := ""
-		for {
-			query := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents", parent))
+// 		var objects []*APIObject
+// 		pageToken := ""
+// 		for {
+// 			query := client.Files.List().Q(fmt.Sprintf("trashed=false AND '%v' in parents", parent))
 
-			if "" != pageToken {
-				query = query.PageToken(pageToken)
-			}
+// 			if "" != pageToken {
+// 				query = query.PageToken(pageToken)
+// 			}
 
-			results, err := query.Do()
-			if nil != err {
-				Log.Debugf("%v", err)
-				return nil, fmt.Errorf("Could not list objects in parent %v", parent)
-			}
+// 			results, err := query.Do()
+// 			if nil != err {
+// 				Log.Debugf("%v", err)
+// 				return nil, fmt.Errorf("Could not list objects in parent %v", parent)
+// 			}
 
-			for _, file := range results.Items {
-				object, err := mapFileToObject(file)
-				if nil != err {
-					Log.Debugf("%v", err)
-					return nil, fmt.Errorf("Could not map Google Drive file to object")
-				}
-				objects = append(objects, object)
-			}
+// 			for _, file := range results.Items {
+// 				object, err := mapFileToObject(file)
+// 				if nil != err {
+// 					Log.Debugf("%v", err)
+// 					return nil, fmt.Errorf("Could not map Google Drive file to object")
+// 				}
+// 				objects = append(objects, object)
+// 			}
 
-			pageToken = results.NextPageToken
-			if "" == pageToken {
-				break
-			}
-		}
+// 			pageToken = results.NextPageToken
+// 			if "" == pageToken {
+// 				break
+// 			}
+// 		}
 
-		return objects, nil
-	}
+// 		return objects, nil
+// 	}
 
-	return d.cache.GetObjectsByParent(parent, getFunc)
-}
-
-// FileSize gets the file size
-func (d *Drive) FileSize(id string) (int64, error) {
-	client, err := d.getClient()
-	if nil != err {
-		return 0, err
-	}
-
-	httpResponse, err := client.Files.Get(id).Download()
-	if nil != err {
-		return 0, err
-	}
-
-	statusCode := httpResponse.StatusCode
-	if 200 == statusCode {
-		return httpResponse.ContentLength, nil
-	}
-
-	return 0, fmt.Errorf("Invalid status code %v", statusCode)
-}
+// 	return d.cache.GetObjectsByParent(parent, getFunc)
+// }
 
 // mapFileToObject maps a Google Drive file to APIObject
-func mapFileToObject(file *gdrive.File) (*APIObject, error) {
+func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedDate)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not parse last modified date")
+		return APIObject{}, fmt.Errorf("Could not parse last modified date")
 	}
 
 	var parents []string
@@ -209,14 +180,14 @@ func mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		parents = append(parents, parent.Id)
 	}
 
-	return &APIObject{
-		ID:           file.Id,
+	return APIObject{
+		ObjectID:     file.Id,
 		Name:         file.Title,
 		IsDir:        file.MimeType == "application/vnd.google-apps.folder",
 		LastModified: lastModified,
 		Size:         uint64(file.FileSize),
 		DownloadURL:  file.DownloadUrl,
-		Parents:      parents,
+		Parents:      fmt.Sprintf("|%v|", strings.Join(parents, "|")),
 	}, nil
 }
 
