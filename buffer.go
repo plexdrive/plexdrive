@@ -100,15 +100,14 @@ func (b *Buffer) Close() error {
 }
 
 // ReadBytes on a specific location
-func (b *Buffer) ReadBytes(start, size int64) ([]byte, error) {
+func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 	fOffset := start % b.chunkSize
 	offset := start - fOffset
 	offsetEnd := offset + b.chunkSize
 
-	Log.Debugf("Getting object %v bytes %v - %v", b.object.ObjectID, offset, offsetEnd)
+	Log.Debugf("Getting object %v bytes %v - %v (is preload: %v)", b.object.ObjectID, offset, offsetEnd, isPreload)
 
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
-
 	if f, err := os.Open(filename); nil == err {
 		defer f.Close()
 		buf := make([]byte, size)
@@ -153,9 +152,9 @@ func (b *Buffer) ReadBytes(start, size int64) ([]byte, error) {
 		return nil, err
 	}
 
-	if b.preload && uint64(offsetEnd) < b.object.Size {
+	if !isPreload && b.preload && uint64(offsetEnd) < b.object.Size {
 		go func() {
-			b.ReadBytes(offsetEnd+1, size)
+			b.ReadBytes(offsetEnd+1, size, true)
 		}()
 	}
 
