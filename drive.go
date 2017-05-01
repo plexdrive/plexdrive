@@ -57,7 +57,92 @@ func NewDriveClient(config *Config, cache *Cache) (*Drive, error) {
 		return nil, err
 	}
 
+	go drive.startWatchChanges()
+
 	return &drive, nil
+}
+
+func (d *Drive) startWatchChanges() {
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		Log.Warningf("Could not get Google Drive client to watch for changes")
+		return
+	}
+
+	for _ = range time.Tick(1 * time.Minute) {
+		Log.Debugf("Checking for changes")
+
+		changeID, err := d.cache.GetLargestChangeID()
+		if nil != err {
+			Log.Debugf("%v", err)
+			Log.Warningf("Could not get largest change ID")
+			continue
+		}
+
+		deletedItems := 0
+		updatedItems := 0
+		createdItems := 0
+		processedItems := 0
+		pageToken := ""
+		for {
+			query := client.Changes.List().IncludeDeleted(true).MaxResults(500)
+
+			if "" != pageToken {
+				query = query.PageToken(pageToken)
+			}
+
+			if 0 != changeID {
+				query = query.StartChangeId(changeID)
+			}
+
+			results, err := query.Do()
+			if nil != err {
+				Log.Debugf("%v", err)
+				Log.Warningf("Could not get changes")
+				break
+			}
+
+			for _, change := range results.Items {
+				if change.Deleted || (nil != change.File && change.File.ExplicitlyTrashed) {
+					d.cache.DeleteObject(change.FileId)
+					deletedItems++
+				} else {
+					object, err := d.mapFileToObject(change.File)
+					if nil != err {
+						Log.Debugf("%v", err)
+						Log.Warningf("Could not map Google Drive file to object")
+					} else {
+						created, err := d.cache.UpdateObject(&object)
+						if nil != err {
+							Log.Debugf("%v", err)
+							Log.Warningf("Could not update object %v", object.ObjectID)
+						}
+						if created {
+							createdItems++
+						} else {
+							updatedItems++
+						}
+					}
+				}
+
+				processedItems++
+			}
+
+			if processedItems > 0 {
+				Log.Infof("Processed %v items / deleted %v items / created %v items / updated %v items",
+					processedItems, deletedItems, createdItems, updatedItems)
+			}
+
+			changeID = results.LargestChangeId
+			pageToken = results.NextPageToken
+			if "" == pageToken {
+				break
+			}
+		}
+
+		d.cache.StoreLargestChangeID(changeID)
+	}
 }
 
 func (d *Drive) authorize() error {
@@ -153,7 +238,7 @@ func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
 		var objects []APIObject
 		pageToken := ""
 		for {
-			query := client.Files.List().Q(fmt.Sprintf("trashed = false AND '%v' in parents", parent))
+			query := client.Files.List().Q(fmt.Sprintf("trashed = false AND '%v' in parents", parent)).MaxResults(500)
 
 			if "" != pageToken {
 				query = query.PageToken(pageToken)

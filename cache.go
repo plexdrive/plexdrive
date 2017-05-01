@@ -18,14 +18,14 @@ type Cache struct {
 
 // APIObject is a Google Drive file object
 type APIObject struct {
-	gorm.Model
-	ObjectID     string
+	ObjectID     string `gorm:"primary_key"`
 	Name         string
 	IsDir        bool
 	Size         uint64
 	LastModified time.Time
 	DownloadURL  string
 	Parents      string
+	CreatedAt    time.Time
 }
 
 // OAuth2Token is the internal gorm structure for the access token
@@ -35,6 +35,12 @@ type OAuth2Token struct {
 	Expiry       time.Time
 	RefreshToken string
 	TokenType    string
+}
+
+// LargestChangeID is the last change id
+type LargestChangeID struct {
+	gorm.Model
+	ChangeID int64
 }
 
 // NewCache creates a new cache instance
@@ -49,6 +55,7 @@ func NewCache(cachePath string) (*Cache, error) {
 	Log.Debugf("Migrating cache schema")
 	db.AutoMigrate(&OAuth2Token{})
 	db.AutoMigrate(&APIObject{})
+	db.AutoMigrate(&LargestChangeID{})
 
 	return &Cache{
 		db: db,
@@ -158,4 +165,56 @@ func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]AP
 	}
 
 	return o, nil
+}
+
+// DeleteObject deletes an object by id
+func (c *Cache) DeleteObject(id string) error {
+	Log.Debugf("Deleting object %v", id)
+
+	c.db.Where(&APIObject{ObjectID: id}).Delete(&APIObject{})
+
+	return nil
+}
+
+// UpdateObject updates an object
+func (c *Cache) UpdateObject(object *APIObject) (bool, error) {
+
+	var obj APIObject
+	c.db.Where(&APIObject{ObjectID: object.ObjectID}).First(&obj)
+
+	created := false
+	if "" == obj.ObjectID {
+		Log.Debugf("Storing object %v in cache", object.ObjectID)
+		c.db.Create(&object)
+		created = true
+	} else {
+		Log.Debugf("Updating object %v in cache", object.ObjectID)
+		c.db.Model(obj).Update(object)
+	}
+
+	return created, nil
+}
+
+// StoreLargestChangeID stores the largest change id
+func (c *Cache) StoreLargestChangeID(changeID int64) error {
+	Log.Debugf("Storing change id %v in cache", changeID)
+
+	c.db.Delete(&LargestChangeID{})
+	c.db.Create(&LargestChangeID{
+		ChangeID: changeID,
+	})
+
+	return nil
+}
+
+// GetLargestChangeID gets the largest change id or zero change id
+func (c *Cache) GetLargestChangeID() (int64, error) {
+	Log.Debugf("Getting change id from cache")
+
+	var changeID LargestChangeID
+	c.db.First(&changeID)
+
+	Log.Tracef("Got change id %v", changeID.ChangeID)
+
+	return changeID.ChangeID, nil
 }
