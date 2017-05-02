@@ -43,7 +43,15 @@ func GetBufferInstance(client *http.Client, object *APIObject) (*Buffer, error) 
 		instances.Set(object.ObjectID, i)
 	}
 
-	instance, _ := instances.Get(object.ObjectID)
+	instance, ok := instances.Get(object.ObjectID)
+	// if buffer allocation failed due to race conditions it will try to fetch a new one
+	if !ok {
+		i, err := GetBufferInstance(client, object)
+		if nil != err {
+			return nil, err
+		}
+		instance = i
+	}
 	instance.(*Buffer).numberOfInstances++
 	return instance.(*Buffer), nil
 }
