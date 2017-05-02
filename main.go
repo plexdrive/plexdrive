@@ -24,9 +24,10 @@ func main() {
 	argTempPath := flag.String("temp", os.TempDir(), "Path to a temporary directory to store temporary data")
 	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in kb)")
 	// TODO: add clear cache option
+	// TODO: add refresh interval
+	// TODO: add clear interval
+	// TODO: add mount options (allow_other, ...)
 	flag.Parse()
-
-	// TODO: chunksize is not used yet
 
 	// check if mountpoint is specified
 	argMountPoint := flag.Arg(0)

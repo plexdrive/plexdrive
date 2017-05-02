@@ -70,14 +70,14 @@ func (d *Drive) startWatchChanges() {
 		return
 	}
 
-	for _ = range time.Tick(1 * time.Minute) {
+	checkChanges := func() {
 		Log.Debugf("Checking for changes")
 
 		changeID, err := d.cache.GetLargestChangeID()
 		if nil != err {
 			Log.Debugf("%v", err)
 			Log.Warningf("Could not get largest change ID")
-			continue
+			return
 		}
 
 		deletedItems := 0
@@ -142,6 +142,11 @@ func (d *Drive) startWatchChanges() {
 		}
 
 		d.cache.StoreLargestChangeID(changeID)
+	}
+
+	checkChanges()
+	for _ = range time.Tick(15 * time.Minute) {
+		checkChanges()
 	}
 }
 
