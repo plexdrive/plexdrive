@@ -11,8 +11,8 @@ import (
 
 // CleanChunkDir check frequently the temporary directory and
 // cleans old stuff
-func CleanChunkDir(chunkDir string) {
-	for _ = range time.Tick(1 * time.Minute) {
+func CleanChunkDir(chunkDir string, clearInterval time.Duration) {
+	for _ = range time.Tick(clearInterval) {
 		Log.Debugf("Cleaning chunk directory %v", chunkDir)
 
 		filepath.Walk(chunkDir, func(path string, f os.FileInfo, err error) error {

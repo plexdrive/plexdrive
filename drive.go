@@ -37,7 +37,7 @@ type Drive struct {
 }
 
 // NewDriveClient creates a new Google Drive client
-func NewDriveClient(config *Config, cache *Cache) (*Drive, error) {
+func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration) (*Drive, error) {
 	drive := Drive{
 		cache:   cache,
 		context: context.Background(),
@@ -57,12 +57,12 @@ func NewDriveClient(config *Config, cache *Cache) (*Drive, error) {
 		return nil, err
 	}
 
-	go drive.startWatchChanges()
+	go drive.startWatchChanges(refreshInterval)
 
 	return &drive, nil
 }
 
-func (d *Drive) startWatchChanges() {
+func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -104,6 +104,8 @@ func (d *Drive) startWatchChanges() {
 			}
 
 			for _, change := range results.Items {
+				Log.Tracef("Change %v", change)
+
 				if change.Deleted || (nil != change.File && change.File.ExplicitlyTrashed) {
 					d.cache.DeleteObject(change.FileId)
 					deletedItems++
@@ -134,18 +136,20 @@ func (d *Drive) startWatchChanges() {
 					processedItems, deletedItems, createdItems, updatedItems)
 			}
 
-			changeID = results.LargestChangeId
+			if results.LargestChangeId >= changeID {
+				changeID = results.LargestChangeId
+				d.cache.StoreLargestChangeID(changeID + 1)
+			}
+
 			pageToken = results.NextPageToken
 			if "" == pageToken {
 				break
 			}
 		}
-
-		d.cache.StoreLargestChangeID(changeID)
 	}
 
 	checkChanges()
-	for _ = range time.Tick(15 * time.Minute) {
+	for _ = range time.Tick(refreshInterval) {
 		checkChanges()
 	}
 }

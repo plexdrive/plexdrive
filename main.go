@@ -7,6 +7,8 @@ import (
 	"os/user"
 	"path/filepath"
 
+	"time"
+
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
 )
@@ -23,9 +25,9 @@ func main() {
 	argConfigPath := flag.String("config", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.String("temp", os.TempDir(), "Path to a temporary directory to store temporary data")
 	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in kb)")
+	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
+	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
 	// TODO: add clear cache option
-	// TODO: add refresh interval
-	// TODO: add clear interval
 	// TODO: add mount options (allow_other, ...)
 	flag.Parse()
 
@@ -93,14 +95,14 @@ func main() {
 	}
 	defer cache.Close()
 
-	drive, err := NewDriveClient(config, cache)
+	drive, err := NewDriveClient(config, cache, *argRefreshInterval)
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
 		Log.Debugf("%v", err)
 		os.Exit(5)
 	}
 
-	go CleanChunkDir(chunkPath)
+	go CleanChunkDir(chunkPath, *argClearInterval)
 	if err := Mount(drive, argMountPoint); nil != err {
 		Log.Errorf("Could not mount path %v", argMountPoint)
 		Log.Debugf("%v", err)

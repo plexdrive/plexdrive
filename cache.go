@@ -185,10 +185,12 @@ func (c *Cache) UpdateObject(object *APIObject) (bool, error) {
 	created := false
 	if "" == obj.ObjectID {
 		Log.Debugf("Storing object %v in cache", object.ObjectID)
+		Log.Tracef("Storing object %v", object)
 		c.db.Create(&object)
 		created = true
 	} else {
 		Log.Debugf("Updating object %v in cache", object.ObjectID)
+		Log.Tracef("Updating object %v", object)
 		c.db.Model(obj).Update(object)
 	}
 
