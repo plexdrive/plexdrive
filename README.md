@@ -1,0 +1,66 @@
+# Plexdrive
+Plexdrive allows you to mount your Google Drive account as fuse
+filesystem.
+
+The project is comparable to projects like [rclone](https://rclone.org/) or [node-gdrive-fuse](https://github.com/thejinx0r/node-gdrive-fuse), but optimized for media streaming e.g. with plex ;)
+
+I tried using rclone a long time, but got API Quota errors ever day, or more times a day. So I decided to try node-gdrive-fuse. The problem here was, that it missed some of my media files, so I started implementing my own file system library.
+
+## Installation
+1. First you should install fuse on your system
+2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
+
+3. You have to create a configuration directory and configuration file like this
+```
+mkdir ~/.plexdrive
+touch ~/.plexdrive/config.json
+```
+The content of the config.json file should look like this
+```
+{
+  "clientId": "",
+  "clientSecret": ""
+}
+
+```
+You simply have to add your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
+
+4. Run the application like this
+```
+./plexdrive /path/to/my/mount
+```
+
+### Usage
+```
+Usage of ./plexdrive:
+  -chunk-size int
+    	The size of each chunk that is downloaded (in kb) (default 5242880)
+  -clear-chunk-interval duration
+    	The number of minutes to wait till clearing the chunk directory (default 1m0s)
+  -config string
+    	The path to the configuration directory (default "/home/myuser/.plexdrive")
+  -log-level int
+    	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
+  -refresh-interval duration
+    	The number of minutes to wait till checking for changes (default 5m0s)
+  -temp string
+    	Path to a temporary directory to store temporary data (default "/tmp")
+```
+
+# Init files
+Personally I start the program with systemd. You can use this configuration
+```
+[Unit]
+Description=Plexdrive
+AssertPathIsDirectory=/mnt/drive
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/plexdrive -log-level 2 /mnt/drive
+ExecStop=/bin/fusermount -u /mnt/drive
+Restart=on-abort
+
+[Install]
+WantedBy=default.target
+```
