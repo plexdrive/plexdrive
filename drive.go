@@ -82,11 +82,11 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 
 		deletedItems := 0
 		updatedItems := 0
-		createdItems := 0
 		processedItems := 0
 		pageToken := ""
+		largestChangeID := changeID
 		for {
-			query := client.Changes.List().IncludeDeleted(true).MaxResults(500)
+			query := client.Changes.List().IncludeDeleted(true).MaxResults(1000)
 
 			if "" != pageToken {
 				query = query.PageToken(pageToken)
@@ -115,16 +115,12 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 						Log.Debugf("%v", err)
 						Log.Warningf("Could not map Google Drive file to object")
 					} else {
-						created, err := d.cache.UpdateObject(&object)
+						err := d.cache.UpdateObject(&object)
 						if nil != err {
 							Log.Debugf("%v", err)
 							Log.Warningf("Could not update object %v", object.ObjectID)
 						}
-						if created {
-							createdItems++
-						} else {
-							updatedItems++
-						}
+						updatedItems++
 					}
 				}
 
@@ -132,19 +128,19 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 			}
 
 			if processedItems > 0 {
-				Log.Infof("Processed %v items / deleted %v items / created %v items / updated %v items",
-					processedItems, deletedItems, createdItems, updatedItems)
+				Log.Infof("Processed %v items / deleted %v items / updated %v items",
+					processedItems, deletedItems, updatedItems)
 			}
 
-			if results.LargestChangeId >= changeID {
-				changeID = results.LargestChangeId
-				d.cache.StoreLargestChangeID(changeID + 1)
-			}
-
+			largestChangeID = results.LargestChangeId
 			pageToken = results.NextPageToken
 			if "" == pageToken {
 				break
 			}
+		}
+
+		if largestChangeID >= changeID {
+			d.cache.StoreLargestChangeID(largestChangeID + 1)
 		}
 	}
 
@@ -247,7 +243,7 @@ func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
 		var objects []APIObject
 		pageToken := ""
 		for {
-			query := client.Files.List().Q(fmt.Sprintf("trashed = false AND '%v' in parents", parent)).MaxResults(500)
+			query := client.Files.List().Q(fmt.Sprintf("trashed = false AND '%v' in parents", parent)).MaxResults(1000)
 
 			if "" != pageToken {
 				query = query.PageToken(pageToken)

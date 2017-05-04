@@ -13,7 +13,20 @@ import (
 
 // Cache is the cache
 type Cache struct {
-	db *gorm.DB
+	db       *gorm.DB
+	dbAction chan cacheAction
+}
+
+const (
+	// StoreAction stores an object in cache
+	StoreAction = iota
+	// DeleteAction deletes an object in cache
+	DeleteAction = iota
+)
+
+type cacheAction struct {
+	action int
+	object *APIObject
 }
 
 // APIObject is a Google Drive file object
@@ -57,14 +70,36 @@ func NewCache(cachePath string) (*Cache, error) {
 	db.AutoMigrate(&APIObject{})
 	db.AutoMigrate(&LargestChangeID{})
 
-	return &Cache{
-		db: db,
-	}, nil
+	cache := Cache{
+		db:       db,
+		dbAction: make(chan cacheAction),
+	}
+
+	go cache.startStoringQueue()
+
+	return &cache, nil
+}
+
+func (c *Cache) startStoringQueue() {
+	for {
+		action := <-c.dbAction
+
+		if action.action == DeleteAction || action.action == StoreAction {
+			Log.Debugf("Deleting object %v", action.object.ObjectID)
+			c.db.Where(action.object).Delete(&APIObject{})
+		}
+		if action.action == StoreAction {
+			Log.Debugf("Storing object %v in cache", action.object.ObjectID)
+			c.db.Create(action.object)
+		}
+	}
 }
 
 // Close closes all handles
 func (c *Cache) Close() error {
 	Log.Debugf("Closing cache connection")
+
+	close(c.dbAction)
 	if err := c.db.Close(); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not close cache connection")
@@ -133,8 +168,10 @@ func (c *Cache) GetObject(id string, loadFromAPI func(string) (APIObject, error)
 
 	// do not cache root object
 	if "root" != id {
-		Log.Debugf("Storing object %v in cache", id)
-		c.db.Create(&o)
+		c.dbAction <- cacheAction{
+			action: StoreAction,
+			object: &o,
+		}
 	}
 	return o, nil
 }
@@ -160,8 +197,10 @@ func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]AP
 	}
 
 	for _, object := range o {
-		Log.Debugf("Storing object %v in cache", object.ObjectID)
-		c.db.Create(&object)
+		c.dbAction <- cacheAction{
+			action: StoreAction,
+			object: &object,
+		}
 	}
 
 	return o, nil
@@ -169,32 +208,20 @@ func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]AP
 
 // DeleteObject deletes an object by id
 func (c *Cache) DeleteObject(id string) error {
-	Log.Debugf("Deleting object %v", id)
-
-	c.db.Where(&APIObject{ObjectID: id}).Delete(&APIObject{})
-
+	c.dbAction <- cacheAction{
+		action: DeleteAction,
+		object: &APIObject{ObjectID: id},
+	}
 	return nil
 }
 
 // UpdateObject updates an object
-func (c *Cache) UpdateObject(object *APIObject) (bool, error) {
-
-	var obj APIObject
-	c.db.Where(&APIObject{ObjectID: object.ObjectID}).First(&obj)
-
-	created := false
-	if "" == obj.ObjectID {
-		Log.Debugf("Storing object %v in cache", object.ObjectID)
-		Log.Tracef("Storing object %v", object)
-		c.db.Create(&object)
-		created = true
-	} else {
-		Log.Debugf("Updating object %v in cache", object.ObjectID)
-		Log.Tracef("Updating object %v", object)
-		c.db.Model(obj).Update(object)
+func (c *Cache) UpdateObject(object *APIObject) error {
+	c.dbAction <- cacheAction{
+		action: StoreAction,
+		object: object,
 	}
-
-	return created, nil
+	return nil
 }
 
 // StoreLargestChangeID stores the largest change id
