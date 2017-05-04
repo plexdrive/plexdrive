@@ -38,7 +38,9 @@ Usage of ./plexdrive:
   -clear-chunk-interval duration
     	The number of minutes to wait till clearing the chunk directory (default 1m0s)
   -config string
-    	The path to the configuration directory (default "/home/myuser/.plexdrive")
+    	The path to the configuration directory (default "/home/user/.plexdrive")
+  -fuse-options string
+    	Fuse mount options (e.g. -fuse-options allow_other,...)
   -log-level int
     	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   -refresh-interval duration
