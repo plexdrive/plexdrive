@@ -12,7 +12,7 @@ import (
 )
 
 // Mount the fuse volume
-func Mount(client *Drive, mountpoint string) error {
+func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 	Log.Infof("Mounting path %v", mountpoint)
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
@@ -27,7 +27,34 @@ func Mount(client *Drive, mountpoint string) error {
 		Log.Tracef("FUSE %v", msg)
 	}
 
-	c, err := fuse.Mount(mountpoint)
+	options := []fuse.MountOption{
+		fuse.NoAppleDouble(),
+		fuse.NoAppleXattr(),
+		fuse.ReadOnly(),
+	}
+	for _, option := range mountOptions {
+		var o fuse.MountOption
+		switch option {
+		case "allow_other":
+			o = fuse.AllowOther()
+			break
+		case "allow_root":
+			o = fuse.AllowRoot()
+			break
+		case "allow_dev":
+			o = fuse.AllowDev()
+			break
+		case "allow_non_empty_mount":
+			o = fuse.AllowNonEmptyMount()
+			break
+		case "allow_suid":
+			o = fuse.AllowSUID()
+			break
+		}
+		options = append(options, o)
+	}
+
+	c, err := fuse.Mount(mountpoint, options...)
 	if err != nil {
 		return err
 	}
@@ -52,7 +79,12 @@ func Mount(client *Drive, mountpoint string) error {
 	if err := c.MountError; err != nil {
 		return err
 	}
+	
 	Log.Infof("Unmounting path %v", mountpoint)
+	err = fuse.Unmount(mountpoint)
+	if nil != err {
+		return err
+	}
 
 	return nil
 }

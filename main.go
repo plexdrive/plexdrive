@@ -9,6 +9,8 @@ import (
 
 	"time"
 
+	"strings"
+
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
 )
@@ -27,8 +29,7 @@ func main() {
 	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in kb)")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
-	// TODO: add clear cache option
-	// TODO: add mount options (allow_other, ...)
+	argMountOptions := flag.String("fuse-options", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	flag.Parse()
 
 	// check if mountpoint is specified
@@ -36,6 +37,12 @@ func main() {
 	if "" == argMountPoint {
 		flag.Usage()
 		panic(fmt.Errorf("Mountpoint not specified"))
+	}
+
+	// parse the mount options
+	var mountOptions []string
+	if "" != *argMountOptions {
+		mountOptions = strings.Split(*argMountOptions, ",")
 	}
 
 	// initialize the logger with the specific log level
@@ -57,10 +64,13 @@ func main() {
 	Log.SetLevel(logLevel)
 
 	// debug all given parameters
-	Log.Debugf("log-level  : %v", logLevel)
-	Log.Debugf("config     : %v", *argConfigPath)
-	Log.Debugf("temp       : %v", *argTempPath)
-	Log.Debugf("chunk-size : %v", *argChunkSize)
+	Log.Debugf("log-level            : %v", logLevel)
+	Log.Debugf("config               : %v", *argConfigPath)
+	Log.Debugf("temp                 : %v", *argTempPath)
+	Log.Debugf("chunk-size           : %v", *argChunkSize)
+	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
+	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
+	Log.Debugf("fuse-options         : %v", *argMountOptions)
 
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
@@ -103,8 +113,7 @@ func main() {
 	}
 
 	go CleanChunkDir(chunkPath, *argClearInterval)
-	if err := Mount(drive, argMountPoint); nil != err {
-		Log.Errorf("Could not mount path %v", argMountPoint)
+	if err := Mount(drive, argMountPoint, mountOptions); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(6)
 	}
