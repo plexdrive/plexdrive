@@ -33,25 +33,26 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 		fuse.ReadOnly(),
 	}
 	for _, option := range mountOptions {
-		var o fuse.MountOption
 		switch option {
 		case "allow_other":
-			o = fuse.AllowOther()
+			options = append(options, fuse.AllowOther())
 			break
 		case "allow_root":
-			o = fuse.AllowRoot()
+			options = append(options, fuse.AllowRoot())
 			break
 		case "allow_dev":
-			o = fuse.AllowDev()
+			options = append(options, fuse.AllowDev())
 			break
 		case "allow_non_empty_mount":
-			o = fuse.AllowNonEmptyMount()
+			options = append(options, fuse.AllowNonEmptyMount())
 			break
 		case "allow_suid":
-			o = fuse.AllowSUID()
+			options = append(options, fuse.AllowSUID())
+			break
+		default:
+			Log.Warningf("Fuse option %v is not supported, yet", option)
 			break
 		}
-		options = append(options, o)
 	}
 
 	c, err := fuse.Mount(mountpoint, options...)
@@ -79,7 +80,7 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 	if err := c.MountError; err != nil {
 		return err
 	}
-	
+
 	Log.Infof("Unmounting path %v", mountpoint)
 	err = fuse.Unmount(mountpoint)
 	if nil != err {
