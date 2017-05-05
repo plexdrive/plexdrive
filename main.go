@@ -26,7 +26,7 @@ func main() {
 	argLogLevel := flag.Int("log-level", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
 	argConfigPath := flag.String("config", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.String("temp", os.TempDir(), "Path to a temporary directory to store temporary data")
-	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in kb)")
+	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in byte)")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
 	argMountOptions := flag.String("fuse-options", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
