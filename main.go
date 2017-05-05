@@ -90,11 +90,15 @@ func main() {
 	SetChunkSize(*argChunkSize)
 
 	// read the configuration
-	config, err := ReadConfig(filepath.Join(*argConfigPath, "config.json"))
+	configPath := filepath.Join(*argConfigPath, "config.json")
+	config, err := ReadConfig(configPath)
 	if nil != err {
-		Log.Errorf("Could not read configuration")
-		Log.Debugf("%v", err)
-		os.Exit(3)
+		config, err = CreateConfig(configPath)
+		if nil != err {
+			Log.Errorf("Could not read configuration")
+			Log.Debugf("%v", err)
+			os.Exit(3)
+		}
 	}
 
 	cache, err := NewCache(filepath.Join(*argConfigPath, "cache"))
