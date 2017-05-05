@@ -166,5 +166,5 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 		}()
 	}
 
-	return bytes[fOffset:int64(math.Min(float64(start+size), float64(len(bytes))))], nil
+	return bytes[fOffset:int64(math.Min(float64(fOffset+size), float64(len(bytes))))], nil
 }
