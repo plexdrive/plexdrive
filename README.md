@@ -34,7 +34,7 @@ You simply have to add your own client id and client secret (see [https://rclone
 ```
 Usage of ./plexdrive:
   -chunk-size int
-    	The size of each chunk that is downloaded (in kb) (default 5242880)
+    	The size of each chunk that is downloaded (in byte) (default 5242880)
   -clear-chunk-interval duration
     	The number of minutes to wait till clearing the chunk directory (default 1m0s)
   -config string
