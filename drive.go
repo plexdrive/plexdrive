@@ -70,7 +70,7 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 		return
 	}
 
-	checkChanges := func() {
+	checkChanges := func(firstCheck bool) {
 		Log.Debugf("Checking for changes")
 
 		changeID, err := d.cache.GetLargestChangeID()
@@ -78,6 +78,10 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 			Log.Debugf("%v", err)
 			Log.Warningf("Could not get largest change ID")
 			return
+		}
+
+		if firstCheck {
+			Log.Infof("First cache build process started...")
 		}
 
 		deletedItems := 0
@@ -142,11 +146,15 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 		if largestChangeID >= changeID {
 			d.cache.StoreLargestChangeID(largestChangeID + 1)
 		}
+
+		if firstCheck {
+			Log.Infof("First cache build process finished!")
+		}
 	}
 
-	checkChanges()
+	checkChanges(true)
 	for _ = range time.Tick(refreshInterval) {
-		checkChanges()
+		checkChanges(false)
 	}
 }
 
