@@ -97,7 +97,7 @@ func (f *FS) Root() (fs.Node, error) {
 	}
 	return &Object{
 		client: f.client,
-		object: &object,
+		object: object,
 	}, nil
 }
 
@@ -153,7 +153,7 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 	return &Object{
 		client: o.client,
-		object: &object,
+		object: object,
 	}, nil
 }
 

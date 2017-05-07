@@ -119,7 +119,7 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 						Log.Debugf("%v", err)
 						Log.Warningf("Could not map Google Drive file to object")
 					} else {
-						err := d.cache.UpdateObject(&object)
+						err := d.cache.UpdateObject(object)
 						if nil != err {
 							Log.Debugf("%v", err)
 							Log.Warningf("Could not update object %v", object.ObjectID)
@@ -209,20 +209,20 @@ func (d *Drive) getNativeClient() *http.Client {
 }
 
 // GetRoot gets the root node directly from the API
-func (d *Drive) GetRoot() (APIObject, error) {
+func (d *Drive) GetRoot() (*APIObject, error) {
 	Log.Debugf("Getting root from API")
 	id := "root"
 
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
-		return APIObject{}, fmt.Errorf("Could not get Google Drive client")
+		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
 	file, err := client.Files.Get(id).Do()
 	if nil != err {
 		Log.Debugf("%v", err)
-		return APIObject{}, fmt.Errorf("Could not get object %v from API", id)
+		return nil, fmt.Errorf("Could not get object %v from API", id)
 	}
 
 	// getting file size
@@ -230,7 +230,7 @@ func (d *Drive) GetRoot() (APIObject, error) {
 		res, err := client.Files.Get(id).Download()
 		if nil != err {
 			Log.Debugf("%v", err)
-			return APIObject{}, fmt.Errorf("Could not get file size for object %v", id)
+			return nil, fmt.Errorf("Could not get file size for object %v", id)
 		}
 		file.FileSize = res.ContentLength
 	}
@@ -239,19 +239,19 @@ func (d *Drive) GetRoot() (APIObject, error) {
 }
 
 // GetObject gets an object by id
-func (d *Drive) GetObject(id string) (APIObject, error) {
+func (d *Drive) GetObject(id string) (*APIObject, error) {
 	return d.cache.GetObject(id)
 }
 
 // GetObjectsByParent get all objects under parent id
-func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
+func (d *Drive) GetObjectsByParent(parent string) ([]*APIObject, error) {
 	return d.cache.GetObjectsByParent(parent)
 }
 
 // GetObjectByParentAndName finds a child element by name and its parent id
-func (d *Drive) GetObjectByParentAndName(parent, name string) (APIObject, error) {
+func (d *Drive) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
 	if _, exists := BlackListObjects[name]; exists {
-		return APIObject{}, fmt.Errorf("Object %v is blacklisted and will not be returned", name)
+		return nil, fmt.Errorf("Object %v is blacklisted and will not be returned", name)
 	}
 
 	return d.cache.GetObjectByParentAndName(parent, name)
@@ -264,11 +264,11 @@ func (d *Drive) Open(object *APIObject) (*Buffer, error) {
 }
 
 // mapFileToObject maps a Google Drive file to APIObject
-func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
+func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedDate)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return APIObject{}, fmt.Errorf("Could not parse last modified date")
+		return nil, fmt.Errorf("Could not parse last modified date")
 	}
 
 	var parents []string
@@ -276,7 +276,7 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (APIObject, error) {
 		parents = append(parents, parent.Id)
 	}
 
-	return APIObject{
+	return &APIObject{
 		ObjectID:     file.Id,
 		Name:         file.Title,
 		IsDir:        file.MimeType == "application/vnd.google-apps.folder",
