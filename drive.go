@@ -210,6 +210,7 @@ func (d *Drive) getNativeClient() *http.Client {
 
 // GetRoot gets the root node directly from the API
 func (d *Drive) GetRoot() (APIObject, error) {
+	Log.Debugf("Getting root from API")
 	id := "root"
 
 	client, err := d.getClient()

@@ -61,15 +61,8 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 	}
 	defer c.Close()
 
-	object, err := client.GetRoot()
-	if nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not get root node")
-	}
-
 	filesys := &FS{
 		client: client,
-		rootID: object.ObjectID,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -93,12 +86,11 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 // FS the fuse filesystem
 type FS struct {
 	client *Drive
-	rootID string
 }
 
 // Root returns the root path
 func (f *FS) Root() (fs.Node, error) {
-	object, err := f.client.GetObject(f.rootID)
+	object, err := f.client.GetRoot()
 	if nil != err {
 		Log.Warningf("%v", err)
 		return nil, fmt.Errorf("Could not get root object")
