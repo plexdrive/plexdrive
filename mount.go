@@ -5,6 +5,10 @@ import (
 
 	"fmt"
 
+	"strings"
+
+	"strconv"
+
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	. "github.com/claudetech/loggo/default"
@@ -27,31 +31,48 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 		Log.Tracef("FUSE %v", msg)
 	}
 
+	// Set mount options
 	options := []fuse.MountOption{
 		fuse.NoAppleDouble(),
 		fuse.NoAppleXattr(),
+		fuse.AsyncRead(),
 		fuse.ReadOnly(),
 	}
 	for _, option := range mountOptions {
-		switch option {
-		case "allow_other":
+		if "allow_other" == option {
 			options = append(options, fuse.AllowOther())
-			break
-		case "allow_root":
+		} else if "allow_root" == option {
 			options = append(options, fuse.AllowRoot())
-			break
-		case "allow_dev":
+		} else if "allow_dev" == option {
 			options = append(options, fuse.AllowDev())
-			break
-		case "allow_non_empty_mount":
+		} else if "allow_non_empty_mount" == option {
 			options = append(options, fuse.AllowNonEmptyMount())
-			break
-		case "allow_suid":
+		} else if "allow_suid" == option {
 			options = append(options, fuse.AllowSUID())
-			break
-		default:
+		} else if strings.Contains(option, "max_readahead=") {
+			data := strings.Split(option, "=")
+			value, err := strconv.ParseUint(data[1], 10, 32)
+			if nil != err {
+				Log.Debugf("%v", err)
+				return fmt.Errorf("Could not parse max_readahead value")
+			}
+			options = append(options, fuse.MaxReadahead(uint32(value)))
+		} else if "default_permissions" == option {
+			options = append(options, fuse.DefaultPermissions())
+		} else if "excl_create" == option {
+			options = append(options, fuse.ExclCreate())
+		} else if strings.Contains(option, "fs_name") {
+			data := strings.Split(option, "=")
+			options = append(options, fuse.FSName(data[1]))
+		} else if "local_volume" == option {
+			options = append(options, fuse.LocalVolume())
+		} else if "writeback_cache" == option {
+			options = append(options, fuse.WritebackCache())
+		} else if strings.Contains(option, "volume_name") {
+			data := strings.Split(option, "=")
+			options = append(options, fuse.VolumeName(data[1]))
+		} else {
 			Log.Warningf("Fuse option %v is not supported, yet", option)
-			break
 		}
 	}
 

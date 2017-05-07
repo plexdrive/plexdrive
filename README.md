@@ -1,6 +1,5 @@
 # Plexdrive
-Plexdrive allows you to mount your Google Drive account as fuse
-filesystem.
+Plexdrive allows you to mount your Google Drive account as fuse filesystem.
 
 The project is comparable to projects like [rclone](https://rclone.org/) or [node-gdrive-fuse](https://github.com/thejinx0r/node-gdrive-fuse), but optimized for media streaming e.g. with plex ;)
 
@@ -9,28 +8,13 @@ I tried using rclone a long time, but got API Quota errors ever day, or more tim
 ## Installation
 1. First you should install fuse on your system
 2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
-
-3. You have to create a configuration directory and configuration file like this
-```
-mkdir ~/.plexdrive
-touch ~/.plexdrive/config.json
-```
-The content of the config.json file should look like this
-```
-{
-  "clientId": "",
-  "clientSecret": ""
-}
-
-```
-You simply have to add your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
-
+3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Run the application like this
 ```
 ./plexdrive /path/to/my/mount
 ```
 
-### Usage
+## Usage
 ```
 Usage of ./plexdrive:
   -chunk-size int
@@ -48,6 +32,20 @@ Usage of ./plexdrive:
   -temp string
     	Path to a temporary directory to store temporary data (default "/tmp")
 ```
+
+### Supported FUSE mount options
+* allow_other
+* allow_root
+* allow_dev
+* allow_non_empty_mount
+* allow_suid
+* max_readahead=1234
+* default_permissions
+* excl_create
+* fs_name=myname
+* local_volume
+* writeback_cache
+* volume_name=myname
 
 # Init files
 Personally I start the program with systemd. You can use this configuration
