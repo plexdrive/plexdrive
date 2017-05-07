@@ -35,7 +35,6 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 	options := []fuse.MountOption{
 		fuse.NoAppleDouble(),
 		fuse.NoAppleXattr(),
-		fuse.AsyncRead(),
 		fuse.ReadOnly(),
 	}
 	for _, option := range mountOptions {
