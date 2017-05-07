@@ -147,7 +147,7 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 }
 
 // GetObject gets an object by id
-func (c *Cache) GetObject(id string, loadFromAPI func(string) (APIObject, error)) (APIObject, error) {
+func (c *Cache) GetObject(id string) (APIObject, error) {
 	Log.Debugf("Getting object %v", id)
 
 	var object APIObject
@@ -159,25 +159,11 @@ func (c *Cache) GetObject(id string, loadFromAPI func(string) (APIObject, error)
 		return object, nil
 	}
 
-	Log.Debugf("Could not find object %v in cache, loading from API", id)
-	o, err := loadFromAPI(id)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return APIObject{}, fmt.Errorf("Could not load object %v from API", id)
-	}
-
-	// do not cache root object
-	if "root" != id {
-		c.dbAction <- cacheAction{
-			action: StoreAction,
-			object: &o,
-		}
-	}
-	return o, nil
+	return APIObject{}, fmt.Errorf("Could not find object %v in cache", id)
 }
 
 // GetObjectsByParent get all objects under parent id
-func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]APIObject, error)) ([]APIObject, error) {
+func (c *Cache) GetObjectsByParent(parent string) ([]APIObject, error) {
 	Log.Debugf("Getting children for %v", parent)
 
 	var objects []APIObject
@@ -189,21 +175,23 @@ func (c *Cache) GetObjectsByParent(parent string, loadFromAPI func(string) ([]AP
 		return objects, nil
 	}
 
-	Log.Debugf("Could not find children for parent %v in cache, loading from API", parent)
-	o, err := loadFromAPI(parent)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return []APIObject{}, fmt.Errorf("Could not load children for %v from API", parent)
+	return []APIObject{}, fmt.Errorf("Could not find children for parent %v in cache", parent)
+}
+
+// GetObjectByParentAndName finds a child element by name and its parent id
+func (c *Cache) GetObjectByParentAndName(parent, name string) (APIObject, error) {
+	Log.Debugf("Getting object %v in parent %v", name, parent)
+
+	var object APIObject
+	c.db.Where("parents LIKE ? AND name = ?", fmt.Sprintf("%%|%v|%%", parent), name).First(&object)
+
+	Log.Tracef("Got object from cache %v", object)
+
+	if "" != object.ObjectID {
+		return object, nil
 	}
 
-	for _, object := range o {
-		c.dbAction <- cacheAction{
-			action: StoreAction,
-			object: &object,
-		}
-	}
-
-	return o, nil
+	return APIObject{}, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 }
 
 // DeleteObject deletes an object by id

@@ -208,80 +208,43 @@ func (d *Drive) getNativeClient() *http.Client {
 	return oauth2.NewClient(d.context, d.config.TokenSource(d.context, d.token))
 }
 
-// GetObject gets an object by id
-func (d *Drive) GetObject(id string) (APIObject, error) {
-	getFunc := func(id string) (APIObject, error) {
-		client, err := d.getClient()
-		if nil != err {
-			Log.Debugf("%v", err)
-			return APIObject{}, fmt.Errorf("Could not get Google Drive client")
-		}
+// GetRoot gets the root node directly from the API
+func (d *Drive) GetRoot() (APIObject, error) {
+	id := "root"
 
-		file, err := client.Files.Get(id).Do()
-		if nil != err {
-			Log.Debugf("%v", err)
-			return APIObject{}, fmt.Errorf("Could not get object %v from API", id)
-		}
-
-		// getting file size
-		if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.FileSize {
-			res, err := client.Files.Get(id).Download()
-			if nil != err {
-				Log.Debugf("%v", err)
-				return APIObject{}, fmt.Errorf("Could not get file size for object %v", id)
-			}
-			file.FileSize = res.ContentLength
-		}
-
-		return d.mapFileToObject(file)
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return APIObject{}, fmt.Errorf("Could not get Google Drive client")
 	}
 
-	return d.cache.GetObject(id, getFunc)
+	file, err := client.Files.Get(id).Do()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return APIObject{}, fmt.Errorf("Could not get object %v from API", id)
+	}
+
+	// getting file size
+	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.FileSize {
+		res, err := client.Files.Get(id).Download()
+		if nil != err {
+			Log.Debugf("%v", err)
+			return APIObject{}, fmt.Errorf("Could not get file size for object %v", id)
+		}
+		file.FileSize = res.ContentLength
+	}
+
+	return d.mapFileToObject(file)
+}
+
+// GetObject gets an object by id
+func (d *Drive) GetObject(id string) (APIObject, error) {
+	return d.cache.GetObject(id)
 }
 
 // GetObjectsByParent get all objects under parent id
 func (d *Drive) GetObjectsByParent(parent string) ([]APIObject, error) {
-	getFunc := func(parent string) ([]APIObject, error) {
-		client, err := d.getClient()
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not get Google Drive client")
-		}
-
-		var objects []APIObject
-		pageToken := ""
-		for {
-			query := client.Files.List().Q(fmt.Sprintf("trashed = false AND '%v' in parents", parent)).MaxResults(1000)
-
-			if "" != pageToken {
-				query = query.PageToken(pageToken)
-			}
-
-			results, err := query.Do()
-			if nil != err {
-				Log.Debugf("%v", err)
-				return nil, fmt.Errorf("Could not list objects in parent %v", parent)
-			}
-
-			for _, file := range results.Items {
-				object, err := d.mapFileToObject(file)
-				if nil != err {
-					Log.Debugf("%v", err)
-					return nil, fmt.Errorf("Could not map Google Drive file to object")
-				}
-				objects = append(objects, object)
-			}
-
-			pageToken = results.NextPageToken
-			if "" == pageToken {
-				break
-			}
-		}
-
-		return objects, nil
-	}
-
-	return d.cache.GetObjectsByParent(parent, getFunc)
+	return d.cache.GetObjectsByParent(parent)
 }
 
 // GetObjectByParentAndName finds a child element by name and its parent id
@@ -290,19 +253,7 @@ func (d *Drive) GetObjectByParentAndName(parent, name string) (APIObject, error)
 		return APIObject{}, fmt.Errorf("Object %v is blacklisted and will not be returned", name)
 	}
 
-	children, err := d.GetObjectsByParent(parent)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return APIObject{}, fmt.Errorf("Could not get children of parent %v", parent)
-	}
-
-	for _, child := range children {
-		if name == child.Name {
-			return child, nil
-		}
-	}
-
-	return APIObject{}, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
+	return d.cache.GetObjectByParentAndName(parent, name)
 }
 
 // Open a file

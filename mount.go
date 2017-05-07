@@ -61,7 +61,7 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 	}
 	defer c.Close()
 
-	object, err := client.GetObject("root")
+	object, err := client.GetRoot()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not get root node")
@@ -138,7 +138,7 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	objects, err := o.client.GetObjectsByParent(o.object.ObjectID)
 	if nil != err {
 		Log.Warningf("%v", err)
-		return nil, err
+		return nil, fuse.ENOENT
 	}
 
 	dirs := []fuse.Dirent{}
@@ -156,7 +156,7 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	object, err := o.client.GetObjectByParentAndName(o.object.ObjectID, name)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, err
+		return nil, fuse.ENOENT
 	}
 
 	return &Object{
@@ -197,7 +197,7 @@ func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Rea
 	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size), false)
 	if nil != err {
 		Log.Warningf("%v", err)
-		return err
+		return fuse.EIO
 	}
 
 	resp.Data = buf[:]
