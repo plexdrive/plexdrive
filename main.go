@@ -13,6 +13,7 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -30,20 +31,26 @@ func main() {
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
 	argMountOptions := flag.String("fuse-options", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
-	argVersion := flag.Bool("version",true,"Displays version information")
+	argVersion := flag.Bool("version", true, "Displays program's version information")
+	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
+	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	flag.Parse()
-
-	//display version information
-	if true == *argVersion{
-		fmt.Println("Version 1.2.1")
-		return
-	}
 
 	// check if mountpoint is specified
 	argMountPoint := flag.Arg(0)
 	if "" == argMountPoint {
 		flag.Usage()
 		panic(fmt.Errorf("Mountpoint not specified"))
+	}
+
+	// calculate uid / gid
+	uid := uint32(unix.Geteuid())
+	gid := uint32(unix.Getegid())
+	if *argUID > -1 {
+		uid = uint32(*argUID)
+	}
+	if *argGID > -1 {
+		gid = uint32(*argGID)
 	}
 
 	// parse the mount options
@@ -78,7 +85,17 @@ func main() {
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
+	Log.Debugf("UID                  : %v", uid)
+	Log.Debugf("GID                  : %v", gid)
+  Log.Debugf("version              : %v", *argVersion)
 
+  
+	//display version information
+	if *argVersion{
+		fmt.Println("Version 1.3.0")
+		return
+	}
+  
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
 		Log.Errorf("Could not create configuration directory")
@@ -124,7 +141,7 @@ func main() {
 	}
 
 	go CleanChunkDir(chunkPath, *argClearInterval)
-	if err := Mount(drive, argMountPoint, mountOptions); nil != err {
+	if err := Mount(drive, argMountPoint, mountOptions, uid, gid); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(6)
 	}

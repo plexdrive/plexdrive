@@ -16,7 +16,7 @@ import (
 )
 
 // Mount the fuse volume
-func Mount(client *Drive, mountpoint string, mountOptions []string) error {
+func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uint32) error {
 	Log.Infof("Mounting path %v", mountpoint)
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
@@ -83,6 +83,8 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 
 	filesys := &FS{
 		client: client,
+		uid:    uid,
+		gid:    gid,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -106,6 +108,8 @@ func Mount(client *Drive, mountpoint string, mountOptions []string) error {
 // FS the fuse filesystem
 type FS struct {
 	client *Drive
+	uid    uint32
+	gid    uint32
 }
 
 // Root returns the root path
@@ -118,6 +122,8 @@ func (f *FS) Root() (fs.Node, error) {
 	return &Object{
 		client: f.client,
 		object: object,
+		uid:    f.uid,
+		gid:    f.gid,
 	}, nil
 }
 
@@ -126,6 +132,8 @@ type Object struct {
 	client *Drive
 	object *APIObject
 	buffer *Buffer
+	uid    uint32
+	gid    uint32
 }
 
 // Attr returns the attributes for a directory
@@ -137,6 +145,9 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 		attr.Mode = 0644
 		attr.Size = o.object.Size
 	}
+
+	attr.Uid = uint32(o.uid)
+	attr.Gid = uint32(o.gid)
 
 	attr.Mtime = o.object.LastModified
 	attr.Crtime = o.object.LastModified
@@ -174,6 +185,8 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	return &Object{
 		client: o.client,
 		object: object,
+		uid:    o.uid,
+		gid:    o.gid,
 	}, nil
 }
 
