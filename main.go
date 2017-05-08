@@ -30,7 +30,14 @@ func main() {
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
 	argMountOptions := flag.String("fuse-options", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
+	argVersion := flag.Bool("version",true,"Displays version information")
 	flag.Parse()
+
+	//display version information
+	if true == *argVersion{
+		fmt.Println("Version 1.2.0")
+		return
+	}
 
 	// check if mountpoint is specified
 	argMountPoint := flag.Arg(0)
