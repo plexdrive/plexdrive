@@ -36,6 +36,12 @@ func main() {
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	flag.Parse()
 
+	// display version information
+	if *argVersion {
+		fmt.Println("1.3.0")
+		return
+	}
+
 	// check if mountpoint is specified
 	argMountPoint := flag.Arg(0)
 	if "" == argMountPoint {
@@ -87,15 +93,7 @@ func main() {
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
-  Log.Debugf("version              : %v", *argVersion)
 
-  
-	//display version information
-	if *argVersion{
-		fmt.Println("Version 1.3.0")
-		return
-	}
-  
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
 		Log.Errorf("Could not create configuration directory")
