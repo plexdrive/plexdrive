@@ -57,7 +57,7 @@ type LargestChangeID struct {
 }
 
 // NewCache creates a new cache instance
-func NewCache(cachePath string) (*Cache, error) {
+func NewCache(cachePath string, sqlDebug bool) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
 	db, err := gorm.Open("sqlite3", cachePath)
 	if nil != err {
@@ -69,6 +69,7 @@ func NewCache(cachePath string) (*Cache, error) {
 	db.AutoMigrate(&OAuth2Token{})
 	db.AutoMigrate(&APIObject{})
 	db.AutoMigrate(&LargestChangeID{})
+	db.LogMode(sqlDebug)
 
 	cache := Cache{
 		db:       db,
@@ -86,7 +87,7 @@ func (c *Cache) startStoringQueue() {
 
 		if action.action == DeleteAction || action.action == StoreAction {
 			Log.Debugf("Deleting object %v", action.object.ObjectID)
-			c.db.Where(action.object).Delete(&APIObject{})
+			c.db.Delete(action.object)
 		}
 		if action.action == StoreAction {
 			Log.Debugf("Storing object %v in cache", action.object.ObjectID)
