@@ -34,6 +34,9 @@ Usage of ./plexdrive:
   -refresh-interval duration
     	The number of minutes to wait till checking for changes (default 5m0s)
   -temp string
+    	Path to a temporary directory to store temporary data (default "/tmp")
+  -version
+        Displays version information
     	Path to a temporary directory to store temporary data (default "/tmp/ip-sh0k")
   -uid int
     	Set the mounts UID (-1 = default permissions) (default -1)

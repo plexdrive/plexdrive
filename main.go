@@ -31,6 +31,7 @@ func main() {
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
 	argMountOptions := flag.String("fuse-options", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
+	argVersion := flag.Bool("version", true, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	flag.Parse()
@@ -86,7 +87,15 @@ func main() {
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
+  Log.Debugf("version              : %v", *argVersion)
 
+  
+	//display version information
+	if *argVersion{
+		fmt.Println("Version 1.3.0")
+		return
+	}
+  
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
 		Log.Errorf("Could not create configuration directory")
