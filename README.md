@@ -24,15 +24,19 @@ Usage of ./plexdrive:
   -clear-chunk-interval duration
     	The number of minutes to wait till clearing the chunk directory (default 1m0s)
   -config string
-    	The path to the configuration directory (default "/home/user/.plexdrive")
+    	The path to the configuration directory (default "/home/ip-sh0k/.plexdrive")
   -fuse-options string
     	Fuse mount options (e.g. -fuse-options allow_other,...)
+  -gid int
+    	Set the mounts GID (-1 = default permissions) (default -1)
   -log-level int
     	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   -refresh-interval duration
     	The number of minutes to wait till checking for changes (default 5m0s)
   -temp string
-    	Path to a temporary directory to store temporary data (default "/tmp")
+    	Path to a temporary directory to store temporary data (default "/tmp/ip-sh0k")
+  -uid int
+    	Set the mounts UID (-1 = default permissions) (default -1)
 ```
 
 ### Supported FUSE mount options
