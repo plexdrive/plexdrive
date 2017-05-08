@@ -31,6 +31,9 @@ Usage of ./plexdrive:
     	The number of minutes to wait till checking for changes (default 5m0s)
   -temp string
     	Path to a temporary directory to store temporary data (default "/tmp")
+  -version
+        Displays version information
+
 ```
 
 ### Supported FUSE mount options
