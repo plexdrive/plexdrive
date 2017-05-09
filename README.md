@@ -19,26 +19,27 @@ I tried using rclone a long time, but got API Quota errors ever day, or more tim
 ## Usage
 ```
 Usage of ./plexdrive:
-  -chunk-size int
+  --chunk-size int
     	The size of each chunk that is downloaded (in byte) (default 5242880)
-  -clear-chunk-interval duration
+  --clear-chunk-interval duration
     	The number of minutes to wait till clearing the chunk directory (default 1m0s)
-  -config string
+  -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
-  -fuse-options string
+  -o, --fuse-options string
     	Fuse mount options (e.g. -fuse-options allow_other,...)
-  -gid int
+  --gid int
     	Set the mounts GID (-1 = default permissions) (default -1)
-  -log-level int
-    	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
-  -refresh-interval duration
+  --refresh-interval duration
     	The number of minutes to wait till checking for changes (default 5m0s)
-  -temp string
+  -t, --temp string
     	Path to a temporary directory to store temporary data (default "/tmp")
-  -version
-    	Displays version information
-  -uid int
+  --uid int
     	Set the mounts UID (-1 = default permissions) (default -1)
+  -v, --verbosity int
+    	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
+  --version
+    	Displays program's version information
+
 ```
 
 ### Supported FUSE mount options
