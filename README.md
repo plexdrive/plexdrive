@@ -21,16 +21,18 @@ I tried using rclone a long time, but got API Quota errors ever day, or more tim
 Usage of ./plexdrive:
   --chunk-size int
     	The size of each chunk that is downloaded (in byte) (default 5242880)
+  --clear-chunk-age duration
+    	The maximum age of a cached chunk file (default 30m0s)
   --clear-chunk-interval duration
-    	The number of minutes to wait till clearing the chunk directory (default 1m0s)
+    	The time to wait till clearing the chunk directory (default 1m0s)
   -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
-    	Fuse mount options (e.g. -fuse-options allow_other,...)
+    	Fuse mount options (e.g. -o allow_other,...)
   --gid int
     	Set the mounts GID (-1 = default permissions) (default -1)
   --refresh-interval duration
-    	The number of minutes to wait till checking for changes (default 5m0s)
+    	The time to wait till checking for changes (default 5m0s)
   -t, --temp string
     	Path to a temporary directory to store temporary data (default "/tmp")
   --uid int
@@ -39,7 +41,6 @@ Usage of ./plexdrive:
     	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   --version
     	Displays program's version information
-
 ```
 
 ### Supported FUSE mount options
@@ -55,6 +56,17 @@ Usage of ./plexdrive:
 * local_volume
 * writeback_cache
 * volume_name=myname
+
+### Cache by usage
+If you set the --clear-chunk-age to e.g. 24 hours your files will be stored
+for 24 hours on your harddisk. This prevents you from downloading the file
+everytime it is accessed so will have a faster playback start, avoid stuttering
+and spare API calls. 
+
+Everytime a file is accessed it will the caching time will be extended.
+E.g. You access a file at 20:00, then it will be deleted on the next day at
+20:00. If you access the file e.g. at 18:00 the next day, the file will be
+deleted the day after at 18:00 and so on.
 
 # Init files
 Personally I start the program with systemd. You can use this configuration
