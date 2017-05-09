@@ -37,7 +37,7 @@ type APIObject struct {
 	Size         uint64
 	LastModified time.Time
 	DownloadURL  string
-	Parents      string `grom:"index"`
+	Parents      string `gorm:"index"`
 	CreatedAt    time.Time
 }
 
