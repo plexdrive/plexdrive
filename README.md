@@ -1,4 +1,4 @@
-![https://travis-ci.org/dweidenfeld/plexdrive](https://travis-ci.org/dweidenfeld/plexdrive.svg?branch=master "Travis Build")
+[![Build Status](https://travis-ci.org/dweidenfeld/plexdrive.svg?branch=master)](https://travis-ci.org/dweidenfeld/plexdrive)
 
 # Plexdrive
 Plexdrive allows you to mount your Google Drive account as fuse filesystem.
