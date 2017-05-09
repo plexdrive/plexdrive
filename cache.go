@@ -32,12 +32,12 @@ type cacheAction struct {
 // APIObject is a Google Drive file object
 type APIObject struct {
 	ObjectID     string `gorm:"primary_key"`
-	Name         string
+	Name         string `gorm:"index"`
 	IsDir        bool
 	Size         uint64
 	LastModified time.Time
 	DownloadURL  string
-	Parents      string
+	Parents      string `grom:"index"`
 	CreatedAt    time.Time
 }
 

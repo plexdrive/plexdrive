@@ -90,7 +90,7 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 		pageToken := ""
 		largestChangeID := changeID
 		for {
-			query := client.Changes.List().IncludeDeleted(true).MaxResults(1000)
+			query := client.Changes.List().MaxResults(1000).IncludeDeleted(true)
 
 			if "" != pageToken {
 				query = query.PageToken(pageToken)
