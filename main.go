@@ -85,15 +85,17 @@ func main() {
 	Log.SetLevel(logLevel)
 
 	// debug all given parameters
-	Log.Debugf("log-level            : %v", logLevel)
+	Log.Debugf("verbosity            : %v", logLevel)
 	Log.Debugf("config               : %v", *argConfigPath)
 	Log.Debugf("temp                 : %v", *argTempPath)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
+	Log.Debugf("clear-chunk-age      : %v", *argClearChunkAge)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
+	// version missing here
 
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
