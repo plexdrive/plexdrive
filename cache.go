@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
 
 	"time"
 
@@ -13,8 +16,9 @@ import (
 
 // Cache is the cache
 type Cache struct {
-	db       *gorm.DB
-	dbAction chan cacheAction
+	db        *gorm.DB
+	dbAction  chan cacheAction
+	tokenPath string
 }
 
 const (
@@ -41,15 +45,6 @@ type APIObject struct {
 	CreatedAt    time.Time
 }
 
-// OAuth2Token is the internal gorm structure for the access token
-type OAuth2Token struct {
-	gorm.Model
-	AccessToken  string
-	Expiry       time.Time
-	RefreshToken string
-	TokenType    string
-}
-
 // LargestChangeID is the last change id
 type LargestChangeID struct {
 	gorm.Model
@@ -57,23 +52,23 @@ type LargestChangeID struct {
 }
 
 // NewCache creates a new cache instance
-func NewCache(cachePath string, sqlDebug bool) (*Cache, error) {
+func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
-	db, err := gorm.Open("sqlite3", cachePath)
+	db, err := gorm.Open("sqlite3", filepath.Join(cacheBasePath, "cache"))
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not open cache database")
 	}
 
 	Log.Debugf("Migrating cache schema")
-	db.AutoMigrate(&OAuth2Token{})
 	db.AutoMigrate(&APIObject{})
 	db.AutoMigrate(&LargestChangeID{})
 	db.LogMode(sqlDebug)
 
 	cache := Cache{
-		db:       db,
-		dbAction: make(chan cacheAction),
+		db:        db,
+		dbAction:  make(chan cacheAction),
+		tokenPath: filepath.Join(cacheBasePath, "token.json"),
 	}
 
 	go cache.startStoringQueue()
@@ -113,36 +108,34 @@ func (c *Cache) Close() error {
 func (c *Cache) LoadToken() (*oauth2.Token, error) {
 	Log.Debugf("Loading token from cache")
 
-	var token OAuth2Token
-	c.db.First(&token)
+	tokenFile, err := ioutil.ReadFile(c.tokenPath)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not read token file in %v", c.tokenPath)
+	}
+
+	var token oauth2.Token
+	json.Unmarshal(tokenFile, &token)
 
 	Log.Tracef("Got token from cache %v", token)
 
-	if "" == token.AccessToken {
-		return nil, fmt.Errorf("Token not found in cache")
-	}
-
-	return &oauth2.Token{
-		AccessToken:  token.AccessToken,
-		Expiry:       token.Expiry,
-		RefreshToken: token.RefreshToken,
-		TokenType:    token.TokenType,
-	}, nil
+	return &token, nil
 }
 
 // StoreToken stores a token in the cache or updates the existing token element
 func (c *Cache) StoreToken(token *oauth2.Token) error {
 	Log.Debugf("Storing token to cache")
 
-	c.db.Delete(&OAuth2Token{})
-	t := OAuth2Token{
-		AccessToken:  token.AccessToken,
-		Expiry:       token.Expiry,
-		RefreshToken: token.RefreshToken,
-		TokenType:    token.TokenType,
+	tokenJSON, err := json.Marshal(token)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not generate token.json content")
 	}
 
-	c.db.Create(&t)
+	if err := ioutil.WriteFile(c.tokenPath, tokenJSON, 0644); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not generate token.json file")
+	}
 
 	return nil
 }

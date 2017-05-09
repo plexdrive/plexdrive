@@ -124,7 +124,7 @@ func main() {
 		}
 	}
 
-	cache, err := NewCache(filepath.Join(*argConfigPath, "cache"), *argLogLevel > 3)
+	cache, err := NewCache(*argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("Could not initialize cache")
 		Log.Debugf("%v", err)
