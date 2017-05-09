@@ -78,8 +78,25 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/plexdrive -log-level 2 /mnt/drive
+ExecStart=/usr/bin/plexdrive -v 2 /mnt/drive
 ExecStop=/bin/fusermount -u /mnt/drive
+Restart=on-abort
+
+[Install]
+WantedBy=default.target
+```
+
+## Crypted mount with rclone
+```
+[Unit]
+Description=Google Drive (rclone)
+AssertPathIsDirectory=/mnt/media
+After=plexdrive.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rclone mount --config /root/.config/rclone/rclone.conf --allow-other ldrive: /mnt/media
+ExecStop=/bin/fusermount -u /mnt/media
 Restart=on-abort
 
 [Install]
