@@ -28,8 +28,9 @@ func main() {
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
 	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in byte)")
-	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The number of minutes to wait till checking for changes")
-	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The number of minutes to wait till clearing the chunk directory")
+	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
+	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
+	argClearChunkAge := flag.Duration("clear-chunk-age", 30*time.Minute, "The maximum age of a cached chunk file")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
@@ -138,7 +139,7 @@ func main() {
 		os.Exit(5)
 	}
 
-	go CleanChunkDir(chunkPath, *argClearInterval)
+	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge)
 	if err := Mount(drive, argMountPoint, mountOptions, uid, gid); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(6)

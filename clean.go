@@ -11,7 +11,7 @@ import (
 
 // CleanChunkDir check frequently the temporary directory and
 // cleans old stuff
-func CleanChunkDir(chunkDir string, clearInterval time.Duration) {
+func CleanChunkDir(chunkDir string, clearInterval, chunkAge time.Duration) {
 	for _ = range time.Tick(clearInterval) {
 		Log.Debugf("Cleaning chunk directory %v", chunkDir)
 
@@ -22,7 +22,7 @@ func CleanChunkDir(chunkDir string, clearInterval time.Duration) {
 
 			now := time.Now()
 			if !f.IsDir() {
-				if now.Sub(f.ModTime()) > 10*time.Minute {
+				if now.Sub(f.ModTime()) > chunkAge {
 					if err := os.Remove(path); nil != err {
 						Log.Warningf("Could not delete temp file %v", path)
 					}

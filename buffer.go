@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"time"
+
 	. "github.com/claudetech/loggo/default"
 	"github.com/orcaman/concurrent-map"
 )
@@ -121,6 +123,12 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 		buf := make([]byte, size)
 		if _, err := f.ReadAt(buf, fOffset); nil == err {
 			Log.Debugf("Found object %v bytes %v - %v in cache", b.object.ObjectID, offset, offsetEnd)
+
+			// update the last modified time for files that are often in use
+			if err := os.Chtimes(filename, time.Now(), time.Now()); nil != err {
+				Log.Warningf("Could not update last modified time for %v", filename)
+			}
+
 			return buf[:size], nil
 		}
 	}
