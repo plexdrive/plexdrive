@@ -26,6 +26,7 @@ func init() {
 	BlackListObjects["HEAD"] = true
 	BlackListObjects[".Trash"] = true
 	BlackListObjects[".Trash-1000"] = true
+	BlackListObjects[".metadata_never_index"] = true
 }
 
 // Drive holds the Google Drive API connection(s)

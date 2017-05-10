@@ -80,13 +80,15 @@ func (c *Cache) startStoringQueue() {
 	for {
 		action := <-c.dbAction
 
-		if action.action == DeleteAction || action.action == StoreAction {
-			Log.Debugf("Deleting object %v", action.object.ObjectID)
-			c.db.Delete(action.object)
-		}
-		if action.action == StoreAction {
-			Log.Debugf("Storing object %v in cache", action.object.ObjectID)
-			c.db.Create(action.object)
+		if nil != action.object {
+			if action.action == DeleteAction || action.action == StoreAction {
+				Log.Debugf("Deleting object %v", action.object.ObjectID)
+				c.db.Delete(action.object)
+			}
+			if action.action == StoreAction {
+				Log.Debugf("Storing object %v in cache", action.object.ObjectID)
+				c.db.Create(action.object)
+			}
 		}
 	}
 }
