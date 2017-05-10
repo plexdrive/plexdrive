@@ -92,16 +92,23 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 
 	// check if the mount process has an error to report
 	<-c.Ready
-	if err := c.MountError; err != nil {
-		return err
+	if err := c.MountError; nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Error mounting FUSE")
 	}
 
-	Log.Infof("Unmounting path %v", mountpoint)
-	err = fuse.Unmount(mountpoint)
-	if nil != err {
-		return err
-	}
+	return Unmount(mountpoint, true)
+}
 
+// Unmount unmounts the mountpoint
+func Unmount(mountpoint string, notify bool) error {
+	if notify {
+		Log.Infof("Unmounting path %v", mountpoint)
+	}
+	if err := fuse.Unmount(mountpoint); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not unmount %v", mountpoint)
+	}
 	return nil
 }
 

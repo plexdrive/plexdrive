@@ -10,6 +10,10 @@ import (
 
 	"strings"
 
+	"syscall"
+
+	"os/signal"
+
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
 	flag "github.com/ogier/pflag"
@@ -141,9 +145,26 @@ func main() {
 		os.Exit(5)
 	}
 
+	// check os signals like SIGINT/TERM
+	checkOsSignals(argMountPoint)
 	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge)
 	if err := Mount(drive, argMountPoint, mountOptions, uid, gid); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(6)
 	}
+}
+
+func checkOsSignals(mountpoint string) {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT)
+
+	go func() {
+		for sig := range signals {
+			if sig == syscall.SIGINT {
+				if err := Unmount(mountpoint, false); nil != err {
+					Log.Warningf("%v", err)
+				}
+			}
+		}
+	}()
 }
