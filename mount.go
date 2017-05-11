@@ -16,7 +16,7 @@ import (
 )
 
 // Mount the fuse volume
-func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uint32) error {
+func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uint32, umask os.FileMode) error {
 	Log.Infof("Mounting path %v", mountpoint)
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
@@ -85,6 +85,7 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 		client: client,
 		uid:    uid,
 		gid:    gid,
+		umask:  umask,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -117,6 +118,7 @@ type FS struct {
 	client *Drive
 	uid    uint32
 	gid    uint32
+	umask  os.FileMode
 }
 
 // Root returns the root path
@@ -131,6 +133,7 @@ func (f *FS) Root() (fs.Node, error) {
 		object: object,
 		uid:    f.uid,
 		gid:    f.gid,
+		umask:  f.umask,
 	}, nil
 }
 
@@ -141,15 +144,24 @@ type Object struct {
 	buffer *Buffer
 	uid    uint32
 	gid    uint32
+	umask  os.FileMode
 }
 
 // Attr returns the attributes for a directory
 func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 	if o.object.IsDir {
-		attr.Mode = os.ModeDir | 0755
+		if o.umask > 0 {
+			attr.Mode = os.ModeDir | o.umask
+		} else {
+			attr.Mode = os.ModeDir | 0755
+		}
 		attr.Size = 0
 	} else {
-		attr.Mode = 0644
+		if o.umask > 0 {
+			attr.Mode = o.umask
+		} else {
+			attr.Mode = 0644
+		}
 		attr.Size = o.object.Size
 	}
 
@@ -194,6 +206,7 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		object: object,
 		uid:    o.uid,
 		gid:    o.gid,
+		umask:  o.umask,
 	}, nil
 }
 

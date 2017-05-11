@@ -39,6 +39,7 @@ func main() {
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
+	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
 	flag.Parse()
 
 	// display version information
@@ -63,6 +64,9 @@ func main() {
 	if *argGID > -1 {
 		gid = uint32(*argGID)
 	}
+
+	// parse filemode
+	umask := os.FileMode(*argUmask)
 
 	// parse the mount options
 	var mountOptions []string
@@ -99,6 +103,7 @@ func main() {
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
+	Log.Debugf("Umask                : %v", umask)
 	// version missing here
 
 	// create all directories
@@ -148,7 +153,7 @@ func main() {
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
 	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge)
-	if err := Mount(drive, argMountPoint, mountOptions, uid, gid); nil != err {
+	if err := Mount(drive, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(6)
 	}
