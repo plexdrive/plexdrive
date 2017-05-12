@@ -7,6 +7,8 @@ The project is comparable to projects like [rclone](https://rclone.org/) or [nod
 
 I tried using rclone a long time, but got API Quota errors ever day, or more times a day. So I decided to try node-gdrive-fuse. The problem here was, that it missed some of my media files, so I started implementing my own file system library.
 
+_If you like the project, feel free to make a small [donation via PayPal](https://www.paypal.me/dowei) or support by implementing new functions / bugfixes yourself and create pull requests :)_
+
 ## Installation
 1. First you should install fuse on your system
 2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
