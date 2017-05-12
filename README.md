@@ -25,10 +25,12 @@ Usage of ./plexdrive:
     	The maximum age of a cached chunk file (default 30m0s)
   --clear-chunk-interval duration
     	The time to wait till clearing the chunk directory (default 1m0s)
+  --clear-chunk-max-size int
+    	The maximum size of the temporary chunk directory (in byte)
   -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
-    	Fuse mount options (e.g. -o allow_other,...)
+    	Fuse mount options (e.g. -fuse-options allow_other,...)
   --gid int
     	Set the mounts GID (-1 = default permissions) (default -1)
   --refresh-interval duration
@@ -37,6 +39,8 @@ Usage of ./plexdrive:
     	Path to a temporary directory to store temporary data (default "/tmp")
   --uid int
     	Set the mounts UID (-1 = default permissions) (default -1)
+  --umask value
+    	Override the default file permissions
   -v, --verbosity int
     	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   --version
