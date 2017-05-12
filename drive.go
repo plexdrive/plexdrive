@@ -264,6 +264,27 @@ func (d *Drive) Open(object *APIObject) (*Buffer, error) {
 	return GetBufferInstance(nativeClient, object)
 }
 
+// Remove removes file from Google Drive
+func (d *Drive) Remove(object *APIObject) error {
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not get Google Drive client")
+	}
+
+	if err := client.Files.Delete(object.ObjectID).Do(); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not delete object %v from API", object.Name)
+	}
+
+	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not delete object %v from cache", object.Name)
+	}
+
+	return nil
+}
+
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedDate)

@@ -35,7 +35,6 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 	options := []fuse.MountOption{
 		fuse.NoAppleDouble(),
 		fuse.NoAppleXattr(),
-		fuse.ReadOnly(),
 	}
 	for _, option := range mountOptions {
 		if "allow_other" == option {
@@ -246,5 +245,22 @@ func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Rea
 	}
 
 	resp.Data = buf[:]
+	return nil
+}
+
+// Remove deletes an element
+func (o *Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+	obj, err := o.client.GetObjectByParentAndName(o.object.ObjectID, req.Name)
+	if nil != err {
+		Log.Warningf("%v", err)
+		return fuse.EIO
+	}
+
+	err = o.client.Remove(obj)
+	if nil != err {
+		Log.Warningf("%v", err)
+		return fuse.EIO
+	}
+
 	return nil
 }
