@@ -121,7 +121,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 	if f, err := os.Open(filename); nil == err {
 		defer f.Close()
 		buf := make([]byte, size)
-		if _, err := f.ReadAt(buf, fOffset); nil == err {
+		if n, err := f.ReadAt(buf, fOffset); nil == err && n > 0 {
 			Log.Debugf("Found object %v bytes %v - %v in cache", b.object.ObjectID, offset, offsetEnd)
 
 			// update the last modified time for files that are often in use
