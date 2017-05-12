@@ -35,6 +35,7 @@ func main() {
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
 	argClearChunkAge := flag.Duration("clear-chunk-age", 30*time.Minute, "The maximum age of a cached chunk file")
+	argClearChunkMaxSize := flag.Int64("clear-chunk-max-size", 0, "The maximum size of the temporary chunk directory (in byte)")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
@@ -100,6 +101,7 @@ func main() {
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
 	Log.Debugf("clear-chunk-age      : %v", *argClearChunkAge)
+	Log.Debugf("clear-chunk-max-size : %v", *argClearChunkMaxSize)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
@@ -122,6 +124,7 @@ func main() {
 	// set the global buffer configuration
 	SetChunkPath(chunkPath)
 	SetChunkSize(*argChunkSize)
+	SetChunkDirMaxSize(*argClearChunkMaxSize)
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")
@@ -152,7 +155,7 @@ func main() {
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
-	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge)
+	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, *argChunkSize, *argClearChunkMaxSize)
 	if err := Mount(drive, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(6)

@@ -18,6 +18,7 @@ import (
 var instances cmap.ConcurrentMap
 var chunkPath string
 var chunkSize int64
+var chunkDirMaxSize int64
 
 func init() {
 	instances = cmap.New()
@@ -29,7 +30,6 @@ type Buffer struct {
 	client            *http.Client
 	object            *APIObject
 	tempDir           string
-	chunkSize         int64
 	preload           bool
 	chunkDir          string
 }
@@ -68,6 +68,11 @@ func SetChunkSize(size int64) {
 	chunkSize = size
 }
 
+// SetChunkDirMaxSize sets the maximum size of the chunk directory
+func SetChunkDirMaxSize(size int64) {
+	chunkDirMaxSize = size
+}
+
 // NewBuffer creates a new buffer instance
 func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
 	Log.Infof("Starting playback of %v", object.Name)
@@ -89,7 +94,6 @@ func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
 		client:            client,
 		object:            object,
 		tempDir:           tempDir,
-		chunkSize:         chunkSize,
 		preload:           true,
 	}
 
@@ -111,9 +115,9 @@ func (b *Buffer) Close() error {
 
 // ReadBytes on a specific location
 func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
-	fOffset := start % b.chunkSize
+	fOffset := start % chunkSize
 	offset := start - fOffset
-	offsetEnd := offset + b.chunkSize
+	offsetEnd := offset + chunkSize
 
 	Log.Debugf("Getting object %v bytes %v - %v (is preload: %v)", b.object.ObjectID, offset, offsetEnd, isPreload)
 
@@ -130,6 +134,13 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 			}
 
 			return buf[:size], nil
+		}
+	}
+
+	if chunkDirMaxSize > 0 {
+		if err := cleanChunkDir(chunkPath); nil != err {
+			Log.Debugf("%v", err)
+			return nil, fmt.Errorf("Could not delete oldest chunk")
 		}
 	}
 
@@ -175,4 +186,53 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 	}
 
 	return bytes[fOffset:int64(math.Min(float64(fOffset+size), float64(len(bytes))))], nil
+}
+
+// cleanChunkDir checks if the chunk folder is grown to big and clears the oldest file if necessary
+func cleanChunkDir(chunkPath string) error {
+	chunkDirSize, err := dirSize(chunkPath)
+	if nil != err {
+		return err
+	}
+
+	if chunkDirSize+chunkSize > chunkDirMaxSize {
+		if err := deleteOldestFile(chunkPath); nil != err {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// deleteOldestFile deletes the oldest file in the directory
+func deleteOldestFile(path string) error {
+	var fpath string
+	lastMod := time.Now()
+
+	err := filepath.Walk(path, func(file string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			modTime := info.ModTime()
+			if modTime.Before(lastMod) {
+				lastMod = modTime
+				fpath = file
+			}
+		}
+		return err
+	})
+
+	os.Remove(fpath)
+
+	return err
+}
+
+// dirSize gets the total directory size
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
