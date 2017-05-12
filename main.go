@@ -45,7 +45,7 @@ func main() {
 
 	// display version information
 	if *argVersion {
-		fmt.Println("2.0.0")
+		fmt.Println("2.1.0")
 		return
 	}
 
