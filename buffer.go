@@ -119,13 +119,13 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
 
-	Log.Debugf("Getting object %v bytes %v - %v (is preload: %v)", b.object.ObjectID, offset, offsetEnd, isPreload)
+	Log.Debugf("Getting object %v - chunk %v - offset %v for %v bytes (is preload: %v)", b.object.ObjectID, offset, fOffset, size, isPreload)
 
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 	if f, err := os.Open(filename); nil == err {
 		defer f.Close()
 		buf := make([]byte, size)
-		if n, err := f.ReadAt(buf, fOffset); nil == err && n > 0 {
+		if n, err := f.ReadAt(buf, fOffset); n > 0 {
 			Log.Debugf("Found object %v bytes %v - %v in cache", b.object.ObjectID, offset, offsetEnd)
 
 			// update the last modified time for files that are often in use
@@ -134,6 +134,8 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 			}
 
 			return buf[:size], nil
+		} else {
+			Log.Debugf("Could not read file %s at %v - err : %v", filename, fOffset, err)
 		}
 	}
 
