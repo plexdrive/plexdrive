@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 
 	"time"
 
@@ -31,11 +32,11 @@ func main() {
 	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
-	argChunkSize := flag.Int64("chunk-size", 5*1024*1024, "The size of each chunk that is downloaded (in byte)")
+	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
 	argClearChunkAge := flag.Duration("clear-chunk-age", 30*time.Minute, "The maximum age of a cached chunk file")
-	argClearChunkMaxSize := flag.Int64("clear-chunk-max-size", 0, "The maximum size of the temporary chunk directory (in byte)")
+	argClearChunkMaxSize := flag.String("clear-chunk-max-size", "", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
@@ -123,8 +124,18 @@ func main() {
 
 	// set the global buffer configuration
 	SetChunkPath(chunkPath)
-	SetChunkSize(*argChunkSize)
-	SetChunkDirMaxSize(*argClearChunkMaxSize)
+	chunkSize, err := parseSizeArg(*argChunkSize)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(3)
+	}
+	SetChunkSize(chunkSize)
+	clearMaxChunkSize, err := parseSizeArg(*argClearChunkMaxSize)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(4)
+	}
+	SetChunkDirMaxSize(clearMaxChunkSize)
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")
@@ -134,7 +145,7 @@ func main() {
 		if nil != err {
 			Log.Errorf("Could not read configuration")
 			Log.Debugf("%v", err)
-			os.Exit(3)
+			os.Exit(5)
 		}
 	}
 
@@ -142,7 +153,7 @@ func main() {
 	if nil != err {
 		Log.Errorf("Could not initialize cache")
 		Log.Debugf("%v", err)
-		os.Exit(4)
+		os.Exit(6)
 	}
 	defer cache.Close()
 
@@ -150,15 +161,15 @@ func main() {
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
 		Log.Debugf("%v", err)
-		os.Exit(5)
+		os.Exit(7)
 	}
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
-	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, *argChunkSize, *argClearChunkMaxSize)
+	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, clearMaxChunkSize)
 	if err := Mount(drive, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
-		os.Exit(6)
+		os.Exit(8)
 	}
 }
 
@@ -175,4 +186,39 @@ func checkOsSignals(mountpoint string) {
 			}
 		}
 	}()
+}
+
+func parseSizeArg(input string) (int64, error) {
+	if "" == input {
+		return 0, nil
+	}
+
+	suffix := input[len(input)-1]
+	suffixLen := 1
+	var multiplier float64
+	switch suffix {
+	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.':
+		suffixLen = 0
+	case 'b', 'B':
+		multiplier = 1
+	case 'k', 'K':
+		multiplier = 1000
+	case 'm', 'M':
+		multiplier = 1000 * 1000
+	case 'g', 'G':
+		multiplier = 1000 * 1000 * 1000
+	default:
+		return 0, fmt.Errorf("Invalid unit %v for %v", suffix, input)
+	}
+	input = input[:len(input)-suffixLen]
+	value, err := strconv.ParseFloat(input, 64)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return 0, fmt.Errorf("Could not parse numeric value %v", input)
+	}
+	if value < 0 {
+		return 0, fmt.Errorf("Numeric value must not be negative %v", input)
+	}
+	value *= multiplier
+	return int64(value), nil
 }

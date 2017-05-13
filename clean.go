@@ -11,7 +11,7 @@ import (
 
 // CleanChunkDir check frequently the temporary directory and
 // cleans old stuff
-func CleanChunkDir(chunkDir string, clearInterval, chunkAge time.Duration, chunkSize, maxTempSize int64) {
+func CleanChunkDir(chunkDir string, clearInterval, chunkAge time.Duration, maxTempSize int64) {
 	if maxTempSize > 0 {
 		Log.Info("Using clear-by-size method for chunk cleaning")
 		clearBySize(chunkDir, clearInterval)
