@@ -69,6 +69,8 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 		} else if strings.Contains(option, "volume_name") {
 			data := strings.Split(option, "=")
 			options = append(options, fuse.VolumeName(data[1]))
+		} else if "read_only" == option {
+			options = append(options, fuse.ReadOnly())
 		} else {
 			Log.Warningf("Fuse option %v is not supported, yet", option)
 		}
@@ -105,10 +107,7 @@ func Unmount(mountpoint string, notify bool) error {
 	if notify {
 		Log.Infof("Unmounting path %v", mountpoint)
 	}
-	if err := fuse.Unmount(mountpoint); nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not unmount %v", mountpoint)
-	}
+	fuse.Unmount(mountpoint)
 	return nil
 }
 

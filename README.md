@@ -62,6 +62,7 @@ Usage of ./plexdrive:
 * local_volume
 * writeback_cache
 * volume_name=myname
+* read_only
 
 ### Cache by usage
 If you set the --clear-chunk-age to e.g. 24 hours your files will be stored
