@@ -21,14 +21,14 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 ## Usage
 ```
 Usage of ./plexdrive:
-  --chunk-size int
-    	The size of each chunk that is downloaded (in byte) (default 5242880)
+  --chunk-size string
+    	The size of each chunk that is downloaded (units: B, K, M, G) (default "5M")
   --clear-chunk-age duration
     	The maximum age of a cached chunk file (default 30m0s)
   --clear-chunk-interval duration
     	The time to wait till clearing the chunk directory (default 1m0s)
-  --clear-chunk-max-size int
-    	The maximum size of the temporary chunk directory (in byte)
+  --clear-chunk-max-size string
+    	The maximum size of the temporary chunk directory (units: B, K, M, G)
   -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
