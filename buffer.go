@@ -233,7 +233,7 @@ func cleanChunkDir(chunkPath string) error {
 		return err
 	}
 
-	if chunkDirSize+chunkSize > chunkDirMaxSize {
+	if chunkDirSize+chunkSize*2 > chunkDirMaxSize {
 		if err := deleteOldestFile(chunkPath); nil != err {
 			return err
 		}

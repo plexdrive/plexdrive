@@ -202,11 +202,11 @@ func parseSizeArg(input string) (int64, error) {
 	case 'b', 'B':
 		multiplier = 1
 	case 'k', 'K':
-		multiplier = 1000
+		multiplier = 1024
 	case 'm', 'M':
-		multiplier = 1000 * 1000
+		multiplier = 1024 * 1024
 	case 'g', 'G':
-		multiplier = 1000 * 1000 * 1000
+		multiplier = 1024 * 1024 * 1024
 	default:
 		return 0, fmt.Errorf("Invalid unit %v for %v", suffix, input)
 	}
