@@ -12,6 +12,8 @@ import (
 
 	"time"
 
+	"strings"
+
 	. "github.com/claudetech/loggo/default"
 	"github.com/orcaman/concurrent-map"
 )
@@ -115,7 +117,7 @@ func (b *Buffer) Close() error {
 }
 
 // ReadBytes on a specific location
-func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
+func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]byte, error) {
 	fOffset := start % chunkSize
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
@@ -151,6 +153,11 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 		}()
 	}
 
+	// sleep if request is throttled
+	if delay > 0 {
+		time.Sleep(time.Duration(delay) * time.Second)
+	}
+
 	Log.Debugf("Requesting object %v bytes %v - %v from API", b.object.ObjectID, offset, offsetEnd)
 	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
 	if nil != err {
@@ -167,7 +174,31 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 	}
 
 	if res.StatusCode != 206 {
-		return nil, fmt.Errorf("Wrong status code %v", res)
+		if res.StatusCode != 403 {
+			return nil, fmt.Errorf("Wrong status code %v", res)
+		}
+
+		// throttle requests
+		if delay > 8 {
+			return nil, fmt.Errorf("Maximum throttle interval has been reached")
+		}
+		bytes, err := ioutil.ReadAll(res.Body)
+		if nil != err {
+			Log.Debugf("%v", err)
+			return nil, fmt.Errorf("Could not read body of 403 error")
+		}
+		body := string(bytes)
+		if strings.Contains(body, "dailyLimitExceeded") ||
+			strings.Contains(body, "userRateLimitExceeded") ||
+			strings.Contains(body, "rateLimitExceeded") ||
+			strings.Contains(body, "backendError") {
+			if 0 == delay {
+				delay = 1
+			} else {
+				delay = delay * 2
+			}
+			return b.ReadBytes(start, size, isPreload, delay)
+		}
 	}
 
 	bytes, err := ioutil.ReadAll(res.Body)
@@ -188,7 +219,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 
 	if !isPreload && b.preload && uint64(offsetEnd) < b.object.Size {
 		go func() {
-			b.ReadBytes(offsetEnd+1, size, true)
+			b.ReadBytes(offsetEnd+1, size, true, 0)
 		}()
 	}
 

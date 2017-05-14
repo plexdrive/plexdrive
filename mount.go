@@ -237,7 +237,7 @@ func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
 
 // Read reads some bytes or the whole file
 func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size), false)
+	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size), false, 0)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
