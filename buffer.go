@@ -125,6 +125,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 	if f, err := os.Open(filename); nil == err {
 		defer f.Close()
+
 		buf := make([]byte, size)
 		if n, err := f.ReadAt(buf, fOffset); n > 0 && (nil == err || io.EOF == err) {
 			Log.Debugf("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
@@ -135,19 +136,20 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool) ([]byte, error) {
 			}
 
 			return buf[:size], nil
-		} else {
-			Log.Debugf("Could not read file %s at %v - err : %v", filename, fOffset, err)
 		}
+
+		Log.Debugf("%v", err)
+		Log.Debugf("Could not read file %s at %v", filename, fOffset)
 	}
 
-	go func() {
-		if chunkDirMaxSize > 0 {
+	if chunkDirMaxSize > 0 {
+		go func() {
 			if err := cleanChunkDir(chunkPath); nil != err {
 				Log.Debugf("%v", err)
 				Log.Warningf("Could not delete oldest chunk")
 			}
-		}
-	}()
+		}()
+	}
 
 	Log.Debugf("Requesting object %v bytes %v - %v from API", b.object.ObjectID, offset, offsetEnd)
 	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
