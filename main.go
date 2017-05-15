@@ -42,6 +42,7 @@ func main() {
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
+	argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s (units: B, K, M, G)")
 	flag.Parse()
 
 	// display version information
@@ -107,6 +108,7 @@ func main() {
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
 	Log.Debugf("Umask                : %v", umask)
+	Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
 	// version missing here
 
 	// create all directories
@@ -119,7 +121,7 @@ func main() {
 	if err := os.MkdirAll(chunkPath, 0777); nil != err {
 		Log.Errorf("Could not create temp chunk directory")
 		Log.Debugf("%v", err)
-		os.Exit(2)
+		os.Exit(1)
 	}
 
 	// set the global buffer configuration
@@ -127,15 +129,21 @@ func main() {
 	chunkSize, err := parseSizeArg(*argChunkSize)
 	if nil != err {
 		Log.Errorf("%v", err)
-		os.Exit(3)
+		os.Exit(2)
 	}
 	SetChunkSize(chunkSize)
 	clearMaxChunkSize, err := parseSizeArg(*argClearChunkMaxSize)
 	if nil != err {
 		Log.Errorf("%v", err)
-		os.Exit(4)
+		os.Exit(2)
 	}
 	SetChunkDirMaxSize(clearMaxChunkSize)
+	downloadSpeedLimit, err := parseSizeArg(*argDownloadSpeedLimit)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(2)
+	}
+	SetDownloadSpeedLimit(downloadSpeedLimit)
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")
@@ -145,7 +153,7 @@ func main() {
 		if nil != err {
 			Log.Errorf("Could not read configuration")
 			Log.Debugf("%v", err)
-			os.Exit(5)
+			os.Exit(3)
 		}
 	}
 
@@ -153,7 +161,7 @@ func main() {
 	if nil != err {
 		Log.Errorf("Could not initialize cache")
 		Log.Debugf("%v", err)
-		os.Exit(6)
+		os.Exit(4)
 	}
 	defer cache.Close()
 
@@ -161,7 +169,7 @@ func main() {
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
 		Log.Debugf("%v", err)
-		os.Exit(7)
+		os.Exit(4)
 	}
 
 	// check os signals like SIGINT/TERM
@@ -169,7 +177,7 @@ func main() {
 	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, clearMaxChunkSize)
 	if err := Mount(drive, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
-		os.Exit(8)
+		os.Exit(5)
 	}
 }
 

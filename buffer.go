@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	. "github.com/claudetech/loggo/default"
+	"github.com/fujiwara/shapeio"
 	"github.com/orcaman/concurrent-map"
 )
 
@@ -22,6 +23,7 @@ var instances cmap.ConcurrentMap
 var chunkPath string
 var chunkSize int64
 var chunkDirMaxSize int64
+var speedLimit int64
 
 func init() {
 	instances = cmap.New()
@@ -74,6 +76,11 @@ func SetChunkSize(size int64) {
 // SetChunkDirMaxSize sets the maximum size of the chunk directory
 func SetChunkDirMaxSize(size int64) {
 	chunkDirMaxSize = size
+}
+
+// SetDownloadSpeedLimit sets the maximum bytes per seconds to be downloaded
+func SetDownloadSpeedLimit(limit int64) {
+	speedLimit = limit
 }
 
 // NewBuffer creates a new buffer instance
@@ -175,6 +182,13 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not request object %v from API", b.object.ObjectID)
 	}
+	defer res.Body.Close()
+	reader := shapeio.NewReader(res.Body)
+
+	// set the speed limit
+	if speedLimit > 0 {
+		reader.SetRateLimit(float64(speedLimit))
+	}
 
 	if res.StatusCode != 206 {
 		if res.StatusCode != 403 {
@@ -185,7 +199,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 		if delay > 8 {
 			return nil, fmt.Errorf("Maximum throttle interval has been reached")
 		}
-		bytes, err := ioutil.ReadAll(res.Body)
+		bytes, err := ioutil.ReadAll(reader)
 		if nil != err {
 			Log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not read body of 403 error")
@@ -204,7 +218,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 		}
 	}
 
-	bytes, err := ioutil.ReadAll(res.Body)
+	bytes, err := ioutil.ReadAll(reader)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not read objects %v API response", b.object.ObjectID)
