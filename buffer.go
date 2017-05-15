@@ -122,7 +122,8 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
 
-	Log.Debugf("Getting object %v - chunk %v - offset %v for %v bytes (is preload: %v)", b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size, isPreload)
+	Log.Debugf("Getting object %v - chunk %v - offset %v for %v bytes (is preload: %v)",
+		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size, isPreload)
 
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 	if f, err := os.Open(filename); nil == err {
@@ -161,7 +162,8 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 	Log.Debugf("Requesting object %v bytes %v - %v from API", b.object.ObjectID, offset, offsetEnd)
 	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
 	if nil != err {
-		return nil, err
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create request object %v from API", b.object.ObjectID)
 	}
 
 	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", offset, offsetEnd))
@@ -170,7 +172,8 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 
 	res, err := b.client.Do(req)
 	if nil != err {
-		return nil, err
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not request object %v from API", b.object.ObjectID)
 	}
 
 	if res.StatusCode != 206 {
@@ -203,18 +206,21 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 
 	bytes, err := ioutil.ReadAll(res.Body)
 	if nil != err {
-		return nil, err
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not read objects %v API response", b.object.ObjectID)
 	}
 
 	f, err := os.Create(filename)
 	if nil != err {
-		return nil, err
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create chunk temp file %v", filename)
 	}
 	defer f.Close()
 
 	_, err = f.Write(bytes)
 	if nil != err {
-		return nil, err
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not write chunk data to temp file %v", filename)
 	}
 
 	if !isPreload && b.preload && uint64(offsetEnd) < b.object.Size {
@@ -223,7 +229,9 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 		}()
 	}
 
-	return bytes[fOffset:int64(math.Min(float64(fOffset+size), float64(len(bytes))))], nil
+	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
+	eOffset := int64(math.Min(float64(fOffset+size), float64(len(bytes))))
+	return bytes[sOffset:eOffset], nil
 }
 
 // cleanChunkDir checks if the chunk folder is grown to big and clears the oldest file if necessary
