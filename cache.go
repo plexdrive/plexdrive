@@ -208,16 +208,20 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 	return nil
 }
 
-func (c *Cache) StoreStartPageToken(token *PageToken) error {
-	Log.Debugf("Storing page token %v in cache", token.Token)
+// StoreStartPageToken stores the page token for changes
+func (c *Cache) StoreStartPageToken(token string) error {
+	Log.Debugf("Storing page token %v in cache", token)
 
 	c.db.Delete(&PageToken{})
-	c.db.Create(token)
+	c.db.Create(&PageToken{
+		Token: token,
+	})
 
 	return nil
 }
 
-func (c *Cache) GetStartPageToken() (*PageToken, error) {
+// GetStartPageToken gets the start page token
+func (c *Cache) GetStartPageToken() (string, error) {
 	Log.Debugf("Getting start page token from cache")
 
 	var pageToken PageToken
@@ -226,8 +230,8 @@ func (c *Cache) GetStartPageToken() (*PageToken, error) {
 	Log.Tracef("Got start page token %v", pageToken.Token)
 
 	if "" == pageToken.Token {
-		return nil, fmt.Errorf("Token not found in cache")
+		return "", fmt.Errorf("Token not found in cache")
 	}
 
-	return &pageToken, nil
+	return pageToken.Token, nil
 }

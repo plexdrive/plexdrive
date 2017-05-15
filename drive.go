@@ -17,7 +17,7 @@ import (
 )
 
 // Fields are the fields that should be returned by the Google Drive API
-var Fields googleapi.Field
+var Fields string
 
 // BlackListObjects is a list of blacklisted items that will not be
 // fetched from cache or the API
@@ -25,7 +25,7 @@ var BlackListObjects map[string]bool
 
 // init initializes the global configurations
 func init() {
-	Fields = "files(id, name)"
+	Fields = "id, name, mimeType, modifiedTime, size, webContentLink, explicitlyTrashed, parents"
 
 	BlackListObjects = make(map[string]bool)
 	BlackListObjects[".git"] = true
@@ -80,13 +80,14 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 	checkChanges := func(firstCheck bool) {
 		Log.Debugf("Checking for changes")
 
+		// get the last token
 		pageToken, err := d.cache.GetStartPageToken()
 		if nil != err {
-			pageToken = &PageToken{
-				Token: "1",
-			}
+			pageToken = "1"
+			Log.Info("No last change id found, starting from beginning...")
+		} else {
+			Log.Debugf("Last change id found, continuing getting changes (%v)", pageToken)
 		}
-		Log.Debugf("Using page token %v", pageToken.Token)
 
 		if firstCheck {
 			Log.Infof("First cache build process started...")
@@ -96,7 +97,11 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 		updatedItems := 0
 		processedItems := 0
 		for {
-			query := client.Changes.List(pageToken.Token).Fields(Fields).PageSize(1000).IncludeRemoved(true)
+			query := client.Changes.
+				List(pageToken).
+				Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
+				PageSize(1000).
+				IncludeRemoved(true)
 
 			results, err := query.Do()
 			if nil != err {
@@ -134,13 +139,15 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 					processedItems, deletedItems, updatedItems)
 			}
 
-			pageToken.Token = results.NewStartPageToken
-			if "" == results.NextPageToken {
+			if "" != results.NextPageToken {
+				pageToken = results.NextPageToken
+				d.cache.StoreStartPageToken(pageToken)
+			} else {
+				pageToken = results.NewStartPageToken
+				d.cache.StoreStartPageToken(pageToken)
 				break
 			}
 		}
-
-		d.cache.StoreStartPageToken(pageToken)
 
 		if firstCheck {
 			Log.Infof("First cache build process finished!")
@@ -214,7 +221,10 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
-	file, err := client.Files.Get(id).Fields(Fields).Do()
+	file, err := client.Files.
+		Get(id).
+		Fields(googleapi.Field(Fields)).
+		Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object %v from API", id)
@@ -281,6 +291,8 @@ func (d *Drive) Remove(object *APIObject) error {
 
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
+	Log.Tracef("Converting Google Drive file: %v", file)
+
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
 	if nil != err {
 		Log.Debugf("%v", err)
