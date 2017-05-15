@@ -45,10 +45,10 @@ type APIObject struct {
 	CreatedAt    time.Time
 }
 
-// LargestChangeID is the last change id
-type LargestChangeID struct {
+// PageToken is the last change id
+type PageToken struct {
 	gorm.Model
-	ChangeID int64
+	Token string
 }
 
 // NewCache creates a new cache instance
@@ -62,7 +62,7 @@ func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 
 	Log.Debugf("Migrating cache schema")
 	db.AutoMigrate(&APIObject{})
-	db.AutoMigrate(&LargestChangeID{})
+	db.AutoMigrate(&PageToken{})
 	db.LogMode(sqlDebug)
 
 	cache := Cache{
@@ -208,26 +208,26 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 	return nil
 }
 
-// StoreLargestChangeID stores the largest change id
-func (c *Cache) StoreLargestChangeID(changeID int64) error {
-	Log.Debugf("Storing change id %v in cache", changeID)
+func (c *Cache) StoreStartPageToken(token *PageToken) error {
+	Log.Debugf("Storing page token %v in cache", token.Token)
 
-	c.db.Delete(&LargestChangeID{})
-	c.db.Create(&LargestChangeID{
-		ChangeID: changeID,
-	})
+	c.db.Delete(&PageToken{})
+	c.db.Create(token)
 
 	return nil
 }
 
-// GetLargestChangeID gets the largest change id or zero change id
-func (c *Cache) GetLargestChangeID() (int64, error) {
-	Log.Debugf("Getting change id from cache")
+func (c *Cache) GetStartPageToken() (*PageToken, error) {
+	Log.Debugf("Getting start page token from cache")
 
-	var changeID LargestChangeID
-	c.db.First(&changeID)
+	var pageToken PageToken
+	c.db.First(&pageToken)
 
-	Log.Tracef("Got change id %v", changeID.ChangeID)
+	Log.Tracef("Got start page token %v", pageToken.Token)
 
-	return changeID.ChangeID, nil
+	if "" == pageToken.Token {
+		return nil, fmt.Errorf("Token not found in cache")
+	}
+
+	return &pageToken, nil
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	gdrive "google.golang.org/api/drive/v2"
+	gdrive "google.golang.org/api/drive/v3"
 
 	"time"
 
@@ -13,7 +13,11 @@ import (
 
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
+	"google.golang.org/api/googleapi"
 )
+
+// Fields are the fields that should be returned by the Google Drive API
+var Fields googleapi.Field
 
 // BlackListObjects is a list of blacklisted items that will not be
 // fetched from cache or the API
@@ -21,6 +25,8 @@ var BlackListObjects map[string]bool
 
 // init initializes the global configurations
 func init() {
+	Fields = "files(id, name)"
+
 	BlackListObjects = make(map[string]bool)
 	BlackListObjects[".git"] = true
 	BlackListObjects["HEAD"] = true
@@ -74,12 +80,13 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 	checkChanges := func(firstCheck bool) {
 		Log.Debugf("Checking for changes")
 
-		changeID, err := d.cache.GetLargestChangeID()
+		pageToken, err := d.cache.GetStartPageToken()
 		if nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not get largest change ID")
-			return
+			pageToken = &PageToken{
+				Token: "1",
+			}
 		}
+		Log.Debugf("Using page token %v", pageToken.Token)
 
 		if firstCheck {
 			Log.Infof("First cache build process started...")
@@ -88,18 +95,8 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 		deletedItems := 0
 		updatedItems := 0
 		processedItems := 0
-		pageToken := ""
-		largestChangeID := changeID
 		for {
-			query := client.Changes.List().MaxResults(1000).IncludeDeleted(true)
-
-			if "" != pageToken {
-				query = query.PageToken(pageToken)
-			}
-
-			if 0 != changeID {
-				query = query.StartChangeId(changeID)
-			}
+			query := client.Changes.List(pageToken.Token).Fields(Fields).PageSize(1000).IncludeRemoved(true)
 
 			results, err := query.Do()
 			if nil != err {
@@ -108,10 +105,10 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 				break
 			}
 
-			for _, change := range results.Items {
+			for _, change := range results.Changes {
 				Log.Tracef("Change %v", change)
 
-				if change.Deleted || (nil != change.File && change.File.ExplicitlyTrashed) {
+				if change.Removed || (nil != change.File && change.File.ExplicitlyTrashed) {
 					d.cache.DeleteObject(change.FileId)
 					deletedItems++
 				} else {
@@ -137,16 +134,13 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 					processedItems, deletedItems, updatedItems)
 			}
 
-			largestChangeID = results.LargestChangeId
-			pageToken = results.NextPageToken
-			if "" == pageToken {
+			pageToken.Token = results.NewStartPageToken
+			if "" == results.NextPageToken {
 				break
 			}
 		}
 
-		if largestChangeID >= changeID {
-			d.cache.StoreLargestChangeID(largestChangeID + 1)
-		}
+		d.cache.StoreStartPageToken(pageToken)
 
 		if firstCheck {
 			Log.Infof("First cache build process finished!")
@@ -220,20 +214,20 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
-	file, err := client.Files.Get(id).Do()
+	file, err := client.Files.Get(id).Fields(Fields).Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object %v from API", id)
 	}
 
 	// getting file size
-	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.FileSize {
+	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.Size {
 		res, err := client.Files.Get(id).Download()
 		if nil != err {
 			Log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not get file size for object %v", id)
 		}
-		file.FileSize = res.ContentLength
+		file.Size = res.ContentLength
 	}
 
 	return d.mapFileToObject(file)
@@ -287,24 +281,25 @@ func (d *Drive) Remove(object *APIObject) error {
 
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
-	lastModified, err := time.Parse(time.RFC3339, file.ModifiedDate)
+	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not parse last modified date")
+		Log.Warningf("Could not parse last modified date for object %v", file.Id)
+		lastModified = time.Now()
 	}
 
 	var parents []string
 	for _, parent := range file.Parents {
-		parents = append(parents, parent.Id)
+		parents = append(parents, parent)
 	}
 
 	return &APIObject{
 		ObjectID:     file.Id,
-		Name:         file.Title,
+		Name:         file.Name,
 		IsDir:        file.MimeType == "application/vnd.google-apps.folder",
 		LastModified: lastModified,
-		Size:         uint64(file.FileSize),
-		DownloadURL:  file.DownloadUrl,
+		Size:         uint64(file.Size),
+		DownloadURL:  file.WebContentLink,
 		Parents:      fmt.Sprintf("|%v|", strings.Join(parents, "|")),
 	}, nil
 }
