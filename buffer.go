@@ -36,7 +36,7 @@ type Buffer struct {
 	object            *APIObject
 	tempDir           string
 	preload           bool
-	chunkDir          string
+	chunks            cmap.ConcurrentMap
 }
 
 // GetBufferInstance gets a singleton instance of buffer
@@ -105,6 +105,7 @@ func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
 		object:            object,
 		tempDir:           tempDir,
 		preload:           true,
+		chunks:            cmap.New(),
 	}
 
 	return &buffer, nil
@@ -129,8 +130,20 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
 
-	Log.Debugf("Getting object %v - chunk %v - offset %v for %v bytes (is preload: %v)",
+	Log.Tracef("Getting object %v - chunk %v - offset %v for %v bytes (is preload: %v)",
 		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size, isPreload)
+
+	if b.preload && uint64(offsetEnd) < b.object.Size {
+		defer func() {
+			go func() {
+				preloadStart := strconv.Itoa(int(offsetEnd))
+				if !b.chunks.Has(preloadStart) {
+					b.chunks.Set(preloadStart, true)
+					b.ReadBytes(offsetEnd, size, true, 0)
+				}
+			}()
+		}()
+	}
 
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 	if f, err := os.Open(filename); nil == err {
@@ -138,7 +151,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 
 		buf := make([]byte, size)
 		if n, err := f.ReadAt(buf, fOffset); n > 0 && (nil == err || io.EOF == err) {
-			Log.Debugf("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
+			Log.Tracef("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
 
 			// update the last modified time for files that are often in use
 			if err := os.Chtimes(filename, time.Now(), time.Now()); nil != err {
@@ -235,12 +248,6 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not write chunk data to temp file %v", filename)
-	}
-
-	if !isPreload && b.preload && uint64(offsetEnd) < b.object.Size {
-		go func() {
-			b.ReadBytes(offsetEnd+1, size, true, 0)
-		}()
 	}
 
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
