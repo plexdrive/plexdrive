@@ -125,13 +125,13 @@ func (b *Buffer) Close() error {
 }
 
 // ReadBytes on a specific location
-func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]byte, error) {
+func (b *Buffer) ReadBytes(start, size int64, delay int32) ([]byte, error) {
 	fOffset := start % chunkSize
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
 
-	Log.Tracef("Getting object %v - chunk %v - offset %v for %v bytes (is preload: %v)",
-		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size, isPreload)
+	Log.Tracef("Getting object %v - chunk %v - offset %v for %v bytes",
+		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size)
 
 	if b.preload && uint64(offsetEnd) < b.object.Size {
 		defer func() {
@@ -139,7 +139,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 				preloadStart := strconv.Itoa(int(offsetEnd))
 				if !b.chunks.Has(preloadStart) {
 					b.chunks.Set(preloadStart, true)
-					b.ReadBytes(offsetEnd, size, true, 0)
+					b.ReadBytes(offsetEnd, size, 0)
 				}
 			}()
 		}()
@@ -227,7 +227,7 @@ func (b *Buffer) ReadBytes(start, size int64, isPreload bool, delay int32) ([]by
 			} else {
 				delay = delay * 2
 			}
-			return b.ReadBytes(start, size, isPreload, delay)
+			return b.ReadBytes(start, size, delay)
 		}
 	}
 
