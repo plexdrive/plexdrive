@@ -226,7 +226,7 @@ func (b *Buffer) ReadBytes(start, size int64, delay int32) ([]byte, error) {
 
 	if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not write chunk temp file %v", filename)
+		Log.Warningf("Could not write chunk temp file %v", filename)
 	}
 
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
