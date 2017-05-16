@@ -289,7 +289,7 @@ func deleteOldestFile(path string) error {
 func dirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
+		if nil != err && nil != info && !info.IsDir() {
 			size += info.Size()
 		}
 		return err
