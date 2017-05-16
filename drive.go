@@ -25,7 +25,7 @@ var BlackListObjects map[string]bool
 
 // init initializes the global configurations
 func init() {
-	Fields = "id, name, mimeType, modifiedTime, size, webContentLink, explicitlyTrashed, parents"
+	Fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents"
 
 	BlackListObjects = make(map[string]bool)
 	BlackListObjects[".git"] = true
@@ -311,7 +311,7 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		IsDir:        file.MimeType == "application/vnd.google-apps.folder",
 		LastModified: lastModified,
 		Size:         uint64(file.Size),
-		DownloadURL:  file.WebContentLink,
+		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", file.Id),
 		Parents:      fmt.Sprintf("|%v|", strings.Join(parents, "|")),
 	}, nil
 }
