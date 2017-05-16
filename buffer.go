@@ -237,17 +237,9 @@ func (b *Buffer) ReadBytes(start, size int64, delay int32) ([]byte, error) {
 		return nil, fmt.Errorf("Could not read objects %v API response", b.object.ObjectID)
 	}
 
-	f, err := os.Create(filename)
-	if nil != err {
+	if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not create chunk temp file %v", filename)
-	}
-	defer f.Close()
-
-	_, err = f.Write(bytes)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not write chunk data to temp file %v", filename)
+		return nil, fmt.Errorf("Could not write chunk temp file %v", filename)
 	}
 
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
