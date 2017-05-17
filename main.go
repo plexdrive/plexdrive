@@ -42,7 +42,7 @@ func main() {
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
-	// argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s (units: B, K, M, G)")
+	argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
 	flag.Parse()
 
 	// display version information
@@ -108,7 +108,7 @@ func main() {
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
 	Log.Debugf("Umask                : %v", umask)
-	// Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
+	Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
 	// version missing here
 
 	// create all directories
@@ -138,11 +138,12 @@ func main() {
 		os.Exit(2)
 	}
 	SetChunkDirMaxSize(clearMaxChunkSize)
-	// downloadSpeedLimit, err := parseSizeArg(*argDownloadSpeedLimit)
-	// if nil != err {
-	// 	Log.Errorf("%v", err)
-	// 	os.Exit(2)
-	// }
+	downloadSpeedLimit, err := parseSizeArg(*argDownloadSpeedLimit)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(2)
+	}
+	SetDownloadSpeedLimit(downloadSpeedLimit)
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	. "github.com/claudetech/loggo/default"
+	"github.com/mxk/go-flowrate/flowrate"
 	"github.com/orcaman/concurrent-map"
 )
 
@@ -22,6 +23,7 @@ var instances cmap.ConcurrentMap
 var chunkPath string
 var chunkSize int64
 var chunkDirMaxSize int64
+var speedLimit int64
 
 func init() {
 	instances = cmap.New()
@@ -74,6 +76,11 @@ func SetChunkSize(size int64) {
 // SetChunkDirMaxSize sets the maximum size of the chunk directory
 func SetChunkDirMaxSize(size int64) {
 	chunkDirMaxSize = size
+}
+
+// SetDownloadSpeedLimit sets the download speed limit per chunk
+func SetDownloadSpeedLimit(downloadSpeedLimit int64) {
+	speedLimit = downloadSpeedLimit
 }
 
 // NewBuffer creates a new buffer instance
@@ -190,6 +197,11 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	}
 	defer res.Body.Close()
 
+	reader := res.Body
+	if speedLimit > 0 {
+		reader = flowrate.NewReader(res.Body, speedLimit)
+	}
+
 	if res.StatusCode != 206 {
 		if res.StatusCode != 403 {
 			return nil, fmt.Errorf("Wrong status code %v", res)
@@ -199,7 +211,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		if delay > 8 {
 			return nil, fmt.Errorf("Maximum throttle interval has been reached")
 		}
-		bytes, err := ioutil.ReadAll(res.Body)
+		bytes, err := ioutil.ReadAll(reader)
 		if nil != err {
 			Log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not read body of 403 error")
@@ -218,7 +230,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		}
 	}
 
-	bytes, err := ioutil.ReadAll(res.Body)
+	bytes, err := ioutil.ReadAll(reader)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not read objects %v API response", b.object.ObjectID)
