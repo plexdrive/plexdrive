@@ -126,6 +126,18 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	Log.Tracef("Getting object %v - chunk %v - offset %v for %v bytes",
 		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size)
 
+	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
+		defer func() {
+			go func() {
+				preloadStart := strconv.Itoa(int(offsetEnd))
+				if !b.chunks.Has(preloadStart) {
+					b.chunks.Set(preloadStart, true)
+					b.ReadBytes(offsetEnd, size, true, 0)
+				}
+			}()
+		}()
+	}
+
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 	if f, err := os.Open(filename); nil == err {
 		defer f.Close()
@@ -202,7 +214,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 			} else {
 				delay = delay * 2
 			}
-			return b.ReadBytes(start, size, false, delay)
+			return b.ReadBytes(start, size, true, delay)
 		}
 	}
 
@@ -215,12 +227,6 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
 		Log.Debugf("%v", err)
 		Log.Warningf("Could not write chunk temp file %v", filename)
-	}
-
-	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
-		go func() {
-			b.ReadBytes(offsetEnd+1, size, true, 0)
-		}()
 	}
 
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
