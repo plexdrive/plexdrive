@@ -177,7 +177,7 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	objects, err := o.client.GetObjectsByParent(o.object.ObjectID)
 	if nil != err {
-		Log.Warningf("%v", err)
+		Log.Debugf("%v", err)
 		return nil, fuse.ENOENT
 	}
 
