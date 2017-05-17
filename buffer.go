@@ -118,25 +118,13 @@ func (b *Buffer) Close() error {
 }
 
 // ReadBytes on a specific location
-func (b *Buffer) ReadBytes(start, size int64, delay int32) ([]byte, error) {
+func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte, error) {
 	fOffset := start % chunkSize
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
 
 	Log.Tracef("Getting object %v - chunk %v - offset %v for %v bytes",
 		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size)
-
-	if b.preload && uint64(offsetEnd) < b.object.Size {
-		defer func() {
-			go func() {
-				preloadStart := strconv.Itoa(int(offsetEnd))
-				if !b.chunks.Has(preloadStart) {
-					b.chunks.Set(preloadStart, true)
-					b.ReadBytes(offsetEnd, size, 0)
-				}
-			}()
-		}()
-	}
 
 	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 	if f, err := os.Open(filename); nil == err {
@@ -214,7 +202,7 @@ func (b *Buffer) ReadBytes(start, size int64, delay int32) ([]byte, error) {
 			} else {
 				delay = delay * 2
 			}
-			return b.ReadBytes(start, size, delay)
+			return b.ReadBytes(start, size, false, delay)
 		}
 	}
 
@@ -227,6 +215,12 @@ func (b *Buffer) ReadBytes(start, size int64, delay int32) ([]byte, error) {
 	if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
 		Log.Debugf("%v", err)
 		Log.Warningf("Could not write chunk temp file %v", filename)
+	}
+
+	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
+		go func() {
+			b.ReadBytes(offsetEnd+1, size, true, 0)
+		}()
 	}
 
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
