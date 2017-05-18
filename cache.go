@@ -144,7 +144,7 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 
 // GetObject gets an object by id
 func (c *Cache) GetObject(id string) (*APIObject, error) {
-	Log.Debugf("Getting object %v", id)
+	Log.Tracef("Getting object %v", id)
 
 	var object APIObject
 	c.db.Where(&APIObject{ObjectID: id}).First(&object)
@@ -176,7 +176,7 @@ func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 
 // GetObjectByParentAndName finds a child element by name and its parent id
 func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
-	Log.Debugf("Getting object %v in parent %v", name, parent)
+	Log.Tracef("Getting object %v in parent %v", name, parent)
 
 	var object APIObject
 	c.db.Where("parents LIKE ? AND name = ?", fmt.Sprintf("%%|%v|%%", parent), name).First(&object)

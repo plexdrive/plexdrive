@@ -278,6 +278,7 @@ func deleteOldestFile(path string) error {
 		return err
 	})
 
+	Log.Debugf("Deleting oldest chunk file %v", fpath)
 	os.Remove(fpath)
 
 	return err
@@ -287,7 +288,7 @@ func deleteOldestFile(path string) error {
 func dirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if nil != err && nil != info && !info.IsDir() {
+		if nil == err && nil != info && !info.IsDir() {
 			size += info.Size()
 		}
 		return err
