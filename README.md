@@ -18,6 +18,9 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 ./plexdrive /path/to/my/mount
 ```
 
+### Crypted mount with rclone
+You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypted rclone mount.
+
 ## Usage
 ```
 Usage of ./plexdrive:
@@ -76,38 +79,3 @@ Everytime a file is accessed it will the caching time will be extended.
 E.g. You access a file at 20:00, then it will be deleted on the next day at
 20:00. If you access the file e.g. at 18:00 the next day, the file will be
 deleted the day after at 18:00 and so on.
-
-# Init files
-Personally I start the program with systemd. You can use this configuration
-```
-[Unit]
-Description=Plexdrive
-AssertPathIsDirectory=/mnt/drive
-After=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/plexdrive -v 2 /mnt/drive
-ExecStop=/bin/fusermount -u /mnt/drive
-Restart=on-abort
-
-[Install]
-WantedBy=default.target
-```
-
-## Crypted mount with rclone
-```
-[Unit]
-Description=Google Drive (rclone)
-AssertPathIsDirectory=/mnt/media
-After=plexdrive.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/rclone mount --config /root/.config/rclone/rclone.conf --allow-other ldrive: /mnt/media
-ExecStop=/bin/fusermount -u /mnt/media
-Restart=on-abort
-
-[Install]
-WantedBy=default.target
-```
