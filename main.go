@@ -43,6 +43,7 @@ func main() {
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
 	argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
+	argRootNodeId := flag.StringP("root-node-id", "R", "root", "The ID of the root node to mount")
 	flag.Parse()
 
 	// display version information
@@ -165,7 +166,7 @@ func main() {
 	}
 	defer cache.Close()
 
-	drive, err := NewDriveClient(config, cache, *argRefreshInterval)
+	drive, err := NewDriveClient(config, cache, *argRefreshInterval, *argRootNodeId)
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
 		Log.Debugf("%v", err)
