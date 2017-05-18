@@ -48,6 +48,8 @@ Usage of ./plexdrive:
   --version
     	Displays program's version information
 ```
+### Support 
+Slack support is available on [our Slack channel](https://plexdrive.slack.com/shared_invite/MTg1NTg5NzY2Njc4LTE0OTUwNDU3NzAtMjJjNWRiMTAxMg). Feel free to ask configuration and setup questions here.
 
 ### Supported FUSE mount options
 * allow_other
