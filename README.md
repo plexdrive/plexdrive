@@ -51,8 +51,10 @@ Usage of ./plexdrive:
   --version
     	Displays program's version information
 ```
+
 ### Support 
-Slack support is available on [our Slack channel](https://plexdrive.slack.com/shared_invite/MTg1NTg5NzY2Njc4LTE0OTUwNDU3NzAtMjJjNWRiMTAxMg). Feel free to ask configuration and setup questions here.
+Slack support is available on [our Slack channel](https://plexdrive.slack.com/shared_invite/MTg1NTg5NzY2Njc4LTE0OTUwNDU3NzAtMjJjNWRiMTAxMg). 
+Feel free to ask configuration and setup questions here.
 
 ### Supported FUSE mount options
 * allow_other
@@ -79,3 +81,15 @@ Everytime a file is accessed it will the caching time will be extended.
 E.g. You access a file at 20:00, then it will be deleted on the next day at
 20:00. If you access the file e.g. at 18:00 the next day, the file will be
 deleted the day after at 18:00 and so on.
+
+# Contribute
+If you want to support the project by implementing functions / fixing bugs
+yourself feel free to do so!
+
+1. Fork the repository
+2. Clone it to your [golang workspace](https://golang.org/doc/code.html) $GOPATH/src/github.com/username/plexdrive
+3. Implement your changes
+4. Test your changes (e.g. `go build && ./plexdrive -v3 /tmp/drive`)
+5. Format everything with [gofmt](https://golang.org/cmd/gofmt/) (
+(I recommend working with [VSCode](https://code.visualstudio.com/) and [VSCode-Go](https://github.com/lukehoban/vscode-go))
+6. Create a pull request
