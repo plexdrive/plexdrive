@@ -22,7 +22,7 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
 		Log.Debugf("Mountpoint doesn't exist, creating...")
 		if err := os.MkdirAll(mountpoint, 0644); nil != err {
-			Log.Debugf("%v", err)
+			Log.Errorf("%v", err)
 			return fmt.Errorf("Could not create mount directory %v", mountpoint)
 		}
 	}
@@ -51,7 +51,7 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 			data := strings.Split(option, "=")
 			value, err := strconv.ParseUint(data[1], 10, 32)
 			if nil != err {
-				Log.Debugf("%v", err)
+				Log.Errorf("%v", err)
 				return fmt.Errorf("Could not parse max_readahead value")
 			}
 			options = append(options, fuse.MaxReadahead(uint32(value)))
@@ -95,7 +95,7 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 	// check if the mount process has an error to report
 	<-c.Ready
 	if err := c.MountError; nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Error mounting FUSE")
 	}
 
@@ -177,7 +177,7 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	objects, err := o.client.GetObjectsByParent(o.object.ObjectID)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fuse.ENOENT
 	}
 
@@ -195,7 +195,7 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	object, err := o.client.GetObjectByParentAndName(o.object.ObjectID, name)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fuse.ENOENT
 	}
 

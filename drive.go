@@ -72,7 +72,7 @@ func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration)
 func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		Log.Warningf("Could not get Google Drive client to watch for changes")
 		return
 	}
@@ -105,7 +105,7 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 
 			results, err := query.Do()
 			if nil != err {
-				Log.Debugf("%v", err)
+				Log.Errorf("%v", err)
 				Log.Warningf("Could not get changes")
 				break
 			}
@@ -217,7 +217,7 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
@@ -234,7 +234,7 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.Size {
 		res, err := client.Files.Get(id).Download()
 		if nil != err {
-			Log.Debugf("%v", err)
+			Log.Errorf("%v", err)
 			return nil, fmt.Errorf("Could not get file size for object %v", id)
 		}
 		file.Size = res.ContentLength
@@ -272,17 +272,17 @@ func (d *Drive) Open(object *APIObject) (*Buffer, error) {
 func (d *Drive) Remove(object *APIObject) error {
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Could not get Google Drive client")
 	}
 
 	if err := client.Files.Delete(object.ObjectID).Do(); nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Could not delete object %v from API", object.Name)
 	}
 
 	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Could not delete object %v from cache", object.Name)
 	}
 
@@ -295,7 +295,7 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		Log.Warningf("Could not parse last modified date for object %v", file.Id)
 		lastModified = time.Now()
 	}

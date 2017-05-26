@@ -161,14 +161,14 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 			return buf[:size], nil
 		}
 
-		Log.Debugf("%v", err)
-		Log.Debugf("Could not read file %s at %v", filename, fOffset)
+		Log.Errorf("%v", err)
+		Log.Errorf("Could not read file %s at %v", filename, fOffset)
 	}
 
 	if chunkDirMaxSize > 0 {
 		go func() {
 			if err := cleanChunkDir(chunkPath); nil != err {
-				Log.Debugf("%v", err)
+				Log.Errorf("%v", err)
 				Log.Warningf("Could not delete oldest chunk")
 			}
 		}()
@@ -182,7 +182,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	Log.Debugf("Requesting object %v bytes %v - %v from API", b.object.ObjectID, offset, offsetEnd)
 	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fmt.Errorf("Could not create request object %v from API", b.object.ObjectID)
 	}
 
@@ -192,7 +192,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 
 	res, err := b.client.Do(req)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fmt.Errorf("Could not request object %v from API", b.object.ObjectID)
 	}
 	defer res.Body.Close()
@@ -213,7 +213,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		}
 		bytes, err := ioutil.ReadAll(reader)
 		if nil != err {
-			Log.Debugf("%v", err)
+			Log.Errorf("%v", err)
 			return nil, fmt.Errorf("Could not read body of 403 error")
 		}
 		body := string(bytes)
@@ -232,19 +232,19 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 
 	bytes, err := ioutil.ReadAll(reader)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fmt.Errorf("Could not read objects %v API response", b.object.ObjectID)
 	}
 
 	if _, err := os.Stat(b.tempDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(b.tempDir, 0777); nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not create chunk temp path for chunk %v", filename)
+			Log.Errorf("%v", err)
+			return nil, fmt.Errorf("Could not create chunk temp path for chunk %v: Error: %+v", filename)
 		}
 	}
 
 	if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		Log.Warningf("Could not write chunk temp file %v", filename)
 	}
 

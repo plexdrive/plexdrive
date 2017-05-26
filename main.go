@@ -147,7 +147,7 @@ func main() {
 		config, err = CreateConfig(configPath)
 		if nil != err {
 			Log.Errorf("Could not read configuration")
-			Log.Debugf("%v", err)
+			Log.Errorf("%v", err)
 			os.Exit(3)
 		}
 	}
@@ -155,7 +155,7 @@ func main() {
 	cache, err := NewCache(*argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("Could not initialize cache")
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		os.Exit(4)
 	}
 	defer cache.Close()
@@ -163,7 +163,7 @@ func main() {
 	drive, err := NewDriveClient(config, cache, *argRefreshInterval)
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		os.Exit(4)
 	}
 
@@ -171,7 +171,7 @@ func main() {
 	checkOsSignals(argMountPoint)
 	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, clearMaxChunkSize)
 	if err := Mount(drive, argMountPoint, mountOptions, uid, gid, umask); nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		os.Exit(5)
 	}
 }
@@ -216,7 +216,7 @@ func parseSizeArg(input string) (int64, error) {
 	input = input[:len(input)-suffixLen]
 	value, err := strconv.ParseFloat(input, 64)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return 0, fmt.Errorf("Could not parse numeric value %v", input)
 	}
 	if value < 0 {
