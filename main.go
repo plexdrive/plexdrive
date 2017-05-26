@@ -118,11 +118,6 @@ func main() {
 		os.Exit(1)
 	}
 	chunkPath := filepath.Join(*argTempPath, "chunks")
-	if err := os.MkdirAll(chunkPath, 0777); nil != err {
-		Log.Errorf("Could not create temp chunk directory")
-		Log.Debugf("%v", err)
-		os.Exit(1)
-	}
 
 	// set the global buffer configuration
 	SetChunkPath(chunkPath)
