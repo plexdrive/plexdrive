@@ -82,6 +82,10 @@ E.g. You access a file at 20:00, then it will be deleted on the next day at
 20:00. If you access the file e.g. at 18:00 the next day, the file will be
 deleted the day after at 18:00 and so on.
 
+If you activate the option `clear-chunk-max-size` you will automatically disable
+the cache cleaning by time. So it will only delete the oldest chunk file when it 
+needs the space.
+
 # Contribute
 If you want to support the project by implementing functions / fixing bugs
 yourself feel free to do so!
