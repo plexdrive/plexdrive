@@ -268,6 +268,14 @@ func deleteOldestFile(path string) error {
 	lastMod := time.Now()
 
 	err := filepath.Walk(path, func(file string, info os.FileInfo, err error) error {
+		if err != nil {
+			Log.Errorf("Error during walk through cache directory: %+v", err)
+			return filepath.SkipDir
+		}
+		if info == nil {
+			Log.Errorf("File info for %s was nil", file)
+			return filepath.SkipDir
+		}
 		if !info.IsDir() {
 			modTime := info.ModTime()
 			if modTime.Before(lastMod) {
