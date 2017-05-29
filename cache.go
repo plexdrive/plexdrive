@@ -160,7 +160,7 @@ func (c *Cache) GetObject(id string) (*APIObject, error) {
 
 // GetObjectsByParent get all objects under parent id
 func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
-	Log.Debugf("Getting children for %v", parent)
+	Log.Tracef("Getting children for %v", parent)
 
 	var objects []*APIObject
 	c.db.Where("parents LIKE ?", fmt.Sprintf("%%|%v|%%", parent)).Find(&objects)
