@@ -1,9 +1,15 @@
 [![Build Status](https://travis-ci.org/dweidenfeld/plexdrive.svg?branch=master)](https://travis-ci.org/dweidenfeld/plexdrive)
 
 # Plexdrive
-Plexdrive allows you to mount your Google Drive account as fuse filesystem.
+Plexdrive allows you to mount your Google Drive account as read-only fuse filesystem.
 
-The project is comparable to projects like [rclone](https://rclone.org/) or [node-gdrive-fuse](https://github.com/thejinx0r/node-gdrive-fuse), but optimized for media streaming e.g. with plex ;)
+The project is comparable to projects like [rclone](https://rclone.org/), 
+[google-drive-ocamlfuse](https://github.com/astrada/google-drive-ocamlfuse) or 
+[node-gdrive-fuse](https://github.com/thejinx0r/node-gdrive-fuse), 
+but optimized for media streaming e.g. with plex ;)
+
+Please note, that plexdrive doesn't currently support writes (adding new files or modifications).
+It only supports reading existing files and deletion. 
 
 I tried using rclone a long time, but got API Quota errors ever day, or more times a day. So I decided to try node-gdrive-fuse. The problem here was, that it missed some of my media files, so I started implementing my own file system library.
 
