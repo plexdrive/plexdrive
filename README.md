@@ -88,10 +88,10 @@ needs the space.
 
 **This function does not limit the storage to the given size**. It will only say
 "if you reach the given limit, check if you can clean up old stuff". So if you have
-a limit of e.g. 100gb you should specify the clear-chunk-max-size of at most 60gb
+a limit of e.g. 100gb available for chunks, you should specify the clear-chunk-max-size of at most 60gb
 to be sure it will not override the 100gb limit.
 The implementation is done that way, because a hard checking routine could make the
-playback buffering, because the program is still busy cleaning up old stuff.
+playback unstable and present buffering because the cleaning of the old chunks off the file system is a low priority over streaming your files.
 
 # Contribute
 If you want to support the project by implementing functions / fixing bugs
