@@ -98,7 +98,7 @@ func (c *Cache) Close() error {
 
 	close(c.dbAction)
 	if err := c.db.Close(); nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Could not close cache connection")
 	}
 
@@ -111,7 +111,7 @@ func (c *Cache) LoadToken() (*oauth2.Token, error) {
 
 	tokenFile, err := ioutil.ReadFile(c.tokenPath)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return nil, fmt.Errorf("Could not read token file in %v", c.tokenPath)
 	}
 
@@ -129,12 +129,12 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 
 	tokenJSON, err := json.Marshal(token)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Could not generate token.json content")
 	}
 
 	if err := ioutil.WriteFile(c.tokenPath, tokenJSON, 0644); nil != err {
-		Log.Debugf("%v", err)
+		Log.Errorf("%v", err)
 		return fmt.Errorf("Could not generate token.json file")
 	}
 
