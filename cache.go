@@ -17,6 +17,7 @@ import (
 // Cache is the cache
 type Cache struct {
 	db        *gorm.DB
+	backup    *gorm.DB
 	dbAction  chan cacheAction
 	tokenPath string
 }
@@ -53,24 +54,43 @@ type PageToken struct {
 // NewCache creates a new cache instance
 func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
-	db, err := gorm.Open("sqlite3", filepath.Join(cacheBasePath, "cache"))
+	db, err := gorm.Open("sqlite3", "file::memory:?cache=shared")
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not open cache database")
+	}
+	backupPath := filepath.Join(cacheBasePath, "cache")
+	backupDb, err := gorm.Open("sqlite3", backupPath)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not open cache backup database")
 	}
 
 	Log.Debugf("Migrating cache schema")
 	db.AutoMigrate(&APIObject{})
 	db.AutoMigrate(&PageToken{})
 	db.LogMode(sqlDebug)
+	backupDb.AutoMigrate(&APIObject{})
+	backupDb.AutoMigrate(&PageToken{})
+	backupDb.LogMode(sqlDebug)
 
 	cache := Cache{
 		db:        db,
+		backup:    backupDb,
 		dbAction:  make(chan cacheAction),
 		tokenPath: filepath.Join(cacheBasePath, "token.json"),
 	}
 
+	// Check if backup contains data and copy those data
+	var count int64
+	backupDb.Model(&APIObject{}).Count(&count)
+	if count > 0 {
+		copyDatabase(backupDb, db)
+		Log.Infof("Imported cached data from %v", backupPath)
+	}
+
 	go cache.startStoringQueue()
+	go cache.startBackup()
 
 	return &cache, nil
 }
@@ -89,6 +109,13 @@ func (c *Cache) startStoringQueue() {
 				c.db.Unscoped().Create(action.object)
 			}
 		}
+	}
+}
+
+func (c *Cache) startBackup() {
+	for _ = range time.Tick(5 * time.Minute) {
+		Log.Debugf("Backup cache database")
+		copyDatabase(c.db, c.backup)
 	}
 }
 
@@ -233,4 +260,26 @@ func (c *Cache) GetStartPageToken() (string, error) {
 	}
 
 	return pageToken.Token, nil
+}
+
+func copyDatabase(src *gorm.DB, dest *gorm.DB) {
+	tx := dest.Begin()
+
+	// delete old data
+	tx.Unscoped().Delete(&PageToken{})
+	tx.Unscoped().Delete(&APIObject{})
+
+	// copy page token
+	var token PageToken
+	src.First(&token)
+	tx.Unscoped().Create(&token)
+
+	// copy objects
+	var objects []*APIObject
+	src.Find(&objects)
+	for _, object := range objects {
+		tx.Unscoped().Create(object)
+	}
+
+	tx.Commit()
 }
