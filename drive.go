@@ -151,6 +151,7 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 
 		if firstCheck {
 			Log.Infof("First cache build process finished!")
+			d.cache.Backup()
 		}
 	}
 

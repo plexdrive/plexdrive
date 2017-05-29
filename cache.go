@@ -114,9 +114,14 @@ func (c *Cache) startStoringQueue() {
 
 func (c *Cache) startBackup() {
 	for _ = range time.Tick(5 * time.Minute) {
-		Log.Debugf("Backup cache database")
-		copyDatabase(c.db, c.backup)
+		c.Backup()
 	}
+}
+
+// Backup backups the in memory cache to disk
+func (c *Cache) Backup() {
+	Log.Debugf("Backup cache database")
+	copyDatabase(c.db, c.backup)
 }
 
 // Close closes all handles
@@ -127,6 +132,10 @@ func (c *Cache) Close() error {
 	if err := c.db.Close(); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not close cache connection")
+	}
+	if err := c.backup.Close(); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not close cache backup connection")
 	}
 
 	return nil
