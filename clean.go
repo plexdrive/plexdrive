@@ -59,8 +59,16 @@ func clearByInterval(chunkDir string, clearInterval, chunkAge time.Duration) {
 
 // deleteEmptyDirs deletes empty directories
 func deleteEmptyDirs(dir string) error {
-	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
-		if f.IsDir() {
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if nil != err {
+			Log.Debugf("%v", err)
+			Log.Warningf("Error during walk through cache directory: %v", dir)
+			return filepath.SkipDir
+		}
+		if nil == info {
+			return filepath.SkipDir
+		}
+		if info.IsDir() {
 			if empty, err := isEmptyDir(path); nil == err && empty {
 				Log.Debugf("Cleaning empty directory %v", path)
 				if err := os.RemoveAll(path); nil != err {
