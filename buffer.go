@@ -158,7 +158,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 				Log.Warningf("Could not update last modified time for %v", filename)
 			}
 
-			eOffset := int64(math.Min(float64(size), float64(len(bytes))))
+			eOffset := int64(math.Min(float64(size), float64(len(buf))))
 			return buf[:eOffset], nil
 		}
 
