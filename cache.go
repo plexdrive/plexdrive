@@ -42,7 +42,6 @@ type APIObject struct {
 	LastModified time.Time
 	DownloadURL  string
 	Parents      string `gorm:"index"`
-	CreatedAt    time.Time
 }
 
 // PageToken is the last change id
@@ -83,11 +82,11 @@ func (c *Cache) startStoringQueue() {
 		if nil != action.object {
 			if action.action == DeleteAction || action.action == StoreAction {
 				Log.Debugf("Deleting object %v", action.object.ObjectID)
-				c.db.Delete(action.object)
+				c.db.Unscoped().Delete(action.object)
 			}
 			if action.action == StoreAction {
 				Log.Debugf("Storing object %v in cache", action.object.ObjectID)
-				c.db.Create(action.object)
+				c.db.Unscoped().Create(action.object)
 			}
 		}
 	}
@@ -212,8 +211,8 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 func (c *Cache) StoreStartPageToken(token string) error {
 	Log.Debugf("Storing page token %v in cache", token)
 
-	c.db.Delete(&PageToken{})
-	c.db.Create(&PageToken{
+	c.db.Unscoped().Delete(&PageToken{})
+	c.db.Unscoped().Create(&PageToken{
 		Token: token,
 	})
 
