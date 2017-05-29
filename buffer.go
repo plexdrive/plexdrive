@@ -150,7 +150,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		defer f.Close()
 
 		buf := make([]byte, size)
-		if n, err := f.ReadAt(buf, fOffset); n > 0 && (nil == err || io.EOF == err) {
+		if n, err := f.ReadAt(buf, fOffset); n > 0 && (nil == err || io.EOF == err || io.ErrUnexpectedEOF == err) {
 			Log.Tracef("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
 
 			// update the last modified time for files that are often in use
