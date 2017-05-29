@@ -277,8 +277,7 @@ func deleteOldestFile(path string) error {
 
 	err := filepath.Walk(path, func(file string, info os.FileInfo, err error) error {
 		if nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Error during walk through cache directory: %v", path)
+			Log.Tracef("%v", err)
 			return filepath.SkipDir
 		}
 		if nil == info {
