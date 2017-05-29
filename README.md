@@ -86,6 +86,13 @@ If you activate the option `clear-chunk-max-size` you will automatically disable
 the cache cleaning by time. So it will only delete the oldest chunk file when it 
 needs the space.
 
+**This function does not limit the storage to the given size**. It will only say
+"if you reach the given limit, check if you can clean up old stuff". So if you have
+a limit of e.g. 100gb you should specify the clear-chunk-max-size of at most 60gb
+to be sure it will not override the 100gb limit.
+The implementation is done that way, because a hard checking routine could make the
+playback buffering, because the program is still busy cleaning up old stuff.
+
 # Contribute
 If you want to support the project by implementing functions / fixing bugs
 yourself feel free to do so!
