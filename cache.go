@@ -17,6 +17,7 @@ import (
 // Cache is the cache
 type Cache struct {
 	db        *gorm.DB
+	tx        *gorm.DB
 	backup    *gorm.DB
 	dbAction  chan cacheAction
 	tokenPath string
@@ -90,7 +91,6 @@ func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 	}
 
 	go cache.startStoringQueue()
-	go cache.startBackup()
 
 	return &cache, nil
 }
@@ -102,20 +102,24 @@ func (c *Cache) startStoringQueue() {
 		if nil != action.object {
 			if action.action == DeleteAction || action.action == StoreAction {
 				Log.Debugf("Deleting object %v", action.object.ObjectID)
-				c.db.Unscoped().Delete(action.object)
+				c.tx.Unscoped().Delete(action.object)
 			}
 			if action.action == StoreAction {
 				Log.Debugf("Storing object %v in cache", action.object.ObjectID)
-				c.db.Unscoped().Create(action.object)
+				c.tx.Unscoped().Create(action.object)
 			}
 		}
 	}
 }
 
-func (c *Cache) startBackup() {
-	for _ = range time.Tick(5 * time.Minute) {
-		c.Backup()
-	}
+// StartTransaction starts a new transaction
+func (c *Cache) StartTransaction() {
+	c.tx = c.db.Begin()
+}
+
+// EndTransaction ends the current transaction
+func (c *Cache) EndTransaction() {
+	c.tx.Commit()
 }
 
 // Backup backups the in memory cache to disk
@@ -247,8 +251,8 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 func (c *Cache) StoreStartPageToken(token string) error {
 	Log.Debugf("Storing page token %v in cache", token)
 
-	c.db.Unscoped().Delete(&PageToken{})
-	c.db.Unscoped().Create(&PageToken{
+	c.tx.Unscoped().Delete(&PageToken{})
+	c.tx.Unscoped().Create(&PageToken{
 		Token: token,
 	})
 

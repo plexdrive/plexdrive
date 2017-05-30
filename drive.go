@@ -93,6 +93,8 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 			Log.Infof("First cache build process started...")
 		}
 
+		d.cache.StartTransaction()
+
 		deletedItems := 0
 		updatedItems := 0
 		processedItems := 0
@@ -151,8 +153,10 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 
 		if firstCheck {
 			Log.Infof("First cache build process finished!")
-			d.cache.Backup()
 		}
+
+		d.cache.EndTransaction()
+		d.cache.Backup()
 	}
 
 	checkChanges(true)
