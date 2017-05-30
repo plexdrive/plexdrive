@@ -46,6 +46,10 @@ Usage of ./plexdrive:
     	Set the mounts GID (-1 = default permissions) (default -1)
   --refresh-interval duration
     	The time to wait till checking for changes (default 5m0s)
+  --root-node-id string
+    	The ID of the root node to mount (use this for only mount a sub directory) (default "root")
+  --speed-limit string
+    	This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)
   -t, --temp string
     	Path to a temporary directory to store temporary data (default "/tmp")
   --uid int
@@ -94,10 +98,20 @@ needs the space.
 
 **This function does not limit the storage to the given size**. It will only say
 "if you reach the given limit, check if you can clean up old stuff". So if you have
-a limit of e.g. 100gb available for chunks, you should specify the clear-chunk-max-size of at most 60gb
-to be sure it will not override the 100gb limit.
-The implementation is done that way, because a hard checking routine could make the
-playback unstable and present buffering because the cleaning of the old chunks off the file system is a low priority over streaming your files.
+a limit of e.g. 100gb available for chunks, you should specify the clear-chunk-max-size 
+of at most 60gb to be sure it will not override the 100gb limit. The implementation is 
+done that way, because a hard checking routine could make the playback unstable and 
+present buffering because the cleaning of the old chunks off the file system is a low 
+priority over streaming your files.
+
+
+### Root-Node-ID
+You can use the option `root-node-id` to specify a folder id that should be mounted as
+the root folder. This option will not prevent plexdrive from getting the changes for your
+whole Google Drive structure. It will only "display" another folder as root instead of the
+real root folder.
+Don't expect any performance improvement or something else. This option is only for your
+personal folder structuring.
 
 # Contribute
 If you want to support the project by implementing functions / fixing bugs

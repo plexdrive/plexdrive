@@ -38,11 +38,11 @@ type Drive struct {
 	context    context.Context
 	token      *oauth2.Token
 	config     *oauth2.Config
-	rootNodeId string
+	rootNodeID string
 }
 
 // NewDriveClient creates a new Google Drive client
-func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration, rootNodeId string) (*Drive, error) {
+func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration, rootNodeID string) (*Drive, error) {
 	drive := Drive{
 		cache:   cache,
 		context: context.Background(),
@@ -56,11 +56,11 @@ func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration,
 			RedirectURL: "urn:ietf:wg:oauth:2.0:oob",
 			Scopes:      []string{gdrive.DriveScope},
 		},
-		rootNodeId: rootNodeId,
+		rootNodeID: rootNodeID,
 	}
 
-	if drive.rootNodeId == "" {
-		drive.rootNodeId = "root"
+	if "" == drive.rootNodeID {
+		drive.rootNodeID = "root"
 	}
 
 	if err := drive.authorize(); nil != err {
@@ -229,20 +229,20 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 	}
 
 	file, err := client.Files.
-		Get(d.rootNodeId).
+		Get(d.rootNodeID).
 		Fields(googleapi.Field(Fields)).
 		Do()
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not get object %v from API", d.rootNodeId)
+		return nil, fmt.Errorf("Could not get object %v from API", d.rootNodeID)
 	}
 
 	// getting file size
 	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.Size {
-		res, err := client.Files.Get(d.rootNodeId).Download()
+		res, err := client.Files.Get(d.rootNodeID).Download()
 		if nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not get file size for object %v", d.rootNodeId)
+			return nil, fmt.Errorf("Could not get file size for object %v", d.rootNodeID)
 		}
 		file.Size = res.ContentLength
 	}

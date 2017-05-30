@@ -30,6 +30,7 @@ func main() {
 
 	// parse the command line arguments
 	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
+	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
@@ -43,7 +44,6 @@ func main() {
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
 	argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
-	argRootNodeId := flag.StringP("root-node-id", "R", "root", "The ID of the root node to mount")
 	flag.Parse()
 
 	// display version information
@@ -98,6 +98,7 @@ func main() {
 
 	// debug all given parameters
 	Log.Debugf("verbosity            : %v", logLevel)
+	Log.Debugf("root-node-id         : %v", *argRootNodeID)
 	Log.Debugf("config               : %v", *argConfigPath)
 	Log.Debugf("temp                 : %v", *argTempPath)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
@@ -161,7 +162,7 @@ func main() {
 	}
 	defer cache.Close()
 
-	drive, err := NewDriveClient(config, cache, *argRefreshInterval, *argRootNodeId)
+	drive, err := NewDriveClient(config, cache, *argRefreshInterval, *argRootNodeID)
 	if nil != err {
 		Log.Errorf("Could not initialize Google Drive Client")
 		Log.Debugf("%v", err)
