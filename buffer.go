@@ -205,7 +205,9 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 
 	if res.StatusCode != 206 {
 		if res.StatusCode != 403 {
-			return nil, fmt.Errorf("Wrong status code %v", res)
+			Log.Debugf("Request\n----------\n%v\n----------\n", req)
+			Log.Debugf("Response\n----------\n%v\n----------\n", res)
+			return nil, fmt.Errorf("Wrong status code %v", res.StatusCode)
 		}
 
 		// throttle requests
