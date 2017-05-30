@@ -16,20 +16,9 @@ import (
 // Fields are the fields that should be returned by the Google Drive API
 var Fields string
 
-// BlackListObjects is a list of blacklisted items that will not be
-// fetched from cache or the API
-var BlackListObjects map[string]bool
-
 // init initializes the global configurations
 func init() {
 	Fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents"
-
-	BlackListObjects = make(map[string]bool)
-	BlackListObjects[".git"] = true
-	BlackListObjects["HEAD"] = true
-	BlackListObjects[".Trash"] = true
-	BlackListObjects[".Trash-1000"] = true
-	BlackListObjects[".metadata_never_index"] = true
 }
 
 // Drive holds the Google Drive API connection(s)
@@ -262,10 +251,6 @@ func (d *Drive) GetObjectsByParent(parent string) ([]*APIObject, error) {
 
 // GetObjectByParentAndName finds a child element by name and its parent id
 func (d *Drive) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
-	if _, exists := BlackListObjects[name]; exists {
-		return nil, fmt.Errorf("Object %v is blacklisted and will not be returned", name)
-	}
-
 	return d.cache.GetObjectByParentAndName(parent, name)
 }
 

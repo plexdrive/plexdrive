@@ -195,7 +195,7 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	object, err := o.client.GetObjectByParentAndName(o.object.ObjectID, name)
 	if nil != err {
-		Log.Debugf("%v", err)
+		Log.Tracef("%v", err)
 		return nil, fuse.ENOENT
 	}
 
