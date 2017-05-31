@@ -18,16 +18,17 @@ var Fields string
 
 // init initializes the global configurations
 func init() {
-	Fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents"
+	Fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash"
 }
 
 // Drive holds the Google Drive API connection(s)
 type Drive struct {
-	cache      *Cache
-	context    context.Context
-	token      *oauth2.Token
-	config     *oauth2.Config
-	rootNodeID string
+	cache            *Cache
+	context          context.Context
+	token            *oauth2.Token
+	config           *oauth2.Config
+	rootNodeID       string
+	UserPermissionID string
 }
 
 // NewDriveClient creates a new Google Drive client
@@ -219,11 +220,15 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 
 	file, err := client.Files.
 		Get(d.rootNodeID).
-		Fields(googleapi.Field(Fields)).
+		Fields(googleapi.Field(Fields + ", ownedByMe, owners/permissionId")).
 		Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object %v from API", d.rootNodeID)
+	}
+
+	if file.OwnedByMe {
+		d.UserPermissionID = file.Owners[0].PermissionId
 	}
 
 	// getting file size
@@ -268,9 +273,16 @@ func (d *Drive) Remove(object *APIObject) error {
 		return fmt.Errorf("Could not get Google Drive client")
 	}
 
-	if err := client.Files.Delete(object.ObjectID).Do(); nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not delete object %v from API", object.Name)
+	if object.CanTrash {
+		if err := client.Files.Delete(object.ObjectID).Do(); nil != err {
+			Log.Debugf("%v", err)
+			return fmt.Errorf("Could not delete object %v from API", object.Name)
+		}
+	} else {
+		if err := client.Permissions.Delete(object.ObjectID, d.UserPermissionID).Do(); nil != err {
+			Log.Debugf("%v", err)
+			return fmt.Errorf("Could not remove permission of object %v from API", object.Name)
+		}
 	}
 
 	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
@@ -305,5 +317,6 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		Size:         uint64(file.Size),
 		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", file.Id),
 		Parents:      fmt.Sprintf("|%v|", strings.Join(parents, "|")),
+		CanTrash:     file.Capabilities.CanTrash,
 	}, nil
 }

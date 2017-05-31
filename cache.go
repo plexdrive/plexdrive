@@ -44,6 +44,7 @@ type APIObject struct {
 	LastModified time.Time
 	DownloadURL  string
 	Parents      string `gorm:"index"`
+	CanTrash     bool
 }
 
 // PageToken is the last change id
