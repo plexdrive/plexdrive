@@ -98,8 +98,7 @@ func (d *Drive) checkChanges(firstCheck bool) {
 		query := client.Changes.
 			List(pageToken).
 			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
-			PageSize(1000).
-			IncludeRemoved(true)
+			PageSize(1000)
 
 		results, err := query.Do()
 		if nil != err {
@@ -112,7 +111,9 @@ func (d *Drive) checkChanges(firstCheck bool) {
 			Log.Tracef("Change %v", change)
 
 			if change.Removed || (nil != change.File && change.File.ExplicitlyTrashed) {
-				d.cache.DeleteObject(change.FileId)
+				if err := d.cache.DeleteObject(change.FileId); nil != err {
+					Log.Tracef("%v", err)
+				}
 				deletedItems++
 			} else {
 				object, err := d.mapFileToObject(change.File)
@@ -120,10 +121,8 @@ func (d *Drive) checkChanges(firstCheck bool) {
 					Log.Debugf("%v", err)
 					Log.Warningf("Could not map Google Drive file to object")
 				} else {
-					err := d.cache.UpdateObject(object)
-					if nil != err {
-						Log.Debugf("%v", err)
-						Log.Warningf("Could not update object %v", object.ObjectID)
+					if err := d.cache.UpdateObject(object); nil != err {
+						Log.Warningf("%v", err)
 					}
 					updatedItems++
 				}

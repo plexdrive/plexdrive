@@ -125,7 +125,6 @@ func (c *Cache) GetObject(id string) (*APIObject, error) {
 
 	var object APIObject
 	if err := db.Find(bson.M{"_id": id}).One(&object); nil != err {
-		Log.Debugf("GetObject %v", err)
 		return nil, fmt.Errorf("Could not find object %v in cache", id)
 	}
 
@@ -140,7 +139,6 @@ func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 
 	var objects []*APIObject
 	if err := db.Find(bson.M{"parents": parent}).All(&objects); nil != err {
-		Log.Debugf("GetObjectsByParent %v", err)
 		return nil, fmt.Errorf("Could not find children for parent %v in cache", parent)
 	}
 
@@ -155,7 +153,6 @@ func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error
 
 	var object APIObject
 	if err := db.Find(bson.M{"parents": parent, "name": name}).One(&object); nil != err {
-		Log.Tracef("GetObjectByParentAndName %v", err)
 		return nil, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 	}
 
@@ -168,7 +165,6 @@ func (c *Cache) DeleteObject(id string) error {
 	db := c.session.DB("plexdrive").C("api_objects")
 
 	if err := db.Remove(bson.M{"_id": id}); nil != err {
-		Log.Debugf("DeleteObject %v", err)
 		return fmt.Errorf("Could not delete object %v", id)
 	}
 
@@ -180,7 +176,6 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 	db := c.session.DB("plexdrive").C("api_objects")
 
 	if _, err := db.Upsert(bson.M{"_id": object.ObjectID}, object); nil != err {
-		Log.Debugf("UpdateObject %v", err)
 		return fmt.Errorf("Could not update/save object %v", object.ObjectID)
 	}
 
@@ -193,7 +188,6 @@ func (c *Cache) StoreStartPageToken(token string) error {
 	db := c.session.DB("plexdrive").C("page_token")
 
 	if _, err := db.Upsert(bson.M{"_id": "t"}, &PageToken{ID: "t", Token: token}); nil != err {
-		Log.Debugf("StoreStartPageToken %v", err)
 		return fmt.Errorf("Could not store token %v", token)
 	}
 
@@ -207,7 +201,6 @@ func (c *Cache) GetStartPageToken() (string, error) {
 
 	var pageToken PageToken
 	if err := db.Find(nil).One(&pageToken); nil != err {
-		Log.Debugf("GetStartPageToken %v", err)
 		return "", fmt.Errorf("Could not get token from cache")
 	}
 
