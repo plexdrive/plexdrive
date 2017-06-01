@@ -67,6 +67,11 @@ func NewCache(mongoURL string, cacheBasePath string, sqlDebug bool) (*Cache, err
 		tokenPath: filepath.Join(cacheBasePath, "token.json"),
 	}
 
+	// create index
+	db := session.DB("plexdrive").C("api_objects")
+	db.EnsureIndex(mgo.Index{Key: []string{"parents"}})
+	db.EnsureIndex(mgo.Index{Key: []string{"name"}})
+
 	return &cache, nil
 }
 
