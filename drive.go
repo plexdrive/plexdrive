@@ -63,6 +63,15 @@ func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration,
 }
 
 func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
+	d.checkChanges(true)
+	for _ = range time.Tick(refreshInterval) {
+		d.checkChanges(false)
+	}
+}
+
+func (d *Drive) checkChanges(firstCheck bool) {
+	Log.Debugf("Checking for changes")
+
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -70,92 +79,84 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 		return
 	}
 
-	checkChanges := func(firstCheck bool) {
-		Log.Debugf("Checking for changes")
+	// get the last token
+	pageToken, err := d.cache.GetStartPageToken()
+	if nil != err {
+		pageToken = "1"
+		Log.Info("No last change id found, starting from beginning...")
+	} else {
+		Log.Debugf("Last change id found, continuing getting changes (%v)", pageToken)
+	}
 
-		// get the last token
-		pageToken, err := d.cache.GetStartPageToken()
+	if firstCheck {
+		Log.Infof("First cache build process started...")
+	}
+
+	d.cache.StartTransaction()
+
+	deletedItems := 0
+	updatedItems := 0
+	processedItems := 0
+	for {
+		query := client.Changes.
+			List(pageToken).
+			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
+			PageSize(1000).
+			IncludeRemoved(true)
+
+		results, err := query.Do()
 		if nil != err {
-			pageToken = "1"
-			Log.Info("No last change id found, starting from beginning...")
-		} else {
-			Log.Debugf("Last change id found, continuing getting changes (%v)", pageToken)
+			Log.Debugf("%v", err)
+			Log.Warningf("Could not get changes")
+			break
 		}
 
-		if firstCheck {
-			Log.Infof("First cache build process started...")
-		}
+		for _, change := range results.Changes {
+			Log.Tracef("Change %v", change)
 
-		d.cache.StartTransaction()
-
-		deletedItems := 0
-		updatedItems := 0
-		processedItems := 0
-		for {
-			query := client.Changes.
-				List(pageToken).
-				Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
-				PageSize(1000).
-				IncludeRemoved(true)
-
-			results, err := query.Do()
-			if nil != err {
-				Log.Debugf("%v", err)
-				Log.Warningf("Could not get changes")
-				break
-			}
-
-			for _, change := range results.Changes {
-				Log.Tracef("Change %v", change)
-
-				if change.Removed || (nil != change.File && change.File.ExplicitlyTrashed) {
-					d.cache.DeleteObject(change.FileId)
-					deletedItems++
+			if change.Removed || (nil != change.File && change.File.ExplicitlyTrashed) {
+				d.cache.DeleteObject(change.FileId, false)
+				deletedItems++
+			} else {
+				object, err := d.mapFileToObject(change.File)
+				if nil != err {
+					Log.Debugf("%v", err)
+					Log.Warningf("Could not map Google Drive file to object")
 				} else {
-					object, err := d.mapFileToObject(change.File)
+					err := d.cache.UpdateObject(object)
 					if nil != err {
 						Log.Debugf("%v", err)
-						Log.Warningf("Could not map Google Drive file to object")
-					} else {
-						err := d.cache.UpdateObject(object)
-						if nil != err {
-							Log.Debugf("%v", err)
-							Log.Warningf("Could not update object %v", object.ObjectID)
-						}
-						updatedItems++
+						Log.Warningf("Could not update object %v", object.ObjectID)
 					}
+					updatedItems++
 				}
-
-				processedItems++
 			}
 
-			if processedItems > 0 {
-				Log.Infof("Processed %v items / deleted %v items / updated %v items",
-					processedItems, deletedItems, updatedItems)
-			}
-
-			if "" != results.NextPageToken {
-				pageToken = results.NextPageToken
-				d.cache.StoreStartPageToken(pageToken)
-			} else {
-				pageToken = results.NewStartPageToken
-				d.cache.StoreStartPageToken(pageToken)
-				break
-			}
+			processedItems++
 		}
 
-		if firstCheck {
-			Log.Infof("First cache build process finished!")
+		if processedItems > 0 {
+			Log.Infof("Processed %v items / deleted %v items / updated %v items",
+				processedItems, deletedItems, updatedItems)
 		}
 
-		d.cache.EndTransaction()
-		d.cache.Backup()
+		if "" != results.NextPageToken {
+			pageToken = results.NextPageToken
+			d.cache.StoreStartPageToken(pageToken)
+		} else {
+			pageToken = results.NewStartPageToken
+			d.cache.StoreStartPageToken(pageToken)
+			break
+		}
 	}
 
-	checkChanges(true)
-	for _ = range time.Tick(refreshInterval) {
-		checkChanges(false)
+	if firstCheck {
+		Log.Infof("First cache build process finished!")
 	}
+
+	d.cache.EndTransaction()
+	d.cache.Backup()
+
 }
 
 func (d *Drive) authorize() error {
@@ -285,7 +286,7 @@ func (d *Drive) Remove(object *APIObject) error {
 		}
 	}
 
-	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
+	if err := d.cache.DeleteObject(object.ObjectID, true); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not delete object %v from cache", object.Name)
 	}

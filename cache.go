@@ -31,8 +31,9 @@ const (
 )
 
 type cacheAction struct {
-	action int
-	object *APIObject
+	action  int
+	object  *APIObject
+	instant bool
 }
 
 // APIObject is a Google Drive file object
@@ -103,11 +104,19 @@ func (c *Cache) startStoringQueue() {
 		if nil != action.object {
 			if action.action == DeleteAction || action.action == StoreAction {
 				Log.Debugf("Deleting object %v", action.object.ObjectID)
-				c.tx.Unscoped().Delete(action.object)
+				if action.instant {
+					c.db.Unscoped().Delete(action.object)
+				} else {
+					c.tx.Unscoped().Delete(action.object)
+				}
 			}
 			if action.action == StoreAction {
 				Log.Debugf("Storing object %v in cache", action.object.ObjectID)
-				c.tx.Unscoped().Create(action.object)
+				if action.instant {
+					c.tx.Unscoped().Create(action.object)
+				} else {
+					c.tx.Unscoped().Create(action.object)
+				}
 			}
 		}
 	}
@@ -231,10 +240,11 @@ func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error
 }
 
 // DeleteObject deletes an object by id
-func (c *Cache) DeleteObject(id string) error {
+func (c *Cache) DeleteObject(id string, instant bool) error {
 	c.dbAction <- cacheAction{
-		action: DeleteAction,
-		object: &APIObject{ObjectID: id},
+		action:  DeleteAction,
+		object:  &APIObject{ObjectID: id},
+		instant: instant,
 	}
 	return nil
 }
