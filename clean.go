@@ -37,6 +37,13 @@ func clearByInterval(chunkDir string, clearInterval, chunkAge time.Duration) {
 			if path == chunkDir {
 				return nil
 			}
+			if nil != err {
+				Log.Tracef("%v", err)
+				return filepath.SkipDir
+			}
+			if nil == f {
+				return filepath.SkipDir
+			}
 
 			now := time.Now()
 			if !f.IsDir() {
@@ -52,7 +59,7 @@ func clearByInterval(chunkDir string, clearInterval, chunkAge time.Duration) {
 					}
 				}
 			}
-			return err
+			return nil
 		})
 	}
 }
@@ -75,7 +82,7 @@ func deleteEmptyDirs(dir string) error {
 				}
 			}
 		}
-		return err
+		return nil
 	})
 
 	return err
