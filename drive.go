@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	. "github.com/claudetech/loggo/default"
@@ -92,8 +91,6 @@ func (d *Drive) checkChanges(firstCheck bool) {
 		Log.Infof("First cache build process started...")
 	}
 
-	d.cache.StartTransaction()
-
 	deletedItems := 0
 	updatedItems := 0
 	processedItems := 0
@@ -115,7 +112,7 @@ func (d *Drive) checkChanges(firstCheck bool) {
 			Log.Tracef("Change %v", change)
 
 			if change.Removed || (nil != change.File && change.File.ExplicitlyTrashed) {
-				d.cache.DeleteObject(change.FileId, false)
+				d.cache.DeleteObject(change.FileId)
 				deletedItems++
 			} else {
 				object, err := d.mapFileToObject(change.File)
@@ -153,10 +150,6 @@ func (d *Drive) checkChanges(firstCheck bool) {
 	if firstCheck {
 		Log.Infof("First cache build process finished!")
 	}
-
-	d.cache.EndTransaction()
-	d.cache.Backup()
-
 }
 
 func (d *Drive) authorize() error {
@@ -286,7 +279,7 @@ func (d *Drive) Remove(object *APIObject) error {
 		}
 	}
 
-	if err := d.cache.DeleteObject(object.ObjectID, true); nil != err {
+	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not delete object %v from cache", object.Name)
 	}
@@ -317,7 +310,7 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		LastModified: lastModified,
 		Size:         uint64(file.Size),
 		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", file.Id),
-		Parents:      fmt.Sprintf("|%v|", strings.Join(parents, "|")),
+		Parents:      parents,
 		CanTrash:     file.Capabilities.CanTrash,
 	}, nil
 }
