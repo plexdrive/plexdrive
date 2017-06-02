@@ -39,7 +39,7 @@ Usage of ./plexdrive:
   --clear-chunk-max-size string
     	The maximum size of the temporary chunk directory (units: B, K, M, G)
   -c, --config string
-    	The path to the configuration directory (default "/root/.plexdrive")
+    	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
     	Fuse mount options (e.g. -fuse-options allow_other,...)
   --gid int
