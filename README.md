@@ -21,7 +21,7 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Run the application like this
 ```
-./plexdrive /path/to/my/mount
+./plexdrive -m localhost /path/to/my/mount
 ```
 
 ### Crypted mount with rclone
