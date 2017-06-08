@@ -33,7 +33,10 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
-	argMongoURL := flag.StringP("mongo-db-urls", "m", "", "Connection URL for mongodb")
+	argMongoURL := flag.StringP("mongo-db-host", "m", "localhost", "MongoDB host")
+	argMongoUser := flag.String("mongo-db-user", "", "MongoDB username")
+	argMongoPass := flag.String("mongo-db-password", "", "MongoDB password")
+	argMongoDatabase := flag.String("mongo-db-database", "plexdrive", "MongoDB database")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
@@ -63,7 +66,12 @@ func main() {
 	if "" == *argMongoURL {
 		flag.Usage()
 		fmt.Println()
-		panic(fmt.Errorf("MongoDB URL not specified"))
+		panic(fmt.Errorf("MongoDB URLs not specified"))
+	}
+	if "" == *argMongoDatabase {
+		flag.Usage()
+		fmt.Println()
+		panic(fmt.Errorf("MongoDB database not specified"))
 	}
 
 	// calculate uid / gid
@@ -108,7 +116,10 @@ func main() {
 	Log.Debugf("root-node-id         : %v", *argRootNodeID)
 	Log.Debugf("config               : %v", *argConfigPath)
 	Log.Debugf("temp                 : %v", *argTempPath)
-	Log.Debugf("mongo-db-urls        : %v", *argMongoURL)
+	Log.Debugf("mongo-db-host        : %v", *argMongoURL)
+	Log.Debugf("mongo-db-user        : %v", *argMongoUser)
+	Log.Debugf("mongo-db-password    : %v", *argMongoPass)
+	Log.Debugf("mongo-db-database    : %v", *argMongoDatabase)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
@@ -162,7 +173,7 @@ func main() {
 		}
 	}
 
-	cache, err := NewCache(*argMongoURL, *argConfigPath, *argLogLevel > 3)
+	cache, err := NewCache(*argMongoURL, *argMongoUser, *argMongoPass, *argMongoDatabase, *argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("Could not initialize cache")
 		Log.Debugf("%v", err)

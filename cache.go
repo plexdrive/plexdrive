@@ -18,6 +18,7 @@ import (
 // Cache is the cache
 type Cache struct {
 	session   *mgo.Session
+	dbName    string
 	tokenPath string
 }
 
@@ -53,7 +54,7 @@ type PageToken struct {
 }
 
 // NewCache creates a new cache instance
-func NewCache(mongoURL string, cacheBasePath string, sqlDebug bool) (*Cache, error) {
+func NewCache(mongoURL, mongoUser, mongoPass, mongoDatabase, cacheBasePath string, sqlDebug bool) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
 
 	session, err := mgo.Dial(mongoURL)
@@ -64,13 +65,22 @@ func NewCache(mongoURL string, cacheBasePath string, sqlDebug bool) (*Cache, err
 
 	cache := Cache{
 		session:   session,
+		dbName:    mongoDatabase,
 		tokenPath: filepath.Join(cacheBasePath, "token.json"),
 	}
 
+	// getting the db
+	db := session.DB(mongoDatabase)
+
+	// login
+	if "" != mongoUser && "" != mongoPass {
+		db.Login(mongoUser, mongoPass)
+	}
+
 	// create index
-	db := session.DB("plexdrive").C("api_objects")
-	db.EnsureIndex(mgo.Index{Key: []string{"parents"}})
-	db.EnsureIndex(mgo.Index{Key: []string{"name"}})
+	col := db.C("api_objects")
+	col.EnsureIndex(mgo.Index{Key: []string{"parents"}})
+	col.EnsureIndex(mgo.Index{Key: []string{"name"}})
 
 	return &cache, nil
 }
@@ -121,7 +131,7 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 // GetObject gets an object by id
 func (c *Cache) GetObject(id string) (*APIObject, error) {
 	Log.Tracef("Getting object %v", id)
-	db := c.session.DB("plexdrive").C("api_objects")
+	db := c.session.DB(c.dbName).C("api_objects")
 
 	var object APIObject
 	if err := db.Find(bson.M{"_id": id}).One(&object); nil != err {
@@ -135,7 +145,7 @@ func (c *Cache) GetObject(id string) (*APIObject, error) {
 // GetObjectsByParent get all objects under parent id
 func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 	Log.Tracef("Getting children for %v", parent)
-	db := c.session.DB("plexdrive").C("api_objects")
+	db := c.session.DB(c.dbName).C("api_objects")
 
 	var objects []*APIObject
 	if err := db.Find(bson.M{"parents": parent}).All(&objects); nil != err {
@@ -149,7 +159,7 @@ func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 // GetObjectByParentAndName finds a child element by name and its parent id
 func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
 	Log.Tracef("Getting object %v in parent %v", name, parent)
-	db := c.session.DB("plexdrive").C("api_objects")
+	db := c.session.DB(c.dbName).C("api_objects")
 
 	var object APIObject
 	if err := db.Find(bson.M{"parents": parent, "name": name}).One(&object); nil != err {
@@ -162,7 +172,7 @@ func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error
 
 // DeleteObject deletes an object by id
 func (c *Cache) DeleteObject(id string) error {
-	db := c.session.DB("plexdrive").C("api_objects")
+	db := c.session.DB(c.dbName).C("api_objects")
 
 	if err := db.Remove(bson.M{"_id": id}); nil != err {
 		return fmt.Errorf("Could not delete object %v", id)
@@ -173,7 +183,7 @@ func (c *Cache) DeleteObject(id string) error {
 
 // UpdateObject updates an object
 func (c *Cache) UpdateObject(object *APIObject) error {
-	db := c.session.DB("plexdrive").C("api_objects")
+	db := c.session.DB(c.dbName).C("api_objects")
 
 	if _, err := db.Upsert(bson.M{"_id": object.ObjectID}, object); nil != err {
 		return fmt.Errorf("Could not update/save object %v", object.ObjectID)
@@ -185,7 +195,7 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 // StoreStartPageToken stores the page token for changes
 func (c *Cache) StoreStartPageToken(token string) error {
 	Log.Debugf("Storing page token %v in cache", token)
-	db := c.session.DB("plexdrive").C("page_token")
+	db := c.session.DB(c.dbName).C("page_token")
 
 	if _, err := db.Upsert(bson.M{"_id": "t"}, &PageToken{ID: "t", Token: token}); nil != err {
 		return fmt.Errorf("Could not store token %v", token)
@@ -197,7 +207,7 @@ func (c *Cache) StoreStartPageToken(token string) error {
 // GetStartPageToken gets the start page token
 func (c *Cache) GetStartPageToken() (string, error) {
 	Log.Debugf("Getting start page token from cache")
-	db := c.session.DB("plexdrive").C("page_token")
+	db := c.session.DB(c.dbName).C("page_token")
 
 	var pageToken PageToken
 	if err := db.Find(nil).One(&pageToken); nil != err {

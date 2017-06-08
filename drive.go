@@ -28,6 +28,7 @@ type Drive struct {
 	config           *oauth2.Config
 	rootNodeID       string
 	UserPermissionID string
+	changesChecking  bool
 }
 
 // NewDriveClient creates a new Google Drive client
@@ -45,7 +46,8 @@ func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration,
 			RedirectURL: "urn:ietf:wg:oauth:2.0:oob",
 			Scopes:      []string{gdrive.DriveScope},
 		},
-		rootNodeID: rootNodeID,
+		rootNodeID:      rootNodeID,
+		changesChecking: false,
 	}
 
 	if "" == drive.rootNodeID {
@@ -69,6 +71,11 @@ func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
 }
 
 func (d *Drive) checkChanges(firstCheck bool) {
+	if d.changesChecking {
+		return
+	}
+	d.changesChecking = true
+
 	Log.Debugf("Checking for changes")
 
 	client, err := d.getClient()
@@ -149,6 +156,8 @@ func (d *Drive) checkChanges(firstCheck bool) {
 	if firstCheck {
 		Log.Infof("First cache build process finished!")
 	}
+
+	d.changesChecking = false
 }
 
 func (d *Drive) authorize() error {
