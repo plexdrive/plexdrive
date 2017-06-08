@@ -33,6 +33,7 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
+	argMongoURL := flag.StringP("mongo-db-urls", "m", "", "Connection URL for mongodb")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
@@ -48,7 +49,7 @@ func main() {
 
 	// display version information
 	if *argVersion {
-		fmt.Println("3.1.0")
+		fmt.Println("4.0.0")
 		return
 	}
 
@@ -56,7 +57,13 @@ func main() {
 	argMountPoint := flag.Arg(0)
 	if "" == argMountPoint {
 		flag.Usage()
+		fmt.Println()
 		panic(fmt.Errorf("Mountpoint not specified"))
+	}
+	if "" == *argMongoURL {
+		flag.Usage()
+		fmt.Println()
+		panic(fmt.Errorf("MongoDB URL not specified"))
 	}
 
 	// calculate uid / gid
@@ -101,6 +108,7 @@ func main() {
 	Log.Debugf("root-node-id         : %v", *argRootNodeID)
 	Log.Debugf("config               : %v", *argConfigPath)
 	Log.Debugf("temp                 : %v", *argTempPath)
+	Log.Debugf("mongo-db-urls        : %v", *argMongoURL)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
@@ -154,7 +162,7 @@ func main() {
 		}
 	}
 
-	cache, err := NewCache(*argConfigPath, *argLogLevel > 3)
+	cache, err := NewCache(*argMongoURL, *argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("Could not initialize cache")
 		Log.Debugf("%v", err)

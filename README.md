@@ -15,12 +15,12 @@ I tried using rclone for a long time, but got API Quota errors every day and/or 
 _If you like the project, feel free to make a small [donation via PayPal](https://www.paypal.me/dowei). Otherwise support the project by implementing new functions / bugfixes yourself and create pull requests :)_
 
 ## Installation
-1. First you should install fuse on your system
+1. First you need to install fuse and mongodb on your system 
 2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Run the application like this
 ```
-./plexdrive /path/to/my/mount
+./plexdrive -m localhost /path/to/my/mount
 ```
 
 ### Crypted mount with rclone
@@ -43,6 +43,8 @@ Usage of ./plexdrive:
     	Fuse mount options (e.g. -fuse-options allow_other,...)
   --gid int
     	Set the mounts GID (-1 = default permissions) (default -1)
+  -m, --mongo-db-urls string (example -m localhost)
+    	Connection URL for mongodb
   --refresh-interval duration
     	The time to wait till checking for changes (default 5m0s)
   --root-node-id string
@@ -58,7 +60,7 @@ Usage of ./plexdrive:
   -v, --verbosity int
     	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   --version
-    	Displays program's version information
+    	Displays program's version informationnformation
 ```
 
 ### Support 

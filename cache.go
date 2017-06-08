@@ -9,17 +9,15 @@ import (
 	"time"
 
 	. "github.com/claudetech/loggo/default"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"golang.org/x/oauth2"
+
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // Cache is the cache
 type Cache struct {
-	db        *gorm.DB
-	tx        *gorm.DB
-	backup    *gorm.DB
-	dbAction  chan cacheAction
+	session   *mgo.Session
 	tokenPath string
 }
 
@@ -38,120 +36,49 @@ type cacheAction struct {
 
 // APIObject is a Google Drive file object
 type APIObject struct {
-	ObjectID     string `gorm:"primary_key"`
-	Name         string `gorm:"index"`
+	ObjectID     string `bson:"_id,omitempty"`
+	Name         string
 	IsDir        bool
 	Size         uint64
 	LastModified time.Time
 	DownloadURL  string
-	Parents      string `gorm:"index"`
+	Parents      []string
 	CanTrash     bool
 }
 
 // PageToken is the last change id
 type PageToken struct {
-	gorm.Model
+	ID    string `bson:"_id,omitempty"`
 	Token string
 }
 
 // NewCache creates a new cache instance
-func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
+func NewCache(mongoURL string, cacheBasePath string, sqlDebug bool) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
-	db, err := gorm.Open("sqlite3", "file::memory:?cache=shared")
-	if nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not open cache database")
-	}
-	backupPath := filepath.Join(cacheBasePath, "cache")
-	backupDb, err := gorm.Open("sqlite3", backupPath)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not open cache backup database")
-	}
 
-	Log.Debugf("Migrating cache schema")
-	db.AutoMigrate(&APIObject{})
-	db.AutoMigrate(&PageToken{})
-	db.LogMode(sqlDebug)
-	backupDb.AutoMigrate(&APIObject{})
-	backupDb.AutoMigrate(&PageToken{})
-	backupDb.LogMode(sqlDebug)
+	session, err := mgo.Dial(mongoURL)
+	if nil != err {
+		Log.Debugf("%v")
+		return nil, fmt.Errorf("Could not open mongo db connection")
+	}
 
 	cache := Cache{
-		db:        db,
-		backup:    backupDb,
-		dbAction:  make(chan cacheAction),
+		session:   session,
 		tokenPath: filepath.Join(cacheBasePath, "token.json"),
 	}
 
-	// Check if backup contains data and copy those data
-	var count int64
-	backupDb.Model(&APIObject{}).Count(&count)
-	if count > 0 {
-		copyDatabase(backupDb, db)
-		Log.Infof("Imported cached data from %v", backupPath)
-	}
-
-	go cache.startStoringQueue()
+	// create index
+	db := session.DB("plexdrive").C("api_objects")
+	db.EnsureIndex(mgo.Index{Key: []string{"parents"}})
+	db.EnsureIndex(mgo.Index{Key: []string{"name"}})
 
 	return &cache, nil
-}
-
-func (c *Cache) startStoringQueue() {
-	for {
-		action := <-c.dbAction
-
-		if nil != action.object {
-			if action.action == DeleteAction || action.action == StoreAction {
-				Log.Debugf("Deleting object %v", action.object.ObjectID)
-				if action.instant {
-					c.db.Unscoped().Delete(action.object)
-				} else {
-					c.tx.Unscoped().Delete(action.object)
-				}
-			}
-			if action.action == StoreAction {
-				Log.Debugf("Storing object %v in cache", action.object.ObjectID)
-				if action.instant {
-					c.tx.Unscoped().Create(action.object)
-				} else {
-					c.tx.Unscoped().Create(action.object)
-				}
-			}
-		}
-	}
-}
-
-// StartTransaction starts a new transaction
-func (c *Cache) StartTransaction() {
-	c.tx = c.db.Begin()
-}
-
-// EndTransaction ends the current transaction
-func (c *Cache) EndTransaction() {
-	c.tx.Commit()
-}
-
-// Backup backups the in memory cache to disk
-func (c *Cache) Backup() {
-	Log.Debugf("Backup cache database")
-	copyDatabase(c.db, c.backup)
 }
 
 // Close closes all handles
 func (c *Cache) Close() error {
 	Log.Debugf("Closing cache connection")
-
-	close(c.dbAction)
-	if err := c.db.Close(); nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not close cache connection")
-	}
-	if err := c.backup.Close(); nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not close cache backup connection")
-	}
-
+	c.session.Close()
 	return nil
 }
 
@@ -194,78 +121,75 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 // GetObject gets an object by id
 func (c *Cache) GetObject(id string) (*APIObject, error) {
 	Log.Tracef("Getting object %v", id)
+	db := c.session.DB("plexdrive").C("api_objects")
 
 	var object APIObject
-	c.db.Where(&APIObject{ObjectID: id}).First(&object)
-
-	Log.Tracef("Got object from cache %v", object)
-
-	if "" != object.ObjectID {
-		return &object, nil
+	if err := db.Find(bson.M{"_id": id}).One(&object); nil != err {
+		return nil, fmt.Errorf("Could not find object %v in cache", id)
 	}
 
-	return nil, fmt.Errorf("Could not find object %v in cache", id)
+	Log.Tracef("Got object from cache %v", object)
+	return &object, nil
 }
 
 // GetObjectsByParent get all objects under parent id
 func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 	Log.Tracef("Getting children for %v", parent)
+	db := c.session.DB("plexdrive").C("api_objects")
 
 	var objects []*APIObject
-	c.db.Where("parents LIKE ?", fmt.Sprintf("%%|%v|%%", parent)).Find(&objects)
-
-	Log.Tracef("Got objects from cache %v", objects)
-
-	if 0 != len(objects) {
-		return objects, nil
+	if err := db.Find(bson.M{"parents": parent}).All(&objects); nil != err {
+		return nil, fmt.Errorf("Could not find children for parent %v in cache", parent)
 	}
 
-	return nil, fmt.Errorf("Could not find children for parent %v in cache", parent)
+	Log.Tracef("Got objects from cache %v", objects)
+	return objects, nil
 }
 
 // GetObjectByParentAndName finds a child element by name and its parent id
 func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
 	Log.Tracef("Getting object %v in parent %v", name, parent)
+	db := c.session.DB("plexdrive").C("api_objects")
 
 	var object APIObject
-	c.db.Where("parents LIKE ? AND name = ?", fmt.Sprintf("%%|%v|%%", parent), name).First(&object)
-
-	Log.Tracef("Got object from cache %v", object)
-
-	if "" != object.ObjectID {
-		return &object, nil
+	if err := db.Find(bson.M{"parents": parent, "name": name}).One(&object); nil != err {
+		return nil, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 	}
 
-	return nil, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
+	Log.Tracef("Got object from cache %v", object)
+	return &object, nil
 }
 
 // DeleteObject deletes an object by id
-func (c *Cache) DeleteObject(id string, instant bool) error {
-	c.dbAction <- cacheAction{
-		action:  DeleteAction,
-		object:  &APIObject{ObjectID: id},
-		instant: instant,
+func (c *Cache) DeleteObject(id string) error {
+	db := c.session.DB("plexdrive").C("api_objects")
+
+	if err := db.Remove(bson.M{"_id": id}); nil != err {
+		return fmt.Errorf("Could not delete object %v", id)
 	}
+
 	return nil
 }
 
 // UpdateObject updates an object
 func (c *Cache) UpdateObject(object *APIObject) error {
-	c.dbAction <- cacheAction{
-		action: StoreAction,
-		object: object,
+	db := c.session.DB("plexdrive").C("api_objects")
+
+	if _, err := db.Upsert(bson.M{"_id": object.ObjectID}, object); nil != err {
+		return fmt.Errorf("Could not update/save object %v", object.ObjectID)
 	}
+
 	return nil
 }
 
 // StoreStartPageToken stores the page token for changes
 func (c *Cache) StoreStartPageToken(token string) error {
 	Log.Debugf("Storing page token %v in cache", token)
+	db := c.session.DB("plexdrive").C("page_token")
 
-	c.tx.Unscoped().Delete(&PageToken{})
-	c.tx.Unscoped().Create(&PageToken{
-		Token: token,
-	})
+	if _, err := db.Upsert(bson.M{"_id": "t"}, &PageToken{ID: "t", Token: token}); nil != err {
+		return fmt.Errorf("Could not store token %v", token)
+	}
 
 	return nil
 }
@@ -273,37 +197,13 @@ func (c *Cache) StoreStartPageToken(token string) error {
 // GetStartPageToken gets the start page token
 func (c *Cache) GetStartPageToken() (string, error) {
 	Log.Debugf("Getting start page token from cache")
+	db := c.session.DB("plexdrive").C("page_token")
 
 	var pageToken PageToken
-	c.db.First(&pageToken)
+	if err := db.Find(nil).One(&pageToken); nil != err {
+		return "", fmt.Errorf("Could not get token from cache")
+	}
 
 	Log.Tracef("Got start page token %v", pageToken.Token)
-
-	if "" == pageToken.Token {
-		return "", fmt.Errorf("Token not found in cache")
-	}
-
 	return pageToken.Token, nil
-}
-
-func copyDatabase(src *gorm.DB, dest *gorm.DB) {
-	tx := dest.Begin()
-
-	// delete old data
-	tx.Unscoped().Delete(&PageToken{})
-	tx.Unscoped().Delete(&APIObject{})
-
-	// copy page token
-	var token PageToken
-	src.First(&token)
-	tx.Unscoped().Create(&token)
-
-	// copy objects
-	var objects []*APIObject
-	src.Find(&objects)
-	for _, object := range objects {
-		tx.Unscoped().Create(object)
-	}
-
-	tx.Commit()
 }
