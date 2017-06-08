@@ -28,39 +28,45 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 
 ## Usage
 ```
-Usage of ./plexdrive:
+Usage of ./plexdrive-mongo-4.0.0-beta:
   --chunk-size string
-    	The size of each chunk that is downloaded (units: B, K, M, G) (default "5M")
+        The size of each chunk that is downloaded (units: B, K, M, G) (default "5M")
   --clear-chunk-age duration
-    	The maximum age of a cached chunk file (default 30m0s)
+        The maximum age of a cached chunk file (default 30m0s)
   --clear-chunk-interval duration
-    	The time to wait till clearing the chunk directory (default 1m0s)
+        The time to wait till clearing the chunk directory (default 1m0s)
   --clear-chunk-max-size string
-    	The maximum size of the temporary chunk directory (units: B, K, M, G)
+        The maximum size of the temporary chunk directory (units: B, K, M, G)
   -c, --config string
-    	The path to the configuration directory (default "~/.plexdrive")
+        The path to the configuration directory (default "/root/.plexdrive")
   -o, --fuse-options string
-    	Fuse mount options (e.g. -fuse-options allow_other,...)
+        Fuse mount options (e.g. -fuse-options allow_other,...)
   --gid int
-    	Set the mounts GID (-1 = default permissions) (default -1)
-  -m, --mongo-db-urls string (example -m localhost)
-    	Connection URL for mongodb
+        Set the mounts GID (-1 = default permissions) (default -1)
+  --mongo-db-database string
+        MongoDB database (default "plexdrive")
+  -m, --mongo-db-host string
+        MongoDB host (default "localhost")
+  --mongo-db-password string
+        MongoDB password
+  --mongo-db-user string
+        MongoDB username
   --refresh-interval duration
-    	The time to wait till checking for changes (default 5m0s)
+        The time to wait till checking for changes (default 5m0s)
   --root-node-id string
-    	The ID of the root node to mount (use this for only mount a sub directory) (default "root")
+        The ID of the root node to mount (use this for only mount a sub directory) (default "root")
   --speed-limit string
-    	This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)
+        This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)
   -t, --temp string
-    	Path to a temporary directory to store temporary data (default "/tmp")
+        Path to a temporary directory to store temporary data (default "/tmp")
   --uid int
-    	Set the mounts UID (-1 = default permissions) (default -1)
+        Set the mounts UID (-1 = default permissions) (default -1)
   --umask value
-    	Override the default file permissions
+        Override the default file permissions
   -v, --verbosity int
-    	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
+        Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   --version
-    	Displays program's version informationnformation
+        Displays program's version information
 ```
 
 ### Support 
