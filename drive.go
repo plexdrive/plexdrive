@@ -276,7 +276,7 @@ func (d *Drive) Remove(object *APIObject) error {
 	}
 
 	if object.CanTrash {
-		if err := client.Files.Delete(object.ObjectID).Do(); nil != err {
+		if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Trashed: true}).Do(); nil != err {
 			Log.Debugf("%v", err)
 			return fmt.Errorf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
 		}
