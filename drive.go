@@ -126,7 +126,7 @@ func (d *Drive) checkChanges(firstCheck bool) {
 				object, err := d.mapFileToObject(change.File)
 				if nil != err {
 					Log.Debugf("%v", err)
-					Log.Warningf("Could not map Google Drive file to object")
+					Log.Warningf("Could not map Google Drive file %v (%v) to object", change.File.Id, change.File.Name)
 				} else {
 					if err := d.cache.UpdateObject(object); nil != err {
 						Log.Warningf("%v", err)
@@ -278,18 +278,18 @@ func (d *Drive) Remove(object *APIObject) error {
 	if object.CanTrash {
 		if err := client.Files.Delete(object.ObjectID).Do(); nil != err {
 			Log.Debugf("%v", err)
-			return fmt.Errorf("Could not delete object %v from API", object.Name)
+			return fmt.Errorf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
 		}
 	} else {
 		if err := client.Permissions.Delete(object.ObjectID, d.UserPermissionID).Do(); nil != err {
 			Log.Debugf("%v", err)
-			return fmt.Errorf("Could not remove permission of object %v from API", object.Name)
+			return fmt.Errorf("Could not remove permission of object %v (%v) from API", object.ObjectID, object.Name)
 		}
 	}
 
 	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
 		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not delete object %v from cache", object.Name)
+		return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
 	}
 
 	return nil
@@ -302,7 +302,7 @@ func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
 	if nil != err {
 		Log.Debugf("%v", err)
-		Log.Warningf("Could not parse last modified date for object %v", file.Id)
+		Log.Warningf("Could not parse last modified date for object %v (%v)", file.Id, file.Name)
 		lastModified = time.Now()
 	}
 

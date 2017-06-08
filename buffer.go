@@ -85,13 +85,13 @@ func SetDownloadSpeedLimit(downloadSpeedLimit int64) {
 
 // NewBuffer creates a new buffer instance
 func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
-	Log.Infof("Starting playback of %v", object.Name)
-	Log.Debugf("Creating buffer for object %v", object.ObjectID)
+	Log.Infof("Starting playback of %v (%v)", object.ObjectID, object.Name)
+	Log.Debugf("Creating buffer for object %v (%v)", object.ObjectID, object.Name)
 
 	tempDir := filepath.Join(chunkPath, object.ObjectID)
 	if err := os.MkdirAll(tempDir, 0777); nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not create temp path for object %v", object.ObjectID)
+		return nil, fmt.Errorf("Could not create temp path for object %v (%v)", object.ObjectID, object.Name)
 	}
 
 	if 0 == chunkSize {
@@ -115,8 +115,8 @@ func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
 func (b *Buffer) Close() error {
 	b.numberOfInstances--
 	if 0 == b.numberOfInstances {
-		Log.Infof("Stopping playback of %v", b.object.Name)
-		Log.Debugf("Stop buffering for object %v", b.object.ObjectID)
+		Log.Infof("Stopping playback of %v (%v)", b.object.ObjectID, b.object.Name)
+		Log.Debugf("Stop buffering for object %v (%v)", b.object.ObjectID, b.object.Name)
 
 		b.preload = false
 		instances.Remove(b.object.ObjectID)
@@ -130,8 +130,8 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
 
-	Log.Tracef("Getting object %v - chunk %v - offset %v for %v bytes",
-		b.object.ObjectID, strconv.Itoa(int(offset)), fOffset, size)
+	Log.Tracef("Getting object %v (%v) - chunk %v - offset %v for %v bytes",
+		b.object.ObjectID, b.object.Name, strconv.Itoa(int(offset)), fOffset, size)
 
 	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
 		defer func() {
@@ -180,11 +180,11 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
-	Log.Debugf("Requesting object %v bytes %v - %v from API", b.object.ObjectID, offset, offsetEnd)
+	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API", b.object.ObjectID, b.object.Name, offset, offsetEnd)
 	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not create request object %v from API", b.object.ObjectID)
+		return nil, fmt.Errorf("Could not create request object %v (%v) from API", b.object.ObjectID, b.object.Name)
 	}
 
 	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", offset, offsetEnd))
@@ -194,7 +194,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	res, err := b.client.Do(req)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not request object %v from API", b.object.ObjectID)
+		return nil, fmt.Errorf("Could not request object %v (%v) from API", b.object.ObjectID, b.object.Name)
 	}
 	defer res.Body.Close()
 
@@ -236,7 +236,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 	bytes, err := ioutil.ReadAll(reader)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not read objects %v API response", b.object.ObjectID)
+		return nil, fmt.Errorf("Could not read objects %v (%v) API response", b.object.ObjectID, b.object.Name)
 	}
 
 	if _, err := os.Stat(b.tempDir); os.IsNotExist(err) {

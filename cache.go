@@ -186,7 +186,7 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 	db := c.session.DB(c.dbName).C("api_objects")
 
 	if _, err := db.Upsert(bson.M{"_id": object.ObjectID}, object); nil != err {
-		return fmt.Errorf("Could not update/save object %v", object.ObjectID)
+		return fmt.Errorf("Could not update/save object %v (%v)", object.ObjectID, object.Name)
 	}
 
 	return nil
