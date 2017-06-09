@@ -255,7 +255,7 @@ func (o *Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 		return fuse.EIO
 	}
 
-	err = o.client.Remove(obj)
+	err = o.client.Remove(obj, o.object.ObjectID)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO

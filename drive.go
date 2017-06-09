@@ -263,7 +263,7 @@ func (d *Drive) Open(object *APIObject) (*Buffer, error) {
 }
 
 // Remove removes file from Google Drive
-func (d *Drive) Remove(object *APIObject) error {
+func (d *Drive) Remove(object *APIObject, parent string) error {
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -275,14 +275,19 @@ func (d *Drive) Remove(object *APIObject) error {
 			Log.Debugf("%v", err)
 			return fmt.Errorf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
 		}
-
-		if err := d.cache.DeleteObject(object.ObjectID); nil != err {
+	} else {
+		if _, err := client.Files.Update(object.ObjectID, nil).RemoveParents(parent).Do(); nil != err {
 			Log.Debugf("%v", err)
-			return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
+			return fmt.Errorf("Could not unsubscribe object %v (%v) from API", object.ObjectID, object.Name)
 		}
 	}
 
-	return fmt.Errorf("Could not delete object %v (%v) from API (maybe it is a shared file?)", object.ObjectID, object.Name)
+	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
+	}
+
+	return nil
 }
 
 // mapFileToObject maps a Google Drive file to APIObject
