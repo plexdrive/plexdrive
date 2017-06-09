@@ -234,7 +234,8 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 
 		// return an error if other 403 error occurred
 		Log.Debugf("%v", body)
-		return nil, fmt.Errorf("Could not read file / StatusCode: %v", res.StatusCode)
+		return nil, fmt.Errorf("Could not read object %v (%v) / StatusCode: %v",
+			b.object.ObjectID, b.object.Name, res.StatusCode)
 	}
 
 	bytes, err := ioutil.ReadAll(reader)
