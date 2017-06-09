@@ -22,13 +22,12 @@ func init() {
 
 // Drive holds the Google Drive API connection(s)
 type Drive struct {
-	cache            *Cache
-	context          context.Context
-	token            *oauth2.Token
-	config           *oauth2.Config
-	rootNodeID       string
-	UserPermissionID string
-	changesChecking  bool
+	cache           *Cache
+	context         context.Context
+	token           *oauth2.Token
+	config          *oauth2.Config
+	rootNodeID      string
+	changesChecking bool
 }
 
 // NewDriveClient creates a new Google Drive client
@@ -222,15 +221,11 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 
 	file, err := client.Files.
 		Get(d.rootNodeID).
-		Fields(googleapi.Field(Fields + ", ownedByMe, owners/permissionId")).
+		Fields(googleapi.Field(Fields)).
 		Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object %v from API", d.rootNodeID)
-	}
-
-	if file.OwnedByMe {
-		d.UserPermissionID = file.Owners[0].PermissionId
 	}
 
 	// getting file size
@@ -280,19 +275,14 @@ func (d *Drive) Remove(object *APIObject) error {
 			Log.Debugf("%v", err)
 			return fmt.Errorf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
 		}
-	} else {
-		if err := client.Permissions.Delete(object.ObjectID, d.UserPermissionID).Do(); nil != err {
+
+		if err := d.cache.DeleteObject(object.ObjectID); nil != err {
 			Log.Debugf("%v", err)
-			return fmt.Errorf("Could not remove permission of object %v (%v) from API", object.ObjectID, object.Name)
+			return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
 		}
 	}
 
-	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
-		Log.Debugf("%v", err)
-		return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
-	}
-
-	return nil
+	return fmt.Errorf("Could not delete object %v (%v) from API (maybe it is a shared file?)", object.ObjectID, object.Name)
 }
 
 // mapFileToObject maps a Google Drive file to APIObject
