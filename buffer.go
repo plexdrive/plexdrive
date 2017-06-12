@@ -125,56 +125,73 @@ func (b *Buffer) Close() error {
 }
 
 // ReadBytes on a specific location
-func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte, error) {
+func (b *Buffer) ReadBytes(start, size int64, preload bool) ([]byte, error) {
 	fOffset := start % chunkSize
 	offset := start - fOffset
 	offsetEnd := offset + chunkSize
+	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
 
 	Log.Tracef("Getting object %v (%v) - chunk %v - offset %v for %v bytes",
 		b.object.ObjectID, b.object.Name, strconv.Itoa(int(offset)), fOffset, size)
+	defer b.preloadNextChunks(preload, offsetEnd, size)
 
-	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
-		defer func() {
-			go func() {
-				preloadStart := strconv.Itoa(int(offsetEnd))
-				if !b.chunks.Has(preloadStart) {
-					b.chunks.Set(preloadStart, true)
-					b.ReadBytes(offsetEnd, size, true, 0)
-				}
-			}()
-		}()
+	bytes, err := b.readFromDisk(filename, offset, offsetEnd, size, fOffset)
+	if nil == err {
+		return bytes, nil
+	}
+	Log.Tracef("%v", err)
+
+	bytes, err = b.readFromAPI(0, offset, offsetEnd, start, size)
+	if nil != err {
+		return nil, err
 	}
 
-	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
-	if f, err := os.Open(filename); nil == err {
-		defer f.Close()
+	b.storeChunkOnDisk(filename, bytes)
 
-		buf := make([]byte, size)
-		if n, err := f.ReadAt(buf, fOffset); n > 0 && (nil == err || io.EOF == err || io.ErrUnexpectedEOF == err) {
-			Log.Tracef("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
+	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
+	eOffset := int64(math.Min(float64(fOffset+size), float64(len(bytes))))
+	return bytes[sOffset:eOffset], nil
+}
 
-			// update the last modified time for files that are often in use
-			if err := os.Chtimes(filename, time.Now(), time.Now()); nil != err {
-				Log.Warningf("Could not update last modified time for %v", filename)
+func (b *Buffer) preloadNextChunks(preload bool, offsetEnd, size int64) {
+	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
+		go func() {
+			preloadStart := strconv.Itoa(int(offsetEnd))
+			if !b.chunks.Has(preloadStart) {
+				b.chunks.Set(preloadStart, true)
+				b.ReadBytes(offsetEnd, size, true)
 			}
+		}()
+	}
+}
 
-			eOffset := int64(math.Min(float64(size), float64(len(buf))))
-			return buf[:eOffset], nil
+func (b *Buffer) readFromDisk(filename string, offset, offsetEnd, size, fOffset int64) ([]byte, error) {
+	f, err := os.Open(filename)
+	if nil != err {
+		Log.Tracef("%v", err)
+		return nil, fmt.Errorf("Could not open file %v", filename)
+	}
+	defer f.Close()
+
+	buf := make([]byte, size)
+	n, err := f.ReadAt(buf, fOffset)
+	if n > 0 && (nil == err || io.EOF == err || io.ErrUnexpectedEOF == err) {
+		Log.Tracef("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
+
+		// update the last modified time for files that are often in use
+		if err := os.Chtimes(filename, time.Now(), time.Now()); nil != err {
+			Log.Warningf("Could not update last modified time for %v", filename)
 		}
 
-		Log.Debugf("%v", err)
-		Log.Debugf("Could not read file %s at %v", filename, fOffset)
+		eOffset := int64(math.Min(float64(size), float64(len(buf))))
+		return buf[:eOffset], nil
 	}
 
-	if chunkDirMaxSize > 0 {
-		go func() {
-			if err := cleanChunkDir(chunkPath); nil != err {
-				Log.Debugf("%v", err)
-				Log.Warningf("Could not delete oldest chunk")
-			}
-		}()
-	}
+	Log.Tracef("%v", err)
+	return nil, fmt.Errorf("Could not read file %s at %v", filename, fOffset)
+}
 
+func (b *Buffer) readFromAPI(delay int32, offset, offsetEnd, start, size int64) ([]byte, error) {
 	// sleep if request is throttled
 	if delay > 0 {
 		time.Sleep(time.Duration(delay) * time.Second)
@@ -229,7 +246,7 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 			} else {
 				delay = delay * 2
 			}
-			return b.ReadBytes(start, size, true, delay)
+			return b.readFromAPI(delay, offset, offsetEnd, start, size)
 		}
 
 		// return an error if other 403 error occurred
@@ -244,10 +261,21 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		return nil, fmt.Errorf("Could not read objects %v (%v) API response", b.object.ObjectID, b.object.Name)
 	}
 
+	return bytes, nil
+}
+
+func (b *Buffer) storeChunkOnDisk(filename string, bytes []byte) {
+	if chunkDirMaxSize > 0 {
+		if err := cleanChunkDir(chunkPath); nil != err {
+			Log.Debugf("%v", err)
+			Log.Warningf("Could not delete oldest chunk")
+		}
+	}
+
 	if _, err := os.Stat(b.tempDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(b.tempDir, 0777); nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not create chunk temp path for chunk %v", filename)
+			Log.Warningf("Could not create chunk temp path for chunk %v", filename)
 		}
 	}
 
@@ -255,10 +283,6 @@ func (b *Buffer) ReadBytes(start, size int64, preload bool, delay int32) ([]byte
 		Log.Debugf("%v", err)
 		Log.Warningf("Could not write chunk temp file %v", filename)
 	}
-
-	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
-	eOffset := int64(math.Min(float64(fOffset+size), float64(len(bytes))))
-	return bytes[sOffset:eOffset], nil
 }
 
 // cleanChunkDir checks if the chunk folder is grown to big and clears the oldest file if necessary
