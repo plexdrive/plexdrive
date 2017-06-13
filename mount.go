@@ -170,6 +170,8 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 	attr.Crtime = o.object.LastModified
 	attr.Ctime = o.object.LastModified
 
+	attr.Blocks = (attr.Size + 511) / 512
+
 	return nil
 }
 
@@ -183,10 +185,17 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 	dirs := []fuse.Dirent{}
 	for _, object := range objects {
-		dirs = append(dirs, fuse.Dirent{
-			Name: object.Name,
-			Type: fuse.DT_File,
-		})
+		if object.IsDir {
+			dirs = append(dirs, fuse.Dirent{
+				Name: object.Name,
+				Type: fuse.DT_Dir,
+			})
+		} else {
+			dirs = append(dirs, fuse.Dirent{
+				Name: object.Name,
+				Type: fuse.DT_File,
+			})
+		}
 	}
 	return dirs, nil
 }
