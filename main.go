@@ -52,7 +52,7 @@ func main() {
 
 	// display version information
 	if *argVersion {
-		fmt.Println("4.0.0")
+		fmt.Println("4.1.0-beta")
 		return
 	}
 
