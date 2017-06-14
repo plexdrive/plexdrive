@@ -17,7 +17,7 @@ type DownloadManager struct {
 	Client        *http.Client
 	ChunkManager  *ChunkManager
 	ReadAhead     int
-	Queue         *Queue
+	Queue         *BlockingQueue
 	DownloadQueue cmap.ConcurrentMap
 }
 
@@ -68,24 +68,24 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 	chunkID := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	responseChannel := make(chan *downloadResponse)
-	m.Queue.PushHighPrio(chunkID, &downloadRequest{
+	m.Queue.Put(chunkID, &downloadRequest{
 		chunkID:  chunkID,
 		object:   object,
 		offset:   offset,
 		size:     size,
 		response: responseChannel,
 		highPrio: true,
-	})
+	}, true)
 
 	readAheadOffset := offsetStart + m.ChunkManager.ChunkSize
 	for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
-		m.Queue.PushLowPrio(chunkID, &downloadRequest{
+		m.Queue.Put(chunkID, &downloadRequest{
 			chunkID:  fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset),
 			object:   object,
 			offset:   readAheadOffset,
 			size:     size,
 			highPrio: false,
-		})
+		}, false)
 		readAheadOffset += m.ChunkManager.ChunkSize
 	}
 
@@ -99,8 +99,8 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 
 func (m *DownloadManager) downloadThread() {
 	for {
-		request, err := m.Queue.Pop()
-		if nil == err {
+		request, exists := m.Queue.Pop()
+		if exists {
 			m.getChunk(request.(*downloadRequest))
 		}
 	}
