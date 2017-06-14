@@ -9,6 +9,7 @@ import (
 	"time"
 
 	. "github.com/claudetech/loggo/default"
+	"github.com/orcaman/concurrent-map"
 )
 
 // DownloadManager handles concurrent chunk downloads
@@ -18,6 +19,7 @@ type DownloadManager struct {
 	ReadAhead     int
 	HighPrioQueue chan *downloadRequest
 	LowPrioQueue  chan *downloadRequest
+	DownloadQueue cmap.ConcurrentMap
 }
 
 type downloadRequest struct {
@@ -44,16 +46,20 @@ func NewDownloadManager(
 		ChunkManager:  chunkManager,
 		ReadAhead:     chunkReadAhead,
 		HighPrioQueue: make(chan *downloadRequest),
-		LowPrioQueue:  make(chan *downloadRequest, chunkReadAhead),
+		LowPrioQueue:  make(chan *downloadRequest),
+		DownloadQueue: cmap.New(),
 	}
 
 	if threadCount < 1 {
 		return nil, fmt.Errorf("Number of threads for download manager must not be < 1")
 	}
 
-	for i := 0; i < threadCount; i++ {
-		go manager.downloadThread()
-	}
+	// TODO: multiple threads
+	// for i := 0; i < threadCount; i++ {
+	// 	go manager.downloadThread()
+	// }
+	go manager.downloadThreadHighPrio()
+	go manager.downloadThreadLowPrio()
 
 	return &manager, nil
 }
@@ -68,15 +74,17 @@ func (m *DownloadManager) DownloadHighPrio(object *APIObject, offset, size int64
 		response: responseChannel,
 	}
 
-	readAheadOffset := offset + m.ChunkManager.ChunkSize
-	for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
-		m.LowPrioQueue <- &downloadRequest{
-			object: object,
-			offset: readAheadOffset,
-			size:   size,
+	go func() {
+		readAheadOffset := offset + m.ChunkManager.ChunkSize
+		for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
+			m.LowPrioQueue <- &downloadRequest{
+				object: object,
+				offset: readAheadOffset,
+				size:   size,
+			}
+			readAheadOffset += m.ChunkManager.ChunkSize
 		}
-		readAheadOffset += m.ChunkManager.ChunkSize
-	}
+	}()
 
 	response := <-responseChannel
 
@@ -86,19 +94,24 @@ func (m *DownloadManager) DownloadHighPrio(object *APIObject, offset, size int64
 	return response.content, nil
 }
 
-func (m *DownloadManager) downloadThread() {
+func (m *DownloadManager) downloadThreadHighPrio() {
 	for {
-		select {
-		case request := <-m.HighPrioQueue:
-			getChunk(m.Client, m.ChunkManager, request, true)
-		case request := <-m.LowPrioQueue:
-			getChunk(m.Client, m.ChunkManager, request, false)
-		}
+		m.getChunk(<-m.HighPrioQueue, true)
 	}
 }
 
-func getChunk(client *http.Client, chunkManager *ChunkManager, request *downloadRequest, highPrio bool) {
-	bytes, err := chunkManager.GetChunk(request.object, request.offset, request.size)
+func (m *DownloadManager) downloadThreadLowPrio() {
+	for {
+		m.getChunk(<-m.LowPrioQueue, false)
+	}
+}
+
+func (m *DownloadManager) getChunk(request *downloadRequest, highPrio bool) {
+	fOffset := request.offset % m.ChunkManager.ChunkSize
+	offsetStart := request.offset - fOffset
+	chunkID := fmt.Sprintf("%v:%v", request.object.ObjectID, offsetStart)
+
+	bytes, err := m.ChunkManager.GetChunk(request.object, request.offset, request.size)
 	if nil == err {
 		if nil != request.response {
 			request.response <- &downloadResponse{
@@ -109,7 +122,16 @@ func getChunk(client *http.Client, chunkManager *ChunkManager, request *download
 	}
 	Log.Tracef("%v", err)
 
-	bytes, err = downloadFromAPI(client, chunkManager.ChunkSize, 0, request, highPrio)
+	// check if chunk is already downloading and wait for it
+	if m.DownloadQueue.Has(chunkID) {
+		Log.Debugf("Chunk %v already downloading, waiting...", chunkID)
+		time.Sleep(100 * time.Millisecond)
+		m.getChunk(request, highPrio)
+		return
+	}
+
+	m.DownloadQueue.SetIfAbsent(chunkID, true)
+	bytes, err = downloadFromAPI(m.Client, m.ChunkManager.ChunkSize, 0, request, highPrio)
 	if nil != err {
 		if nil != request.response {
 			request.response <- &downloadResponse{
@@ -118,9 +140,9 @@ func getChunk(client *http.Client, chunkManager *ChunkManager, request *download
 		}
 	}
 
-	chunkManager.StoreChunk(request.object, request.offset, bytes)
+	m.ChunkManager.StoreChunk(request.object, request.offset, bytes)
+	m.DownloadQueue.Remove(chunkID)
 
-	fOffset := request.offset % chunkManager.ChunkSize
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
 	eOffset := int64(math.Min(float64(fOffset+request.size), float64(len(bytes))))
 
@@ -141,8 +163,8 @@ func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *downl
 	offsetStart := request.offset - fOffset
 	offsetEnd := offsetStart + chunkSize
 
-	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (preload: %v)",
-		request.object.ObjectID, request.object.Name, offsetStart, offsetEnd, !highPrio)
+	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (high priority: %v)",
+		request.object.ObjectID, request.object.Name, offsetStart, offsetEnd, highPrio)
 	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)

@@ -89,9 +89,11 @@ func (m *ChunkManager) StoreChunk(object *APIObject, offset int64, content []byt
 			}
 		}
 
-		if err := ioutil.WriteFile(filename, content, 0777); nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not write chunk temp file %v", filename)
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			if err := ioutil.WriteFile(filename, content, 0777); nil != err {
+				Log.Debugf("%v", err)
+				Log.Warningf("Could not write chunk temp file %v", filename)
+			}
 		}
 	}()
 }
