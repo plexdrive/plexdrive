@@ -17,8 +17,7 @@ type DownloadManager struct {
 	Client        *http.Client
 	ChunkManager  *ChunkManager
 	ReadAhead     int
-	HighPrioQueue *Queue
-	LowPrioQueue  *Queue
+	Queue         *Queue
 	DownloadQueue cmap.ConcurrentMap
 }
 
@@ -47,8 +46,7 @@ func NewDownloadManager(
 		Client:        client,
 		ChunkManager:  chunkManager,
 		ReadAhead:     chunkReadAhead,
-		HighPrioQueue: NewQueue(),
-		LowPrioQueue:  NewQueue(),
+		Queue:         NewQueue(),
 		DownloadQueue: cmap.New(),
 	}
 
@@ -56,11 +54,8 @@ func NewDownloadManager(
 		return nil, fmt.Errorf("Number of threads for download manager must not be < 1")
 	}
 
-	for i := 0; i < int(math.Max(1, float64(threadCount/2))); i++ {
-		go manager.downloadThreadHighPrio()
-	}
-	for i := 0; i < int(math.Max(1, float64(threadCount/2))); i++ {
-		go manager.downloadThreadLowPrio()
+	for i := 0; i < threadCount; i++ {
+		go manager.downloadThread()
 	}
 
 	return &manager, nil
@@ -73,7 +68,7 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 	chunkID := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	responseChannel := make(chan *downloadResponse)
-	m.HighPrioQueue.Push(chunkID, &downloadRequest{
+	m.Queue.PushHighPrio(chunkID, &downloadRequest{
 		chunkID:  chunkID,
 		object:   object,
 		offset:   offset,
@@ -84,7 +79,7 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 
 	readAheadOffset := offsetStart + m.ChunkManager.ChunkSize
 	for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
-		m.LowPrioQueue.Push(chunkID, &downloadRequest{
+		m.Queue.PushLowPrio(chunkID, &downloadRequest{
 			chunkID:  fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset),
 			object:   object,
 			offset:   readAheadOffset,
@@ -102,19 +97,10 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 	return response.content, nil
 }
 
-func (m *DownloadManager) downloadThreadHighPrio() {
+func (m *DownloadManager) downloadThread() {
 	for {
 		select {
-		case request := <-m.HighPrioQueue.Pop():
-			m.getChunk(request.(*downloadRequest))
-		}
-	}
-}
-
-func (m *DownloadManager) downloadThreadLowPrio() {
-	for {
-		select {
-		case request := <-m.LowPrioQueue.Pop():
+		case request := <-m.Queue.Pop():
 			m.getChunk(request.(*downloadRequest))
 		}
 	}
