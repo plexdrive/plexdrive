@@ -76,5 +76,5 @@ func (b *Buffer) Close() error {
 
 // ReadBytes on a specific location
 func (b *Buffer) ReadBytes(offset, size int64) ([]byte, error) {
-	return b.downloadManager.DownloadHighPrio(b.object, offset, size)
+	return b.downloadManager.Download(b.object, offset, size)
 }

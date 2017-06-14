@@ -17,16 +17,18 @@ type DownloadManager struct {
 	Client        *http.Client
 	ChunkManager  *ChunkManager
 	ReadAhead     int
-	HighPrioQueue chan *downloadRequest
-	LowPrioQueue  chan *downloadRequest
+	HighPrioQueue *Queue
+	LowPrioQueue  *Queue
 	DownloadQueue cmap.ConcurrentMap
 }
 
 type downloadRequest struct {
+	chunkID  string
 	object   *APIObject
 	offset   int64
 	size     int64
 	response chan *downloadResponse
+	highPrio bool
 }
 
 type downloadResponse struct {
@@ -45,8 +47,8 @@ func NewDownloadManager(
 		Client:        client,
 		ChunkManager:  chunkManager,
 		ReadAhead:     chunkReadAhead,
-		HighPrioQueue: make(chan *downloadRequest),
-		LowPrioQueue:  make(chan *downloadRequest),
+		HighPrioQueue: NewQueue(),
+		LowPrioQueue:  NewQueue(),
 		DownloadQueue: cmap.New(),
 	}
 
@@ -54,37 +56,43 @@ func NewDownloadManager(
 		return nil, fmt.Errorf("Number of threads for download manager must not be < 1")
 	}
 
-	// TODO: multiple threads
-	// for i := 0; i < threadCount; i++ {
-	// 	go manager.downloadThread()
-	// }
-	go manager.downloadThreadHighPrio()
-	go manager.downloadThreadLowPrio()
+	for i := 0; i < int(math.Max(1, float64(threadCount/2))); i++ {
+		go manager.downloadThreadHighPrio()
+	}
+	for i := 0; i < int(math.Max(1, float64(threadCount/2))); i++ {
+		go manager.downloadThreadLowPrio()
+	}
 
 	return &manager, nil
 }
 
-// DownloadHighPrio downloads a chunk with high priority
-func (m *DownloadManager) DownloadHighPrio(object *APIObject, offset, size int64) ([]byte, error) {
+// Download downloads a chunk with high priority
+func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byte, error) {
+	fOffset := offset % m.ChunkManager.ChunkSize
+	offsetStart := offset - fOffset
+	chunkID := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
+
 	responseChannel := make(chan *downloadResponse)
-	m.HighPrioQueue <- &downloadRequest{
+	m.HighPrioQueue.Push(chunkID, &downloadRequest{
+		chunkID:  chunkID,
 		object:   object,
 		offset:   offset,
 		size:     size,
 		response: responseChannel,
-	}
+		highPrio: true,
+	})
 
-	go func() {
-		readAheadOffset := offset + m.ChunkManager.ChunkSize
-		for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
-			m.LowPrioQueue <- &downloadRequest{
-				object: object,
-				offset: readAheadOffset,
-				size:   size,
-			}
-			readAheadOffset += m.ChunkManager.ChunkSize
-		}
-	}()
+	readAheadOffset := offsetStart + m.ChunkManager.ChunkSize
+	for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
+		m.LowPrioQueue.Push(chunkID, &downloadRequest{
+			chunkID:  fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset),
+			object:   object,
+			offset:   readAheadOffset,
+			size:     size,
+			highPrio: false,
+		})
+		readAheadOffset += m.ChunkManager.ChunkSize
+	}
 
 	response := <-responseChannel
 
@@ -96,21 +104,23 @@ func (m *DownloadManager) DownloadHighPrio(object *APIObject, offset, size int64
 
 func (m *DownloadManager) downloadThreadHighPrio() {
 	for {
-		m.getChunk(<-m.HighPrioQueue, true)
+		select {
+		case request := <-m.HighPrioQueue.Pop():
+			m.getChunk(request.(*downloadRequest))
+		}
 	}
 }
 
 func (m *DownloadManager) downloadThreadLowPrio() {
 	for {
-		m.getChunk(<-m.LowPrioQueue, false)
+		select {
+		case request := <-m.LowPrioQueue.Pop():
+			m.getChunk(request.(*downloadRequest))
+		}
 	}
 }
 
-func (m *DownloadManager) getChunk(request *downloadRequest, highPrio bool) {
-	fOffset := request.offset % m.ChunkManager.ChunkSize
-	offsetStart := request.offset - fOffset
-	chunkID := fmt.Sprintf("%v:%v", request.object.ObjectID, offsetStart)
-
+func (m *DownloadManager) getChunk(request *downloadRequest) {
 	bytes, err := m.ChunkManager.GetChunk(request.object, request.offset, request.size)
 	if nil == err {
 		if nil != request.response {
@@ -123,15 +133,14 @@ func (m *DownloadManager) getChunk(request *downloadRequest, highPrio bool) {
 	Log.Tracef("%v", err)
 
 	// check if chunk is already downloading and wait for it
-	if m.DownloadQueue.Has(chunkID) {
-		Log.Debugf("Chunk %v already downloading, waiting...", chunkID)
-		time.Sleep(100 * time.Millisecond)
-		m.getChunk(request, highPrio)
+	if m.DownloadQueue.Has(request.chunkID) {
+		time.Sleep(500 * time.Millisecond)
+		m.getChunk(request)
 		return
 	}
 
-	m.DownloadQueue.SetIfAbsent(chunkID, true)
-	bytes, err = downloadFromAPI(m.Client, m.ChunkManager.ChunkSize, 0, request, highPrio)
+	m.DownloadQueue.Set(request.chunkID, true)
+	bytes, err = downloadFromAPI(m.Client, m.ChunkManager.ChunkSize, 0, request)
 	if nil != err {
 		if nil != request.response {
 			request.response <- &downloadResponse{
@@ -141,8 +150,9 @@ func (m *DownloadManager) getChunk(request *downloadRequest, highPrio bool) {
 	}
 
 	m.ChunkManager.StoreChunk(request.object, request.offset, bytes)
-	m.DownloadQueue.Remove(chunkID)
+	m.DownloadQueue.Remove(request.chunkID)
 
+	fOffset := request.offset % m.ChunkManager.ChunkSize
 	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
 	eOffset := int64(math.Min(float64(fOffset+request.size), float64(len(bytes))))
 
@@ -153,7 +163,7 @@ func (m *DownloadManager) getChunk(request *downloadRequest, highPrio bool) {
 	}
 }
 
-func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *downloadRequest, highPrio bool) ([]byte, error) {
+func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *downloadRequest) ([]byte, error) {
 	// sleep if request is throttled
 	if delay > 0 {
 		time.Sleep(time.Duration(delay) * time.Second)
@@ -164,7 +174,7 @@ func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *downl
 	offsetEnd := offsetStart + chunkSize
 
 	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (high priority: %v)",
-		request.object.ObjectID, request.object.Name, offsetStart, offsetEnd, highPrio)
+		request.object.ObjectID, request.object.Name, offsetStart, offsetEnd, request.highPrio)
 	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -209,7 +219,7 @@ func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *downl
 			} else {
 				delay = delay * 2
 			}
-			return downloadFromAPI(client, chunkSize, delay, request, highPrio)
+			return downloadFromAPI(client, chunkSize, delay, request)
 		}
 
 		// return an error if other 403 error occurred

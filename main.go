@@ -183,7 +183,7 @@ func main() {
 		os.Exit(4)
 	}
 
-	downloadManager, err := NewDownloadManager(2, 2, drive.getNativeClient(), chunkManager)
+	downloadManager, err := NewDownloadManager(4, 2, drive.getNativeClient(), chunkManager)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
