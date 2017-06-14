@@ -1,7 +1,7 @@
 [![Build Status](https://travis-ci.org/dweidenfeld/plexdrive.svg?branch=master)](https://travis-ci.org/dweidenfeld/plexdrive)
 
 # Plexdrive
-Plexdrive allows you to mount your Google Drive account as read-only fuse filesystem, with direct delete of the filesystem.
+Plexdrive allows you to mount your Google Drive account as read-only fuse filesystem, with direct delete option on the filesystem.
 
 The project is comparable to projects like [rclone](https://rclone.org/), 
 [google-drive-ocamlfuse](https://github.com/astrada/google-drive-ocamlfuse) or 
