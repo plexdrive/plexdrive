@@ -256,12 +256,6 @@ func (d *Drive) GetObjectByParentAndName(parent, name string) (*APIObject, error
 	return d.cache.GetObjectByParentAndName(parent, name)
 }
 
-// Open a file
-func (d *Drive) Open(object *APIObject) (*Buffer, error) {
-	nativeClient := d.getNativeClient()
-	return GetBufferInstance(nativeClient, object)
-}
-
 // Remove removes file from Google Drive
 func (d *Drive) Remove(object *APIObject, parent string) error {
 	client, err := d.getClient()

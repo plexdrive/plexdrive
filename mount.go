@@ -16,7 +16,14 @@ import (
 )
 
 // Mount the fuse volume
-func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uint32, umask os.FileMode) error {
+func Mount(
+	client *Drive,
+	downloadManager *DownloadManager,
+	mountpoint string,
+	mountOptions []string,
+	uid, gid uint32,
+	umask os.FileMode) error {
+
 	Log.Infof("Mounting path %v", mountpoint)
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
@@ -83,10 +90,11 @@ func Mount(client *Drive, mountpoint string, mountOptions []string, uid, gid uin
 	defer c.Close()
 
 	filesys := &FS{
-		client: client,
-		uid:    uid,
-		gid:    gid,
-		umask:  umask,
+		client:          client,
+		downloadManager: downloadManager,
+		uid:             uid,
+		gid:             gid,
+		umask:           umask,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -113,10 +121,11 @@ func Unmount(mountpoint string, notify bool) error {
 
 // FS the fuse filesystem
 type FS struct {
-	client *Drive
-	uid    uint32
-	gid    uint32
-	umask  os.FileMode
+	client          *Drive
+	downloadManager *DownloadManager
+	uid             uint32
+	gid             uint32
+	umask           os.FileMode
 }
 
 // Root returns the root path
@@ -127,22 +136,24 @@ func (f *FS) Root() (fs.Node, error) {
 		return nil, fmt.Errorf("Could not get root object")
 	}
 	return &Object{
-		client: f.client,
-		object: object,
-		uid:    f.uid,
-		gid:    f.gid,
-		umask:  f.umask,
+		client:          f.client,
+		downloadManager: f.downloadManager,
+		object:          object,
+		uid:             f.uid,
+		gid:             f.gid,
+		umask:           f.umask,
 	}, nil
 }
 
 // Object represents one drive object
 type Object struct {
-	client *Drive
-	object *APIObject
-	buffer *Buffer
-	uid    uint32
-	gid    uint32
-	umask  os.FileMode
+	client          *Drive
+	downloadManager *DownloadManager
+	object          *APIObject
+	buffer          *Buffer
+	uid             uint32
+	gid             uint32
+	umask           os.FileMode
 }
 
 // Attr returns the attributes for a directory
@@ -209,11 +220,12 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	}
 
 	return &Object{
-		client: o.client,
-		object: object,
-		uid:    o.uid,
-		gid:    o.gid,
-		umask:  o.umask,
+		client:          o.client,
+		downloadManager: o.downloadManager,
+		object:          object,
+		uid:             o.uid,
+		gid:             o.gid,
+		umask:           o.umask,
 	}, nil
 }
 
@@ -223,7 +235,7 @@ func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Ope
 		return o, nil
 	}
 
-	buffer, err := o.client.Open(o.object)
+	buffer, err := GetBufferInstance(o.downloadManager, o.object)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return o, fuse.ENOENT
@@ -246,7 +258,7 @@ func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
 
 // Read reads some bytes or the whole file
 func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size), false)
+	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size))
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO

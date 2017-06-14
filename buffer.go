@@ -2,28 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"io/ioutil"
-	"math"
-	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
-
-	"time"
-
-	"strings"
 
 	. "github.com/claudetech/loggo/default"
-	"github.com/mxk/go-flowrate/flowrate"
 	"github.com/orcaman/concurrent-map"
 )
 
 var instances cmap.ConcurrentMap
-var chunkPath string
-var chunkSize int64
-var chunkDirMaxSize int64
-var speedLimit int64
 
 func init() {
 	instances = cmap.New()
@@ -32,17 +17,14 @@ func init() {
 // Buffer is a buffered stream
 type Buffer struct {
 	numberOfInstances int
-	client            *http.Client
+	downloadManager   *DownloadManager
 	object            *APIObject
-	tempDir           string
-	preload           bool
-	chunks            cmap.ConcurrentMap
 }
 
 // GetBufferInstance gets a singleton instance of buffer
-func GetBufferInstance(client *http.Client, object *APIObject) (*Buffer, error) {
+func GetBufferInstance(downloadManager *DownloadManager, object *APIObject) (*Buffer, error) {
 	if !instances.Has(object.ObjectID) {
-		i, err := newBuffer(client, object)
+		i, err := newBuffer(downloadManager, object)
 		if nil != err {
 			return nil, err
 		}
@@ -53,7 +35,7 @@ func GetBufferInstance(client *http.Client, object *APIObject) (*Buffer, error) 
 	instance, ok := instances.Get(object.ObjectID)
 	// if buffer allocation failed due to race conditions it will try to fetch a new one
 	if !ok {
-		i, err := GetBufferInstance(client, object)
+		i, err := GetBufferInstance(downloadManager, object)
 		if nil != err {
 			return nil, err
 		}
@@ -63,49 +45,21 @@ func GetBufferInstance(client *http.Client, object *APIObject) (*Buffer, error) 
 	return instance.(*Buffer), nil
 }
 
-// SetChunkPath sets the global chunk path
-func SetChunkPath(path string) {
-	chunkPath = path
-}
-
-// SetChunkSize sets the global chunk size
-func SetChunkSize(size int64) {
-	chunkSize = size
-}
-
-// SetChunkDirMaxSize sets the maximum size of the chunk directory
-func SetChunkDirMaxSize(size int64) {
-	chunkDirMaxSize = size
-}
-
-// SetDownloadSpeedLimit sets the download speed limit per chunk
-func SetDownloadSpeedLimit(downloadSpeedLimit int64) {
-	speedLimit = downloadSpeedLimit
-}
-
 // NewBuffer creates a new buffer instance
-func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
-	Log.Infof("Starting playback of %v (%v)", object.ObjectID, object.Name)
+func newBuffer(downloadManager *DownloadManager, object *APIObject) (*Buffer, error) {
 	Log.Debugf("Creating buffer for object %v (%v)", object.ObjectID, object.Name)
 
-	tempDir := filepath.Join(chunkPath, object.ObjectID)
+	// tempDir := filepath.Join(chunkPath, object.ObjectID)
+	tempDir := "placeholder"
 	if err := os.MkdirAll(tempDir, 0777); nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not create temp path for object %v (%v)", object.ObjectID, object.Name)
 	}
 
-	if 0 == chunkSize {
-		Log.Debugf("ChunkSize was 0, setting to default (5 MB)")
-		chunkSize = 5 * 1024 * 1024
-	}
-
 	buffer := Buffer{
 		numberOfInstances: 0,
-		client:            client,
+		downloadManager:   downloadManager,
 		object:            object,
-		tempDir:           tempDir,
-		preload:           true,
-		chunks:            cmap.New(),
 	}
 
 	return &buffer, nil
@@ -115,236 +69,12 @@ func newBuffer(client *http.Client, object *APIObject) (*Buffer, error) {
 func (b *Buffer) Close() error {
 	b.numberOfInstances--
 	if 0 == b.numberOfInstances {
-		Log.Infof("Stopping playback of %v (%v)", b.object.ObjectID, b.object.Name)
-		Log.Debugf("Stop buffering for object %v (%v)", b.object.ObjectID, b.object.Name)
-
-		b.preload = false
 		instances.Remove(b.object.ObjectID)
 	}
 	return nil
 }
 
 // ReadBytes on a specific location
-func (b *Buffer) ReadBytes(start, size int64, preload bool) ([]byte, error) {
-	fOffset := start % chunkSize
-	offset := start - fOffset
-	offsetEnd := offset + chunkSize
-	filename := filepath.Join(b.tempDir, strconv.Itoa(int(offset)))
-
-	Log.Tracef("Getting object %v (%v) - chunk %v - offset %v for %v bytes",
-		b.object.ObjectID, b.object.Name, strconv.Itoa(int(offset)), fOffset, size)
-	defer b.preloadNextChunks(preload, offsetEnd, size)
-
-	bytes, err := b.readFromDisk(filename, offset, offsetEnd, size, fOffset)
-	if nil == err {
-		return bytes, nil
-	}
-	Log.Tracef("%v", err)
-
-	bytes, err = b.readFromAPI(0, offset, offsetEnd, start, size)
-	if nil != err {
-		return nil, err
-	}
-
-	b.storeChunkOnDisk(filename, bytes)
-
-	sOffset := int64(math.Min(float64(fOffset), float64(len(bytes))))
-	eOffset := int64(math.Min(float64(fOffset+size), float64(len(bytes))))
-	return bytes[sOffset:eOffset], nil
-}
-
-func (b *Buffer) preloadNextChunks(preload bool, offsetEnd, size int64) {
-	if !preload && b.preload && uint64(offsetEnd) < b.object.Size {
-		go func() {
-			preloadStart := strconv.Itoa(int(offsetEnd))
-			if !b.chunks.Has(preloadStart) {
-				b.chunks.Set(preloadStart, true)
-				b.ReadBytes(offsetEnd, size, true)
-			}
-		}()
-	}
-}
-
-func (b *Buffer) readFromDisk(filename string, offset, offsetEnd, size, fOffset int64) ([]byte, error) {
-	f, err := os.Open(filename)
-	if nil != err {
-		Log.Tracef("%v", err)
-		return nil, fmt.Errorf("Could not open file %v", filename)
-	}
-	defer f.Close()
-
-	buf := make([]byte, size)
-	n, err := f.ReadAt(buf, fOffset)
-	if n > 0 && (nil == err || io.EOF == err || io.ErrUnexpectedEOF == err) {
-		Log.Tracef("Found file %s bytes %v - %v in cache", filename, offset, offsetEnd)
-
-		// update the last modified time for files that are often in use
-		if err := os.Chtimes(filename, time.Now(), time.Now()); nil != err {
-			Log.Warningf("Could not update last modified time for %v", filename)
-		}
-
-		eOffset := int64(math.Min(float64(size), float64(len(buf))))
-		return buf[:eOffset], nil
-	}
-
-	Log.Tracef("%v", err)
-	return nil, fmt.Errorf("Could not read file %s at %v", filename, fOffset)
-}
-
-func (b *Buffer) readFromAPI(delay int32, offset, offsetEnd, start, size int64) ([]byte, error) {
-	// sleep if request is throttled
-	if delay > 0 {
-		time.Sleep(time.Duration(delay) * time.Second)
-	}
-
-	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API", b.object.ObjectID, b.object.Name, offset, offsetEnd)
-	req, err := http.NewRequest("GET", b.object.DownloadURL, nil)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not create request object %v (%v) from API", b.object.ObjectID, b.object.Name)
-	}
-
-	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", offset, offsetEnd))
-
-	Log.Tracef("Sending HTTP Request %v", req)
-
-	res, err := b.client.Do(req)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not request object %v (%v) from API", b.object.ObjectID, b.object.Name)
-	}
-	defer res.Body.Close()
-
-	reader := res.Body
-	if speedLimit > 0 {
-		reader = flowrate.NewReader(res.Body, speedLimit)
-	}
-
-	if res.StatusCode != 206 {
-		if res.StatusCode != 403 {
-			Log.Debugf("Request\n----------\n%v\n----------\n", req)
-			Log.Debugf("Response\n----------\n%v\n----------\n", res)
-			return nil, fmt.Errorf("Wrong status code %v", res.StatusCode)
-		}
-
-		// throttle requests
-		if delay > 8 {
-			return nil, fmt.Errorf("Maximum throttle interval has been reached")
-		}
-		bytes, err := ioutil.ReadAll(reader)
-		if nil != err {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not read body of 403 error")
-		}
-		body := string(bytes)
-		if strings.Contains(body, "dailyLimitExceeded") ||
-			strings.Contains(body, "userRateLimitExceeded") ||
-			strings.Contains(body, "rateLimitExceeded") ||
-			strings.Contains(body, "backendError") {
-			if 0 == delay {
-				delay = 1
-			} else {
-				delay = delay * 2
-			}
-			return b.readFromAPI(delay, offset, offsetEnd, start, size)
-		}
-
-		// return an error if other 403 error occurred
-		Log.Debugf("%v", body)
-		return nil, fmt.Errorf("Could not read object %v (%v) / StatusCode: %v",
-			b.object.ObjectID, b.object.Name, res.StatusCode)
-	}
-
-	bytes, err := ioutil.ReadAll(reader)
-	if nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not read objects %v (%v) API response", b.object.ObjectID, b.object.Name)
-	}
-
-	return bytes, nil
-}
-
-func (b *Buffer) storeChunkOnDisk(filename string, bytes []byte) {
-	if chunkDirMaxSize > 0 {
-		if err := cleanChunkDir(chunkPath); nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not delete oldest chunk")
-		}
-	}
-
-	if _, err := os.Stat(b.tempDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(b.tempDir, 0777); nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not create chunk temp path for chunk %v", filename)
-		}
-	}
-
-	if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
-		Log.Debugf("%v", err)
-		Log.Warningf("Could not write chunk temp file %v", filename)
-	}
-}
-
-// cleanChunkDir checks if the chunk folder is grown to big and clears the oldest file if necessary
-func cleanChunkDir(chunkPath string) error {
-	chunkDirSize, err := dirSize(chunkPath)
-	if nil != err {
-		return err
-	}
-
-	if chunkDirSize+chunkSize*2 > chunkDirMaxSize {
-		if err := deleteOldestFile(chunkPath); nil != err {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// deleteOldestFile deletes the oldest file in the directory
-func deleteOldestFile(path string) error {
-	var fpath string
-	lastMod := time.Now()
-
-	err := filepath.Walk(path, func(file string, info os.FileInfo, err error) error {
-		if nil != err {
-			Log.Tracef("%v", err)
-			return filepath.SkipDir
-		}
-		if nil == info {
-			return filepath.SkipDir
-		}
-		if !info.IsDir() {
-			modTime := info.ModTime()
-			if modTime.Before(lastMod) {
-				lastMod = modTime
-				fpath = file
-			}
-		}
-		return nil
-	})
-
-	Log.Debugf("Deleting oldest chunk file %v", fpath)
-	os.Remove(fpath)
-
-	return err
-}
-
-// dirSize gets the total directory size
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if nil != err {
-			Log.Tracef("%v", err)
-			return filepath.SkipDir
-		}
-		if nil == info {
-			return filepath.SkipDir
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return nil
-	})
-	return size, err
+func (b *Buffer) ReadBytes(offset, size int64) ([]byte, error) {
+	return b.downloadManager.DownloadHighPrio(b.object, offset, size)
 }

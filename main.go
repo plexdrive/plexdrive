@@ -41,7 +41,7 @@ func main() {
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
 	argClearChunkAge := flag.Duration("clear-chunk-age", 30*time.Minute, "The maximum age of a cached chunk file")
-	argClearChunkMaxSize := flag.String("clear-chunk-max-size", "", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
+	// argClearChunkMaxSize := flag.String("clear-chunk-max-size", "", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
@@ -124,7 +124,7 @@ func main() {
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
 	Log.Debugf("clear-chunk-age      : %v", *argClearChunkAge)
-	Log.Debugf("clear-chunk-max-size : %v", *argClearChunkMaxSize)
+	// Log.Debugf("clear-chunk-max-size : %v", *argClearChunkMaxSize)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
@@ -141,25 +141,16 @@ func main() {
 	chunkPath := filepath.Join(*argTempPath, "chunks")
 
 	// set the global buffer configuration
-	SetChunkPath(chunkPath)
 	chunkSize, err := parseSizeArg(*argChunkSize)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(2)
 	}
-	SetChunkSize(chunkSize)
-	clearMaxChunkSize, err := parseSizeArg(*argClearChunkMaxSize)
-	if nil != err {
-		Log.Errorf("%v", err)
-		os.Exit(2)
-	}
-	SetChunkDirMaxSize(clearMaxChunkSize)
-	downloadSpeedLimit, err := parseSizeArg(*argDownloadSpeedLimit)
-	if nil != err {
-		Log.Errorf("%v", err)
-		os.Exit(2)
-	}
-	SetDownloadSpeedLimit(downloadSpeedLimit)
+	// clearMaxChunkSize, err := parseSizeArg(*argClearChunkMaxSize)
+	// if nil != err {
+	// 	Log.Errorf("%v", err)
+	// 	os.Exit(2)
+	// }
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")
@@ -186,10 +177,22 @@ func main() {
 		os.Exit(4)
 	}
 
+	chunkManager, err := NewChunkManager(chunkPath, chunkSize)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(4)
+	}
+
+	downloadManager, err := NewDownloadManager(2, 2, drive.getNativeClient(), chunkManager)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(4)
+	}
+
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
-	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, clearMaxChunkSize)
-	if err := Mount(drive, argMountPoint, mountOptions, uid, gid, umask); nil != err {
+	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, 0 /*, clearMaxChunkSize*/)
+	if err := Mount(drive, downloadManager, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(5)
 	}
