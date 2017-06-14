@@ -99,8 +99,8 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 
 func (m *DownloadManager) downloadThread() {
 	for {
-		select {
-		case request := <-m.Queue.Pop():
+		request, err := m.Queue.Pop()
+		if nil == err {
 			m.getChunk(request.(*downloadRequest))
 		}
 	}

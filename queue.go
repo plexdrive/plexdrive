@@ -23,11 +23,14 @@ func NewQueue() *Queue {
 }
 
 func (q *Queue) Contains(id string) bool {
+	q.lock.Lock()
 	for _, element := range q.elements {
 		if element.id == id {
+			q.lock.Unlock()
 			return true
 		}
 	}
+	q.lock.Unlock()
 	return false
 }
 
@@ -53,24 +56,7 @@ func (q *Queue) PushLowPrio(id string, element interface{}) {
 	}
 }
 
-func (q *Queue) Push(id string, element interface{}) {
-	q.PushLowPrio(id, element)
-}
-
-func (q *Queue) Pop() chan interface{} {
-	channel := make(chan interface{})
-	go func() {
-		for {
-			if e, err := q.pop(); nil == err {
-				channel <- e
-				return
-			}
-		}
-	}()
-	return channel
-}
-
-func (q *Queue) pop() (interface{}, error) {
+func (q *Queue) Pop() (interface{}, error) {
 	var element *QueueElement
 
 	q.lock.Lock()
