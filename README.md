@@ -18,9 +18,10 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 1. First you need to install fuse and mongodb on your system 
 2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
-4. Run the application like this
+4. Sample command line for plexdrive
 ```
-./plexdrive -m localhost /path/to/my/mount
+./plexdrive -m localhost --clear-chunk-age=24h --chunk-load-ahead=4 --chunk-load-threads=8 -t /mnt/plexdrive-cache/ --config=/root/.plexdrive --refresh-interval=1m --fuse-options=allow_other /mnt/plexdrive
+
 ```
 
 ### Crypted mount with rclone
