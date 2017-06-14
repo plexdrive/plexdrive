@@ -1,9 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	. "github.com/claudetech/loggo/default"
 	"github.com/orcaman/concurrent-map"
 )
@@ -48,13 +45,6 @@ func GetBufferInstance(downloadManager *DownloadManager, object *APIObject) (*Bu
 // NewBuffer creates a new buffer instance
 func newBuffer(downloadManager *DownloadManager, object *APIObject) (*Buffer, error) {
 	Log.Debugf("Creating buffer for object %v (%v)", object.ObjectID, object.Name)
-
-	// tempDir := filepath.Join(chunkPath, object.ObjectID)
-	tempDir := "placeholder"
-	if err := os.MkdirAll(tempDir, 0777); nil != err {
-		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not create temp path for object %v (%v)", object.ObjectID, object.Name)
-	}
 
 	buffer := Buffer{
 		numberOfInstances: 0,
