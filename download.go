@@ -68,6 +68,7 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 	chunkID := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	responseChannel := make(chan *downloadResponse)
+
 	m.Queue.Put(chunkID, &downloadRequest{
 		chunkID:  chunkID,
 		object:   object,
@@ -79,8 +80,9 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 
 	readAheadOffset := offsetStart + m.ChunkManager.ChunkSize
 	for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
-		m.Queue.Put(chunkID, &downloadRequest{
-			chunkID:  fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset),
+		readAheadChunkID := fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset)
+		m.Queue.Put(readAheadChunkID, &downloadRequest{
+			chunkID:  readAheadChunkID,
 			object:   object,
 			offset:   readAheadOffset,
 			size:     size,
