@@ -290,6 +290,31 @@ func (d *Drive) Remove(object *APIObject, parent string) error {
 	return nil
 }
 
+// Rename renames file in Google Drive
+func (d *Drive) Rename(object *APIObject, parent string, NewName string) error {
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not get Google Drive client")
+	}	
+
+
+  if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(strings.Join(object.Parents, ",")).AddParents(parent).Do(); nil != err { 
+    Log.Debugf("%v", err)
+    return fmt.Errorf("Could not rename object %v (%v) from API", object.ObjectID, object.Name)
+  }
+ 
+  object.Name = NewName
+  object.Parents = []string{parent}
+
+  if err := d.cache.UpdateObject(object); nil != err {
+    Log.Debugf("%v", err)
+    return fmt.Errorf("Could not rename object %v (%v) from cache", object.ObjectID, object.Name)
+  }  
+
+	return nil
+}
+
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	Log.Tracef("Converting Google Drive file: %v", file)
