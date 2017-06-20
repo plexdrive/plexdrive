@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"strings"
 
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
