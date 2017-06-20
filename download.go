@@ -17,20 +17,20 @@ type DownloadManager struct {
 	Client        *http.Client
 	ChunkManager  *ChunkManager
 	ReadAhead     int
-	Queue         *BlockingQueue
+	Queue         *Queue
 	DownloadQueue cmap.ConcurrentMap
 }
 
-type downloadRequest struct {
+type DownloadRequest struct {
 	chunkID  string
 	object   *APIObject
 	offset   int64
 	size     int64
-	response chan *downloadResponse
+	response chan *DownloadResponse
 	highPrio bool
 }
 
-type downloadResponse struct {
+type DownloadResponse struct {
 	content []byte
 	err     error
 }
@@ -67,27 +67,26 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 	offsetStart := offset - fOffset
 	chunkID := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
-	responseChannel := make(chan *downloadResponse)
+	responseChannel := make(chan *DownloadResponse)
 
-	m.Queue.Put(chunkID, &downloadRequest{
+	m.Queue.Put(&DownloadRequest{
 		chunkID:  chunkID,
 		object:   object,
 		offset:   offset,
 		size:     size,
 		response: responseChannel,
 		highPrio: true,
-	}, true)
+	})
 
 	readAheadOffset := offsetStart + m.ChunkManager.ChunkSize
 	for i := 0; i < m.ReadAhead && uint64(readAheadOffset) < object.Size; i++ {
-		readAheadChunkID := fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset)
-		m.Queue.Put(readAheadChunkID, &downloadRequest{
-			chunkID:  readAheadChunkID,
+		m.Queue.Put(&DownloadRequest{
+			chunkID:  fmt.Sprintf("%v:%v", object.ObjectID, readAheadOffset),
 			object:   object,
 			offset:   readAheadOffset,
 			size:     size,
 			highPrio: false,
-		}, false)
+		})
 		readAheadOffset += m.ChunkManager.ChunkSize
 	}
 
@@ -101,20 +100,18 @@ func (m *DownloadManager) Download(object *APIObject, offset, size int64) ([]byt
 
 func (m *DownloadManager) downloadThread() {
 	for {
-		request, exists := m.Queue.Pop()
-		if exists {
-			m.getChunk(request.(*downloadRequest))
-		}
+		m.getChunk(m.Queue.Pop())
 	}
 }
 
-func (m *DownloadManager) getChunk(request *downloadRequest) {
+func (m *DownloadManager) getChunk(request *DownloadRequest) {
 	bytes, err := m.ChunkManager.GetChunk(request.object, request.offset, request.size)
 	if nil == err {
 		if nil != request.response {
-			request.response <- &downloadResponse{
+			request.response <- &DownloadResponse{
 				content: bytes,
 			}
+			close(request.response)
 		}
 		return
 	}
@@ -131,9 +128,11 @@ func (m *DownloadManager) getChunk(request *downloadRequest) {
 	bytes, err = downloadFromAPI(m.Client, m.ChunkManager.ChunkSize, 0, request)
 	if nil != err {
 		if nil != request.response {
-			request.response <- &downloadResponse{
+			request.response <- &DownloadResponse{
 				err: err,
 			}
+			close(request.response)
+			return
 		}
 	}
 
@@ -145,13 +144,15 @@ func (m *DownloadManager) getChunk(request *downloadRequest) {
 	eOffset := int64(math.Min(float64(fOffset+request.size), float64(len(bytes))))
 
 	if nil != request.response {
-		request.response <- &downloadResponse{
+		request.response <- &DownloadResponse{
 			content: bytes[sOffset:eOffset],
 		}
+		close(request.response)
+		return
 	}
 }
 
-func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *downloadRequest) ([]byte, error) {
+func downloadFromAPI(client *http.Client, chunkSize, delay int64, request *DownloadRequest) ([]byte, error) {
 	// sleep if request is throttled
 	if delay > 0 {
 		time.Sleep(time.Duration(delay) * time.Second)
