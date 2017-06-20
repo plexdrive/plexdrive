@@ -14,14 +14,14 @@ func init() {
 // Buffer is a buffered stream
 type Buffer struct {
 	numberOfInstances int
-	downloadManager   *DownloadManager
+	chunkManager      *ChunkManager
 	object            *APIObject
 }
 
 // GetBufferInstance gets a singleton instance of buffer
-func GetBufferInstance(downloadManager *DownloadManager, object *APIObject) (*Buffer, error) {
+func GetBufferInstance(chunkManager *ChunkManager, object *APIObject) (*Buffer, error) {
 	if !instances.Has(object.ObjectID) {
-		i, err := newBuffer(downloadManager, object)
+		i, err := newBuffer(chunkManager, object)
 		if nil != err {
 			return nil, err
 		}
@@ -32,7 +32,7 @@ func GetBufferInstance(downloadManager *DownloadManager, object *APIObject) (*Bu
 	instance, ok := instances.Get(object.ObjectID)
 	// if buffer allocation failed due to race conditions it will try to fetch a new one
 	if !ok {
-		i, err := GetBufferInstance(downloadManager, object)
+		i, err := GetBufferInstance(chunkManager, object)
 		if nil != err {
 			return nil, err
 		}
@@ -43,12 +43,12 @@ func GetBufferInstance(downloadManager *DownloadManager, object *APIObject) (*Bu
 }
 
 // NewBuffer creates a new buffer instance
-func newBuffer(downloadManager *DownloadManager, object *APIObject) (*Buffer, error) {
+func newBuffer(chunkManager *ChunkManager, object *APIObject) (*Buffer, error) {
 	Log.Debugf("Creating buffer for object %v (%v)", object.ObjectID, object.Name)
 
 	buffer := Buffer{
 		numberOfInstances: 0,
-		downloadManager:   downloadManager,
+		chunkManager:      chunkManager,
 		object:            object,
 	}
 
@@ -66,5 +66,24 @@ func (b *Buffer) Close() error {
 
 // ReadBytes on a specific location
 func (b *Buffer) ReadBytes(offset, size int64) ([]byte, error) {
-	return b.downloadManager.Download(b.object, offset, size)
+	chunkResponseChannel := b.chunkManager.RequestChunk(&ChunkRequest{
+		Object:  b.object,
+		Offset:  offset,
+		Size:    size,
+		Preload: false,
+	})
+
+	// b.chunkManager.PreloadChunks(&Chunk{
+	// 	Object: b.object,
+	// 	Offset: offset,
+	// 	Size:   size,
+	//  Preload: true,
+	// })
+
+	chunkResponse := <-chunkResponseChannel
+	if nil != chunkResponse.Error {
+		return nil, chunkResponse.Error
+	}
+
+	return chunkResponse.Bytes, nil
 }

@@ -1,64 +1,71 @@
 package main
 
 import (
+	"container/list"
 	"sync"
 )
 
 type Queue struct {
-	hpQueue   chan *DownloadRequest
-	lpQueue   chan *DownloadRequest
-	activeIDs map[string]bool
-	lock      sync.Mutex
+	items *list.List
+	lock  sync.Mutex
+}
+
+type QueueItem struct {
+	request  *ChunkRequest
+	response chan *ChunkResponse
 }
 
 func NewQueue() *Queue {
 	q := &Queue{
-		hpQueue:   make(chan *DownloadRequest, 999),
-		lpQueue:   make(chan *DownloadRequest, 999),
-		activeIDs: make(map[string]bool, 999),
+		items: list.New(),
 	}
 	return q
 }
 
-func (q *Queue) Put(request *DownloadRequest) {
+func (q *Queue) PushLeft(req *ChunkRequest) <-chan *ChunkResponse {
+	res := make(chan *ChunkResponse)
+
 	q.lock.Lock()
-	defer q.lock.Unlock()
+	q.items.PushFront(&QueueItem{
+		request:  req,
+		response: res,
+	})
+	q.lock.Unlock()
 
-	if _, exists := q.activeIDs[request.chunkID]; exists {
-		return
-	}
-
-	if request.highPrio {
-		q.hpQueue <- request
-	} else {
-		q.lpQueue <- request
-	}
-
-	q.activeIDs[request.chunkID] = true
+	return res
 }
 
-func (q *Queue) Pop() *DownloadRequest {
-	res := make(chan *DownloadRequest)
+func (q *Queue) PushRight(req *ChunkRequest) <-chan *ChunkResponse {
+	res := make(chan *ChunkResponse)
+
+	q.lock.Lock()
+	q.items.PushBack(&QueueItem{
+		request:  req,
+		response: res,
+	})
+	q.lock.Unlock()
+
+	return res
+}
+
+func (q *Queue) Pop() (*ChunkRequest, chan *ChunkResponse) {
+	res := make(chan *QueueItem)
 
 	go func() {
-		defer close(res)
 		for {
-			select {
-			case req := <-q.hpQueue:
-				res <- req
-				return
-			case req := <-q.lpQueue:
-				res <- req
+			q.lock.Lock()
+			item := q.items.Front()
+			if nil != item {
+				q.items.Remove(item)
+				res <- item.Value.(*QueueItem)
+				close(res)
+				q.lock.Unlock()
 				return
 			}
+			q.lock.Unlock()
 		}
 	}()
 
-	request := <-res
-
-	q.lock.Lock()
-	delete(q.activeIDs, request.chunkID)
-	q.lock.Unlock()
-
-	return request
+	result := <-res
+	return result.request, result.response
 }
