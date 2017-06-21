@@ -297,21 +297,22 @@ func (d *Drive) Rename(object *APIObject, parent string, NewName string) error {
 	if nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not get Google Drive client")
-	}	
+	}
 
+	p := strings.Join(object.Parents, ",")
 
-  if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(strings.Join(object.Parents, ",")).AddParents(parent).Do(); nil != err { 
-    Log.Debugf("%v", err)
-    return fmt.Errorf("Could not rename object %v (%v) from API", object.ObjectID, object.Name)
-  }
- 
-  object.Name = NewName
-  object.Parents = []string{parent}
+	if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(p).AddParents(parent).Do(); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not rename object %v (%v) from API", object.ObjectID, object.Name)
+	}
 
-  if err := d.cache.UpdateObject(object); nil != err {
-    Log.Debugf("%v", err)
-    return fmt.Errorf("Could not rename object %v (%v) from cache", object.ObjectID, object.Name)
-  }  
+	object.Name = NewName
+	object.Parents = []string{parent}
+
+	if err := d.cache.UpdateObject(object); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not rename object %v (%v) from cache", object.ObjectID, object.Name)
+	}
 
 	return nil
 }
