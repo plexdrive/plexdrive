@@ -280,7 +280,7 @@ func (o *Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.
 		Log.Warningf("%v", err)
 		return fuse.EIO
 	}
- 
+
 	destDir, ok := newDir.(*Object)
 	if !ok {
 		Log.Warningf("%v", err)
