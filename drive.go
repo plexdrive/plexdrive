@@ -317,6 +317,40 @@ func (d *Drive) Rename(object *APIObject, parent string, NewName string) error {
 	return nil
 }
 
+// Mkdir creates a new directory in Google Drive
+func (d *Drive) Mkdir(parent string, Name string) (*APIObject, error) {
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not get Google Drive client")
+	}
+
+	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: "application/vnd.google-apps.folder"}).Do()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create object(%v) from API", Name)
+	}
+
+	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(Fields)).Do()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not get object fields %v from API", created.Id)
+	}
+
+	Obj, err := d.mapFileToObject(file)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not map file to object %v (%v)", file.Id, file.Name)
+	}
+
+	if err := d.cache.UpdateObject(Obj); nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create object %v (%v) from cache", Obj.ObjectID, Obj.Name)
+	}
+
+	return Obj, nil
+}
+
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	Log.Tracef("Converting Google Drive file: %v", file)
