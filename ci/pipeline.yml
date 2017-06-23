@@ -1,0 +1,14 @@
+resources:
+- name: plexdrive
+  type: git
+  source:
+    uri: https://github.com/dweidenfeld/plexdrive
+    branch: master
+
+jobs:
+- name: compile
+  plan:
+  - get: plexdrive
+    trigger: true
+  - task: build
+    file: plexdrive/ci/build.yml

@@ -1,13 +1,17 @@
-resources:
-- name: plexdrive
-  type: git
-  source:
-    uri: https://github.com/dweidenfeld/plexdrive
-    branch: master
+platform: linux
 
-jobs:
-- name: test
-  plan:
-  - get: plexdrive
-  - task: tests
-    file: tasks/build.yml
+image_resource:
+  type: docker-image
+  source: 
+    repository: golang
+    tag: 1.8
+
+inputs:
+- name: plexdrive
+  path: go/src/github.com/dweidenfeld/plexdrive
+
+run:
+  path: go/src/github.com/dweidenfeld/plexdrive/ci/build.sh
+
+outputs:
+- name: binary
