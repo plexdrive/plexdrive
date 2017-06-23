@@ -289,3 +289,26 @@ func (o *Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, er
 		umask:  o.umask,
 	}, nil
 }
+
+// Rename renames an element
+func (o *Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
+	obj, err := o.client.GetObjectByParentAndName(o.object.ObjectID, req.OldName)
+	if nil != err {
+		Log.Warningf("%v", err)
+		return fuse.EIO
+	}
+
+	destDir, ok := newDir.(*Object)
+	if !ok {
+		Log.Warningf("%v", err)
+		return fuse.EIO
+	}
+
+	err = o.client.Rename(obj, o.object.ObjectID, destDir.object.ObjectID, req.NewName)
+	if nil != err {
+		Log.Warningf("%v", err)
+		return fuse.EIO
+	}
+
+	return nil
+}
