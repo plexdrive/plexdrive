@@ -11,7 +11,7 @@ inputs:
   path: go/src/github.com/dweidenfeld/plexdrive
 
 run:
-  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/build.sh
+  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/test.sh
 
 outputs:
 - name: binary
