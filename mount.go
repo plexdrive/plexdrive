@@ -287,7 +287,7 @@ func (o *Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.
 		return fuse.EIO
 	}
 
-	err = o.client.Rename(obj, destDir.object.ObjectID, req.NewName)
+	err = o.client.Rename(obj, o.object.ObjectID, destDir.object.ObjectID, req.NewName)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
