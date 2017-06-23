@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"strings"
 
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
@@ -288,6 +289,66 @@ func (d *Drive) Remove(object *APIObject, parent string) error {
 	}
 
 	return nil
+}
+
+// Rename renames file in Google Drive
+func (d *Drive) Rename(object *APIObject, parent string, NewName string) error {
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not get Google Drive client")
+	}
+
+	p := strings.Join(object.Parents, ",")
+
+	if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(p).AddParents(parent).Do(); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not rename object %v (%v) from API", object.ObjectID, object.Name)
+	}
+
+	object.Name = NewName
+	object.Parents = []string{parent}
+
+	if err := d.cache.UpdateObject(object); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not rename object %v (%v) from cache", object.ObjectID, object.Name)
+	}
+
+	return nil
+}
+
+// Mkdir creates a new directory in Google Drive
+func (d *Drive) Mkdir(parent string, Name string) (*APIObject, error) {
+	client, err := d.getClient()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not get Google Drive client")
+	}
+
+	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: "application/vnd.google-apps.folder"}).Do()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create object(%v) from API", Name)
+	}
+
+	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(Fields)).Do()
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not get object fields %v from API", created.Id)
+	}
+
+	Obj, err := d.mapFileToObject(file)
+	if nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not map file to object %v (%v)", file.Id, file.Name)
+	}
+
+	if err := d.cache.UpdateObject(Obj); nil != err {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not create object %v (%v) from cache", Obj.ObjectID, Obj.Name)
+	}
+
+	return Obj, nil
 }
 
 // mapFileToObject maps a Google Drive file to APIObject
