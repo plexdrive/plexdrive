@@ -6,7 +6,7 @@ resources:
     branch: master
 
 jobs:
-- name: build
+- name: test
   plan:
   - get: plexdrive
     trigger: true
@@ -14,6 +14,9 @@ jobs:
     file: plexdrive/ci/test.yml
 - name: deploy-artifacts
   plan:
+  - get: plexdrive
+    trigger: true
+    passed: [test]
   - task: compile
     file: plexdrive/ci/build.yml
   - task: deploy
