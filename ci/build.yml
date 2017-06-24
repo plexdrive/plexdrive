@@ -14,4 +14,4 @@ run:
   path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/build.sh
 
 outputs:
-- name: binary
+- name: release

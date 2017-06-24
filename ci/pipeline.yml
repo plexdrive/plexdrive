@@ -6,15 +6,11 @@ resources:
     branch: master
 
 jobs:
-- name: test
+- name: build
   plan:
   - get: plexdrive
     trigger: true
   - task: test
     file: plexdrive/ci/test.yml
-- name: compile
-  plan:
-  - get: plexdrive
-    trigger: true
-  - task: build
+  - task: compile
     file: plexdrive/ci/build.yml
