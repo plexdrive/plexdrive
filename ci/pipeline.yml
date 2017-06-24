@@ -12,5 +12,9 @@ jobs:
     trigger: true
   - task: test
     file: plexdrive/ci/test.yml
+- name: deploy-artifacts
+  plan:
   - task: compile
     file: plexdrive/ci/build.yml
+  - task: deploy
+    file: plexdrive/ci/deploy.yml
