@@ -6,5 +6,5 @@ export PATH=$GOPATH/bin:$PATH
 
 cd $GOPATH/src/github.com/dweidenfeld/plexdrive
 
-go get
+go get -v
 go test ./... -race -cover

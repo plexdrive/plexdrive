@@ -61,7 +61,7 @@ PLATFORMS="$PLATFORMS freebsd/amd64"
 #   @dfc: that target expects that you're bulding for a mobile phone
 #   @dfc: iphone 5 and below, ARMv7, iphone 3 and below ARMv6, iphone 5s and above arm64
 # 
-PLATFORMS_ARM="linux freebsd netbsd"
+PLATFORMS_ARM="linux"
 
 ##############################################################
 # Shouldn't really need to modify anything below this line.  #
