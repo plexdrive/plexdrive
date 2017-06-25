@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	. "github.com/claudetech/loggo/default"
@@ -18,6 +19,9 @@ type ChunkManager struct {
 	ChunkPath       string
 	ChunkSize       int64
 	downloadManager *DownloadManager
+	chunks          map[string][]byte
+	chunkLock       sync.Mutex
+	storeQueue      chan ChunkQueueItem
 }
 
 type ChunkRequest struct {
@@ -36,6 +40,11 @@ type ChunkResponse struct {
 	Bytes []byte
 }
 
+type ChunkQueueItem struct {
+	*ChunkRequest
+	*ChunkResponse
+}
+
 // NewChunkManager creates a new chunk manager
 func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSize int64) (*ChunkManager, error) {
 	if "" == chunkPath {
@@ -52,7 +61,11 @@ func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSi
 		ChunkPath:       chunkPath,
 		ChunkSize:       chunkSize,
 		downloadManager: downloadManager,
+		chunks:          make(map[string][]byte),
+		storeQueue:      make(chan ChunkQueueItem, 100),
 	}
+
+	go manager.storingThread()
 
 	return &manager, nil
 }
@@ -68,11 +81,20 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 		req.offsetEnd = req.offsetStart + m.ChunkSize
 		req.id = fmt.Sprintf("%v:%v", req.Object.ObjectID, req.offsetStart)
 
+		ramRes := m.loadChunkFromRAM(req)
+		if nil != ramRes.Error {
+			Log.Tracef("%v", ramRes.Error)
+		} else {
+			res <- ramRes
+			return
+		}
+
 		diskRes := m.loadChunkFromDisk(req)
 		if nil != diskRes.Error {
-			Log.Debugf("%v", diskRes.Error)
+			Log.Tracef("%v", diskRes.Error)
 		} else {
 			res <- diskRes
+			return
 		}
 
 		apiRes := m.downloadManager.RequestChunk(req)
@@ -84,13 +106,44 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 				Bytes: apiRes.Bytes[sOffset:eOffset],
 			}
 
-			m.storeChunkToDisk(req, apiRes)
+			m.storeChunkInRAM(req, apiRes)
+			m.storeQueue <- ChunkQueueItem{
+				ChunkRequest:  req,
+				ChunkResponse: apiRes,
+			}
 		} else {
 			res <- apiRes
 		}
 	}()
 
 	return res
+}
+
+func (m *ChunkManager) storingThread() {
+	for {
+		queueItem := <-m.storeQueue
+		m.storeChunkToDisk(queueItem.ChunkRequest, queueItem.ChunkResponse)
+	}
+}
+
+func (m *ChunkManager) loadChunkFromRAM(req *ChunkRequest) *ChunkResponse {
+	bytes, exists := m.chunks[req.id]
+	if !exists {
+		return &ChunkResponse{
+			Error: fmt.Errorf("Could not find chunk %v in memory", req.id),
+		}
+	}
+
+	eOffset := int64(math.Min(float64(req.Size), float64(len(bytes))))
+	return &ChunkResponse{
+		Bytes: bytes[:eOffset],
+	}
+}
+
+func (m *ChunkManager) storeChunkInRAM(req *ChunkRequest, res *ChunkResponse) {
+	m.chunkLock.Lock()
+	m.chunks[req.id] = res.Bytes
+	m.chunkLock.Unlock()
 }
 
 func (m *ChunkManager) loadChunkFromDisk(req *ChunkRequest) *ChunkResponse {
@@ -145,4 +198,8 @@ func (m *ChunkManager) storeChunkToDisk(req *ChunkRequest, res *ChunkResponse) {
 			Log.Warningf("Could not write chunk temp file %v", filename)
 		}
 	}
+
+	m.chunkLock.Lock()
+	delete(m.chunks, req.id)
+	m.chunkLock.Unlock()
 }

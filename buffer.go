@@ -74,10 +74,10 @@ func (b *Buffer) ReadBytes(offset, size int64) ([]byte, error) {
 	})
 
 	// b.chunkManager.PreloadChunks(&Chunk{
-	// 	Object: b.object,
-	// 	Offset: offset,
-	// 	Size:   size,
-	//  Preload: true,
+	// 	Object:  b.object,
+	// 	Offset:  offset,
+	// 	Size:    size,
+	// 	Preload: true,
 	// })
 
 	chunkResponse := <-chunkResponseChannel
