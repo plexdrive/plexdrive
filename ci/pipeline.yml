@@ -11,6 +11,8 @@ resources:
     owner: dweidenfeld
     repository: plexdrive
     access_token: {{gh-access-token}}
+    drafts: true
+    pre_release: true
 
 jobs:
 - name: build
