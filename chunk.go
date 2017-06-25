@@ -23,8 +23,6 @@ type ChunkManager struct {
 	chunks          map[string][]byte
 	chunkLock       sync.Mutex
 	storeQueue      chan ChunkQueueItem
-	loadingChunks   map[string]*sync.Mutex
-	loadLock        sync.Mutex
 }
 
 type ChunkRequest struct {
@@ -67,7 +65,6 @@ func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSi
 		downloadManager: downloadManager,
 		chunks:          make(map[string][]byte),
 		storeQueue:      make(chan ChunkQueueItem, 100),
-		loadingChunks:   make(map[string]*sync.Mutex),
 	}
 
 	go manager.storingThread()
@@ -85,16 +82,6 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 		req.offsetStart = req.Offset - req.fOffset
 		req.offsetEnd = req.offsetStart + m.ChunkSize
 		req.id = fmt.Sprintf("%v:%v", req.Object.ObjectID, req.offsetStart)
-
-		m.loadLock.Lock()
-		mutex, exists := m.loadingChunks[req.id]
-		if !exists {
-			mutex = &sync.Mutex{}
-			m.loadingChunks[req.id] = mutex
-		}
-		m.loadLock.Unlock()
-		mutex.Lock()
-		defer mutex.Unlock()
 
 		ramRes := m.loadChunkFromRAM(req)
 		if nil != ramRes.Error {

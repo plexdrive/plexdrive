@@ -73,12 +73,12 @@ func (b *Buffer) ReadBytes(offset, size int64) ([]byte, error) {
 		Preload: false,
 	})
 
-	// b.chunkManager.PreloadChunks(&ChunkRequest{
-	// 	Object:  b.object,
-	// 	Offset:  offset,
-	// 	Size:    size,
-	// 	Preload: true,
-	// })
+	b.chunkManager.PreloadChunks(&ChunkRequest{
+		Object:  b.object,
+		Offset:  offset,
+		Size:    size,
+		Preload: true,
+	})
 
 	chunkResponse := <-chunkResponseChannel
 	if nil != chunkResponse.Error {
