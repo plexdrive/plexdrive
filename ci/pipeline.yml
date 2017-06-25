@@ -44,4 +44,4 @@ jobs:
       - release/*
   - put: slack-nightly-notification
     params:
-      text: "A new version ($VERSION) has been published to GitHub. Download it now: https://github.com/dweidenfeld/plexdrive/releases"
+      text_file: metadata/notification
