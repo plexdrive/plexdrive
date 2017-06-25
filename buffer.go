@@ -73,7 +73,7 @@ func (b *Buffer) ReadBytes(offset, size int64) ([]byte, error) {
 		Preload: false,
 	})
 
-	// b.chunkManager.PreloadChunks(&Chunk{
+	// b.chunkManager.PreloadChunks(&ChunkRequest{
 	// 	Object:  b.object,
 	// 	Offset:  offset,
 	// 	Size:    size,

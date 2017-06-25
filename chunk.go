@@ -18,10 +18,13 @@ import (
 type ChunkManager struct {
 	ChunkPath       string
 	ChunkSize       int64
+	LoadAhead       int
 	downloadManager *DownloadManager
 	chunks          map[string][]byte
 	chunkLock       sync.Mutex
 	storeQueue      chan ChunkQueueItem
+	loadingChunks   map[string]*sync.Mutex
+	loadLock        sync.Mutex
 }
 
 type ChunkRequest struct {
@@ -46,7 +49,7 @@ type ChunkQueueItem struct {
 }
 
 // NewChunkManager creates a new chunk manager
-func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSize int64) (*ChunkManager, error) {
+func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSize int64, loadAhead int) (*ChunkManager, error) {
 	if "" == chunkPath {
 		return nil, fmt.Errorf("Path to chunk file must not be empty")
 	}
@@ -60,9 +63,11 @@ func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSi
 	manager := ChunkManager{
 		ChunkPath:       chunkPath,
 		ChunkSize:       chunkSize,
+		LoadAhead:       loadAhead,
 		downloadManager: downloadManager,
 		chunks:          make(map[string][]byte),
 		storeQueue:      make(chan ChunkQueueItem, 100),
+		loadingChunks:   make(map[string]*sync.Mutex),
 	}
 
 	go manager.storingThread()
@@ -80,6 +85,16 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 		req.offsetStart = req.Offset - req.fOffset
 		req.offsetEnd = req.offsetStart + m.ChunkSize
 		req.id = fmt.Sprintf("%v:%v", req.Object.ObjectID, req.offsetStart)
+
+		m.loadLock.Lock()
+		mutex, exists := m.loadingChunks[req.id]
+		if !exists {
+			mutex = &sync.Mutex{}
+			m.loadingChunks[req.id] = mutex
+		}
+		m.loadLock.Unlock()
+		mutex.Lock()
+		defer mutex.Unlock()
 
 		ramRes := m.loadChunkFromRAM(req)
 		if nil != ramRes.Error {
@@ -117,6 +132,20 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 	}()
 
 	return res
+}
+
+func (m *ChunkManager) PreloadChunks(req *ChunkRequest) {
+	fOffset := req.Offset % m.ChunkSize
+	offsetStart := req.Offset - fOffset
+
+	for i := m.ChunkSize; i < (m.ChunkSize * int64(m.LoadAhead+1)); i += m.ChunkSize {
+		m.RequestChunk(&ChunkRequest{
+			Object:  req.Object,
+			Offset:  offsetStart + i,
+			Size:    req.Size,
+			Preload: true,
+		})
+	}
 }
 
 func (m *ChunkManager) storingThread() {
