@@ -23,6 +23,7 @@ go get -v
 ./ci/scripts/go-build-all
 
 mv plexdrive-* $ORIGIN/release
+cp docs/slack-notification $ORIGIN/notifications
 
 cd $ORIGIN
 ls -lah release

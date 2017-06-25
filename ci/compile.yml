@@ -14,3 +14,4 @@ run:
 
 outputs:
 - name: release
+- name: notifications

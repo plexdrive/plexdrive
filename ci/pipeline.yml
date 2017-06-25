@@ -25,7 +25,7 @@ resources:
   type: slack-notification
   source:
     url: https://hooks.slack.com/services/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
-    text_file: plexdrive/docs/slack-notification
+    text_file: notifications/slack-notification
 
 jobs:
 - name: build
