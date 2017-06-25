@@ -25,7 +25,6 @@ resources:
   type: slack-notification
   source:
     url: https://hooks.slack.com/services/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
-    text: "A new version has been published to GitHub. Download it now: https://github.com/dweidenfeld/plexdrive/releases"
 
 jobs:
 - name: build
@@ -44,3 +43,5 @@ jobs:
       globs:
       - release/*
   - put: slack-nightly-notification
+    params:
+      text: "A new version ($VERSION) has been published to GitHub. Download it now: https://github.com/dweidenfeld/plexdrive/releases"
