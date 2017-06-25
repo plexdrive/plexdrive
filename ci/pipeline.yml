@@ -43,3 +43,4 @@ jobs:
       body: plexdrive/docs/version
       globs:
       - release/*
+  - put: slack-nightly-notification
