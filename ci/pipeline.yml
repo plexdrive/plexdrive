@@ -5,7 +5,7 @@ resources:
     uri: https://github.com/dweidenfeld/plexdrive
     branch: master
 
-- name: gh-release
+- name: github-nightly-release
   type: github-release
   source:
     owner: dweidenfeld
@@ -23,7 +23,7 @@ jobs:
     file: plexdrive/ci/test.yml
   - task: compile
     file: plexdrive/ci/compile.yml
-  - put: gh-release
+  - put: github-nightly-release
     params:
       name: plexdrive/docs/version
       tag: plexdrive/docs/version
