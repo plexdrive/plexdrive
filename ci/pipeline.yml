@@ -1,3 +1,10 @@
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
 resources:
 - name: plexdrive
   type: git
@@ -14,6 +21,12 @@ resources:
     release: false
     pre_release: true
 
+- name: slack-nightly-notification
+  type: slack-notification
+  source:
+    url: https://hooks.slack.com/services/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
+    text_file: plexdrive/docs/slack-notification
+
 jobs:
 - name: build
   plan:
@@ -27,5 +40,6 @@ jobs:
     params:
       name: plexdrive/docs/version
       tag: plexdrive/docs/version
+      body: plexdrive/docs/version
       globs:
       - release/*
