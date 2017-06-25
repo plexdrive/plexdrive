@@ -1,0 +1,13 @@
+platform: linux
+
+image_resource:
+  type: docker-image
+  source: 
+    repository: golang
+
+inputs:
+- name: plexdrive
+  path: go/src/github.com/dweidenfeld/plexdrive
+
+run:
+  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/test.sh

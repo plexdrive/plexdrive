@@ -1,0 +1,47 @@
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+- name: plexdrive
+  type: git
+  source:
+    uri: https://github.com/dweidenfeld/plexdrive
+    branch: master
+
+- name: github-nightly-release
+  type: github-release
+  source:
+    owner: dweidenfeld
+    repository: plexdrive
+    access_token: {{gh-access-token}}
+    release: false
+    pre_release: true
+
+- name: slack-nightly-notification
+  type: slack-notification
+  source:
+    url: https://hooks.slack.com/services/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
+
+jobs:
+- name: build
+  plan:
+  - get: plexdrive
+    trigger: true
+  - task: test
+    file: plexdrive/ci/test.yml
+  - task: compile
+    file: plexdrive/ci/compile.yml
+  - put: github-nightly-release
+    params:
+      name: metadata/version
+      tag: metadata/version
+      body: metadata/version
+      globs:
+      - release/*
+  - put: slack-nightly-notification
+    params:
+      text_file: metadata/notification
