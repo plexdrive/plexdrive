@@ -11,7 +11,7 @@ resources:
     owner: dweidenfeld
     repository: plexdrive
     access_token: {{gh-access-token}}
-    drafts: true
+    release: false
     pre_release: true
 
 jobs:
@@ -29,11 +29,3 @@ jobs:
       tag: plexdrive/docs/version
       globs:
       - release/*
-
-# - name: deploy-artifacts
-#   plan:
-#   - get: plexdrive
-#     trigger: true
-#     passed: [test]
-#   - task: deploy
-#     file: plexdrive/ci/deploy.yml
