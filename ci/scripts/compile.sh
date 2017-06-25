@@ -8,22 +8,17 @@ export TS=$(date +%s)
 
 cd $GOPATH/src/github.com/dweidenfeld/plexdrive
 
-export DOCVERSION=$(cat docs/version)
-export VERSION="$DOCVERSION-$TS"
-
+export VERSION="$(cat docs/version)-$TS"
 echo "Got version $VERSION"
 
-sed -i.bak s/$DOCVERSION/$VERSION/g docs/version
-cat docs/version
-
 sed -i.bak s/%VERSION%/$VERSION/g main.go
-sed -i.bak s/%VERSION%/$VERSION/g docs/slack-notification
 
 go get -v
 ./ci/scripts/go-build-all
 
 mv plexdrive-* $ORIGIN/release
-cp docs/slack-notification $ORIGIN/notifications
+echo $VERSION > $ORIGIN/metadata/version
 
 cd $ORIGIN
 ls -lah release
+ls -lah metadata

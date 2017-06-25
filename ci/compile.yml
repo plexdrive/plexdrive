@@ -14,4 +14,4 @@ run:
 
 outputs:
 - name: release
-- name: notifications
+- name: metadata
