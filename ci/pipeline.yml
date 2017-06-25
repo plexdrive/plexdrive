@@ -5,19 +5,33 @@ resources:
     uri: https://github.com/dweidenfeld/plexdrive
     branch: master
 
+- name: gh-release
+  type: github-release
+  source:
+    owner: dweidenfeld
+    repository: plexdrive
+    access_token: {{gh-access-token}}
+
 jobs:
-- name: test
+- name: build
   plan:
   - get: plexdrive
     trigger: true
   - task: test
     file: plexdrive/ci/test.yml
-- name: deploy-artifacts
-  plan:
-  - get: plexdrive
-    trigger: true
-    passed: [test]
   - task: compile
-    file: plexdrive/ci/build.yml
-  - task: deploy
-    file: plexdrive/ci/deploy.yml
+    file: plexdrive/ci/compile.yml
+  - put: gh-release
+    params:
+      name: plexdrive/docs/version
+      tag: plexdrive/docs/version
+      globs:
+      - release/*
+
+# - name: deploy-artifacts
+#   plan:
+#   - get: plexdrive
+#     trigger: true
+#     passed: [test]
+#   - task: deploy
+#     file: plexdrive/ci/deploy.yml

@@ -10,7 +10,7 @@ inputs:
   path: go/src/github.com/dweidenfeld/plexdrive
 
 run:
-  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/build.sh
+  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/compile.sh
 
 outputs:
 - name: release
