@@ -9,12 +9,12 @@ export TS=$(date +%s)
 cd $GOPATH/src/github.com/dweidenfeld/plexdrive
 
 # Version
-export VERSION="$(cat docs/version)-$TS"
+export VERSION="$(cat ci/meta/version)-$TS"
 echo "Got version $VERSION"
 
 sed -i.bak s/%VERSION%/$VERSION/g main.go
 echo $VERSION > $ORIGIN/metadata/version
-sed s/%VERSION%/$VERSION/g docs/notification > $ORIGIN/metadata/notification
+sed s/%VERSION%/$VERSION/g ci/meta/notification > $ORIGIN/metadata/notification
 
 # Build 
 go get -v

@@ -1,4 +1,4 @@
-package main
+package chunk
 
 import (
 	"fmt"
@@ -10,15 +10,15 @@ import (
 	. "github.com/claudetech/loggo/default"
 )
 
-// DownloadManager handles concurrent chunk downloads
-type DownloadManager struct {
+// Downloader handles concurrent chunk downloads
+type Downloader struct {
 	Client *http.Client
 	Queue  *Queue
 }
 
-// NewDownloadManager creates a new download manager
-func NewDownloadManager(threadCount int, client *http.Client) (*DownloadManager, error) {
-	manager := DownloadManager{
+// NewDownloader creates a new download manager
+func NewDownloader(threadCount int, client *http.Client) (*Downloader, error) {
+	manager := Downloader{
 		Client: client,
 		Queue:  NewQueue(),
 	}
@@ -34,20 +34,20 @@ func NewDownloadManager(threadCount int, client *http.Client) (*DownloadManager,
 	return &manager, nil
 }
 
-func (m *DownloadManager) downloadThread() {
+func (m *Downloader) downloadThread() {
 	for {
 		m.Download(m.Queue.Pop())
 	}
 }
 
-func (m *DownloadManager) RequestChunk(req *ChunkRequest) *ChunkResponse {
+func (m *Downloader) RequestChunk(req *ChunkRequest) *ChunkResponse {
 	if req.Preload {
 		return <-m.Queue.PushRight(req)
 	}
 	return <-m.Queue.PushLeft(req)
 }
 
-func (m *DownloadManager) Download(req *ChunkRequest, res chan *ChunkResponse) {
+func (m *Downloader) Download(req *ChunkRequest, res chan *ChunkResponse) {
 	res <- downloadFromAPI(m.Client, req, 0)
 }
 

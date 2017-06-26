@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -14,8 +14,8 @@ type Config struct {
 	ClientSecret string
 }
 
-// ReadConfig reads the configuration based on a filesystem path
-func ReadConfig(configPath string) (*Config, error) {
+// Read reads the configuration based on a filesystem path
+func Read(configPath string) (*Config, error) {
 	configFile, err := ioutil.ReadFile(configPath)
 	if nil != err {
 		return nil, fmt.Errorf("Could not read config file in %v", configPath)
@@ -27,7 +27,7 @@ func ReadConfig(configPath string) (*Config, error) {
 }
 
 // CreateConfig creates the configuration by requesting from stdin
-func CreateConfig(configPath string) (*Config, error) {
+func Create(configPath string) (*Config, error) {
 	fmt.Println("1. Please go to https://console.developers.google.com/")
 	fmt.Println("2. Create a new project")
 	fmt.Println("3. Go to library and activate the Google Drive API")

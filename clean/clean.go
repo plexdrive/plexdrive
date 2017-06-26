@@ -1,4 +1,4 @@
-package main
+package clean
 
 import (
 	"io"

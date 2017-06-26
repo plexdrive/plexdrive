@@ -19,6 +19,11 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
+	"github.com/dweidenfeld/plexdrive/chunk"
+	"github.com/dweidenfeld/plexdrive/clean"
+	"github.com/dweidenfeld/plexdrive/config"
+	"github.com/dweidenfeld/plexdrive/drive"
+	"github.com/dweidenfeld/plexdrive/mount"
 	flag "github.com/ogier/pflag"
 	"golang.org/x/sys/unix"
 )
@@ -158,9 +163,9 @@ func main() {
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")
-	config, err := ReadConfig(configPath)
+	cfg, err := config.Read(configPath)
 	if nil != err {
-		config, err = CreateConfig(configPath)
+		cfg, err = config.Create(configPath)
 		if nil != err {
 			Log.Errorf("Could not read configuration")
 			Log.Debugf("%v", err)
@@ -168,26 +173,26 @@ func main() {
 		}
 	}
 
-	cache, err := NewCache(*argMongoURL, *argMongoUser, *argMongoPass, *argMongoDatabase, *argConfigPath, *argLogLevel > 3)
+	cache, err := drive.NewCache(*argMongoURL, *argMongoUser, *argMongoPass, *argMongoDatabase, *argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
 	}
 	defer cache.Close()
 
-	drive, err := NewDriveClient(config, cache, *argRefreshInterval, *argRootNodeID)
+	client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
 	}
 
-	downloadManager, err := NewDownloadManager(*argChunkLoadThreads, drive.getNativeClient())
+	downloader, err := chunk.NewDownloader(*argChunkLoadThreads, client.GetNativeClient())
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
 	}
 
-	chunkManager, err := NewChunkManager(downloadManager, chunkPath, chunkSize, *argChunkLoadAhead)
+	chunkManager, err := chunk.NewManager(downloader, chunkPath, chunkSize, *argChunkLoadAhead)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
@@ -195,8 +200,8 @@ func main() {
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
-	go CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, 0 /*, clearMaxChunkSize*/)
-	if err := Mount(drive, chunkManager, argMountPoint, mountOptions, uid, gid, umask); nil != err {
+	go clean.CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, 0 /*, clearMaxChunkSize*/)
+	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(5)
 	}
@@ -209,7 +214,7 @@ func checkOsSignals(mountpoint string) {
 	go func() {
 		for sig := range signals {
 			if sig == syscall.SIGINT {
-				if err := Unmount(mountpoint, false); nil != err {
+				if err := mount.Unmount(mountpoint, false); nil != err {
 					Log.Warningf("%v", err)
 				}
 			}

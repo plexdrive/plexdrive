@@ -1,4 +1,4 @@
-package main
+package chunk
 
 import (
 	"fmt"
@@ -12,21 +12,22 @@ import (
 	"time"
 
 	. "github.com/claudetech/loggo/default"
+	"github.com/dweidenfeld/plexdrive/drive"
 )
 
-// ChunkManager manages chunks on disk
-type ChunkManager struct {
-	ChunkPath       string
-	ChunkSize       int64
-	LoadAhead       int
-	downloadManager *DownloadManager
-	chunks          map[string][]byte
-	chunkLock       sync.Mutex
-	storeQueue      chan ChunkQueueItem
+// Manager manages chunks on disk
+type Manager struct {
+	ChunkPath  string
+	ChunkSize  int64
+	LoadAhead  int
+	downloader *Downloader
+	chunks     map[string][]byte
+	chunkLock  sync.Mutex
+	storeQueue chan ChunkQueueItem
 }
 
 type ChunkRequest struct {
-	Object      *APIObject
+	Object      *drive.APIObject
 	Offset      int64
 	Size        int64
 	Preload     bool
@@ -46,8 +47,8 @@ type ChunkQueueItem struct {
 	*ChunkResponse
 }
 
-// NewChunkManager creates a new chunk manager
-func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSize int64, loadAhead int) (*ChunkManager, error) {
+// NewManager creates a new chunk manager
+func NewManager(downloader *Downloader, chunkPath string, chunkSize int64, loadAhead int) (*Manager, error) {
 	if "" == chunkPath {
 		return nil, fmt.Errorf("Path to chunk file must not be empty")
 	}
@@ -58,13 +59,13 @@ func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSi
 		return nil, fmt.Errorf("Chunk size must be divideable by 1024")
 	}
 
-	manager := ChunkManager{
-		ChunkPath:       chunkPath,
-		ChunkSize:       chunkSize,
-		LoadAhead:       loadAhead,
-		downloadManager: downloadManager,
-		chunks:          make(map[string][]byte),
-		storeQueue:      make(chan ChunkQueueItem, 100),
+	manager := Manager{
+		ChunkPath:  chunkPath,
+		ChunkSize:  chunkSize,
+		LoadAhead:  loadAhead,
+		downloader: downloader,
+		chunks:     make(map[string][]byte),
+		storeQueue: make(chan ChunkQueueItem, 100),
 	}
 
 	go manager.storingThread()
@@ -72,7 +73,7 @@ func NewChunkManager(downloadManager *DownloadManager, chunkPath string, chunkSi
 	return &manager, nil
 }
 
-func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
+func (m *Manager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 	res := make(chan *ChunkResponse)
 
 	go func() {
@@ -99,7 +100,7 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 			return
 		}
 
-		apiRes := m.downloadManager.RequestChunk(req)
+		apiRes := m.downloader.RequestChunk(req)
 
 		if nil == apiRes.Error {
 			sOffset := int64(math.Min(float64(req.fOffset), float64(len(apiRes.Bytes))))
@@ -121,7 +122,7 @@ func (m *ChunkManager) RequestChunk(req *ChunkRequest) <-chan *ChunkResponse {
 	return res
 }
 
-func (m *ChunkManager) PreloadChunks(req *ChunkRequest) {
+func (m *Manager) PreloadChunks(req *ChunkRequest) {
 	fOffset := req.Offset % m.ChunkSize
 	offsetStart := req.Offset - fOffset
 
@@ -135,14 +136,14 @@ func (m *ChunkManager) PreloadChunks(req *ChunkRequest) {
 	}
 }
 
-func (m *ChunkManager) storingThread() {
+func (m *Manager) storingThread() {
 	for {
 		queueItem := <-m.storeQueue
 		m.storeChunkToDisk(queueItem.ChunkRequest, queueItem.ChunkResponse)
 	}
 }
 
-func (m *ChunkManager) loadChunkFromRAM(req *ChunkRequest) *ChunkResponse {
+func (m *Manager) loadChunkFromRAM(req *ChunkRequest) *ChunkResponse {
 	bytes, exists := m.chunks[req.id]
 	if !exists {
 		return &ChunkResponse{
@@ -156,13 +157,13 @@ func (m *ChunkManager) loadChunkFromRAM(req *ChunkRequest) *ChunkResponse {
 	}
 }
 
-func (m *ChunkManager) storeChunkInRAM(req *ChunkRequest, res *ChunkResponse) {
+func (m *Manager) storeChunkInRAM(req *ChunkRequest, res *ChunkResponse) {
 	m.chunkLock.Lock()
 	m.chunks[req.id] = res.Bytes
 	m.chunkLock.Unlock()
 }
 
-func (m *ChunkManager) loadChunkFromDisk(req *ChunkRequest) *ChunkResponse {
+func (m *Manager) loadChunkFromDisk(req *ChunkRequest) *ChunkResponse {
 	chunkDir := filepath.Join(m.ChunkPath, req.Object.ObjectID)
 	filename := filepath.Join(chunkDir, strconv.Itoa(int(req.offsetStart)))
 
@@ -197,7 +198,7 @@ func (m *ChunkManager) loadChunkFromDisk(req *ChunkRequest) *ChunkResponse {
 	}
 }
 
-func (m *ChunkManager) storeChunkToDisk(req *ChunkRequest, res *ChunkResponse) {
+func (m *Manager) storeChunkToDisk(req *ChunkRequest, res *ChunkResponse) {
 	chunkDir := filepath.Join(m.ChunkPath, req.Object.ObjectID)
 	filename := filepath.Join(chunkDir, strconv.Itoa(int(req.offsetStart)))
 

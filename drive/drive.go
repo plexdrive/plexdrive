@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	. "github.com/claudetech/loggo/default"
+	"github.com/dweidenfeld/plexdrive/config"
 	"golang.org/x/oauth2"
 	gdrive "google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
@@ -20,8 +21,8 @@ func init() {
 	Fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash"
 }
 
-// Drive holds the Google Drive API connection(s)
-type Drive struct {
+// Client holds the Google Drive API connection(s)
+type Client struct {
 	cache           *Cache
 	context         context.Context
 	token           *oauth2.Token
@@ -30,9 +31,9 @@ type Drive struct {
 	changesChecking bool
 }
 
-// NewDriveClient creates a new Google Drive client
-func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration, rootNodeID string) (*Drive, error) {
-	drive := Drive{
+// NewClient creates a new Google Drive client
+func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duration, rootNodeID string) (*Client, error) {
+	client := Client{
 		cache:   cache,
 		context: context.Background(),
 		config: &oauth2.Config{
@@ -49,27 +50,27 @@ func NewDriveClient(config *Config, cache *Cache, refreshInterval time.Duration,
 		changesChecking: false,
 	}
 
-	if "" == drive.rootNodeID {
-		drive.rootNodeID = "root"
+	if "" == client.rootNodeID {
+		client.rootNodeID = "root"
 	}
 
-	if err := drive.authorize(); nil != err {
+	if err := client.authorize(); nil != err {
 		return nil, err
 	}
 
-	go drive.startWatchChanges(refreshInterval)
+	go client.startWatchChanges(refreshInterval)
 
-	return &drive, nil
+	return &client, nil
 }
 
-func (d *Drive) startWatchChanges(refreshInterval time.Duration) {
+func (d *Client) startWatchChanges(refreshInterval time.Duration) {
 	d.checkChanges(true)
 	for _ = range time.Tick(refreshInterval) {
 		d.checkChanges(false)
 	}
 }
 
-func (d *Drive) checkChanges(firstCheck bool) {
+func (d *Client) checkChanges(firstCheck bool) {
 	if d.changesChecking {
 		return
 	}
@@ -159,7 +160,7 @@ func (d *Drive) checkChanges(firstCheck bool) {
 	d.changesChecking = false
 }
 
-func (d *Drive) authorize() error {
+func (d *Client) authorize() error {
 	Log.Debugf("Authorizing against Google Drive API")
 
 	token, err := d.cache.LoadToken()
@@ -200,17 +201,17 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 }
 
 // getClient gets a new Google Drive client
-func (d *Drive) getClient() (*gdrive.Service, error) {
+func (d *Client) getClient() (*gdrive.Service, error) {
 	return gdrive.New(d.config.Client(d.context, d.token))
 }
 
-// getNativeClient gets a native http client
-func (d *Drive) getNativeClient() *http.Client {
+// GetNativeClient gets a native http client
+func (d *Client) GetNativeClient() *http.Client {
 	return oauth2.NewClient(d.context, d.config.TokenSource(d.context, d.token))
 }
 
 // GetRoot gets the root node directly from the API
-func (d *Drive) GetRoot() (*APIObject, error) {
+func (d *Client) GetRoot() (*APIObject, error) {
 	Log.Debugf("Getting root from API")
 
 	client, err := d.getClient()
@@ -242,22 +243,22 @@ func (d *Drive) GetRoot() (*APIObject, error) {
 }
 
 // GetObject gets an object by id
-func (d *Drive) GetObject(id string) (*APIObject, error) {
+func (d *Client) GetObject(id string) (*APIObject, error) {
 	return d.cache.GetObject(id)
 }
 
 // GetObjectsByParent get all objects under parent id
-func (d *Drive) GetObjectsByParent(parent string) ([]*APIObject, error) {
+func (d *Client) GetObjectsByParent(parent string) ([]*APIObject, error) {
 	return d.cache.GetObjectsByParent(parent)
 }
 
 // GetObjectByParentAndName finds a child element by name and its parent id
-func (d *Drive) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
+func (d *Client) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
 	return d.cache.GetObjectByParentAndName(parent, name)
 }
 
 // Remove removes file from Google Drive
-func (d *Drive) Remove(object *APIObject, parent string) error {
+func (d *Client) Remove(object *APIObject, parent string) error {
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -285,7 +286,7 @@ func (d *Drive) Remove(object *APIObject, parent string) error {
 }
 
 // Mkdir creates a new directory in Google Drive
-func (d *Drive) Mkdir(parent string, Name string) (*APIObject, error) {
+func (d *Client) Mkdir(parent string, Name string) (*APIObject, error) {
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -319,7 +320,7 @@ func (d *Drive) Mkdir(parent string, Name string) (*APIObject, error) {
 }
 
 // Rename renames file in Google Drive
-func (d *Drive) Rename(object *APIObject, OldParent string, NewParent string, NewName string) error {
+func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, NewName string) error {
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -349,7 +350,7 @@ func (d *Drive) Rename(object *APIObject, OldParent string, NewParent string, Ne
 }
 
 // mapFileToObject maps a Google Drive file to APIObject
-func (d *Drive) mapFileToObject(file *gdrive.File) (*APIObject, error) {
+func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	Log.Tracef("Converting Google Drive file: %v", file)
 
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)

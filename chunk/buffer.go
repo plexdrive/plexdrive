@@ -1,7 +1,8 @@
-package main
+package chunk
 
 import (
 	. "github.com/claudetech/loggo/default"
+	"github.com/dweidenfeld/plexdrive/drive"
 	"github.com/orcaman/concurrent-map"
 )
 
@@ -14,12 +15,12 @@ func init() {
 // Buffer is a buffered stream
 type Buffer struct {
 	numberOfInstances int
-	chunkManager      *ChunkManager
-	object            *APIObject
+	chunkManager      *Manager
+	object            *drive.APIObject
 }
 
-// GetBufferInstance gets a singleton instance of buffer
-func GetBufferInstance(chunkManager *ChunkManager, object *APIObject) (*Buffer, error) {
+// GetBuffer gets a singleton instance of buffer
+func GetBuffer(chunkManager *Manager, object *drive.APIObject) (*Buffer, error) {
 	if !instances.Has(object.ObjectID) {
 		i, err := newBuffer(chunkManager, object)
 		if nil != err {
@@ -32,7 +33,7 @@ func GetBufferInstance(chunkManager *ChunkManager, object *APIObject) (*Buffer, 
 	instance, ok := instances.Get(object.ObjectID)
 	// if buffer allocation failed due to race conditions it will try to fetch a new one
 	if !ok {
-		i, err := GetBufferInstance(chunkManager, object)
+		i, err := GetBuffer(chunkManager, object)
 		if nil != err {
 			return nil, err
 		}
@@ -43,7 +44,7 @@ func GetBufferInstance(chunkManager *ChunkManager, object *APIObject) (*Buffer, 
 }
 
 // NewBuffer creates a new buffer instance
-func newBuffer(chunkManager *ChunkManager, object *APIObject) (*Buffer, error) {
+func newBuffer(chunkManager *Manager, object *drive.APIObject) (*Buffer, error) {
 	Log.Debugf("Creating buffer for object %v (%v)", object.ObjectID, object.Name)
 
 	buffer := Buffer{

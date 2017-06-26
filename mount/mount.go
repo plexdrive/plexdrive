@@ -1,4 +1,4 @@
-package main
+package mount
 
 import (
 	"os"
@@ -12,13 +12,15 @@ import (
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	. "github.com/claudetech/loggo/default"
+	"github.com/dweidenfeld/plexdrive/chunk"
+	"github.com/dweidenfeld/plexdrive/drive"
 	"golang.org/x/net/context"
 )
 
 // Mount the fuse volume
 func Mount(
-	client *Drive,
-	chunkManager *ChunkManager,
+	client *drive.Client,
+	chunkManager *chunk.Manager,
 	mountpoint string,
 	mountOptions []string,
 	uid, gid uint32,
@@ -121,8 +123,8 @@ func Unmount(mountpoint string, notify bool) error {
 
 // FS the fuse filesystem
 type FS struct {
-	client       *Drive
-	chunkManager *ChunkManager
+	client       *drive.Client
+	chunkManager *chunk.Manager
 	uid          uint32
 	gid          uint32
 	umask        os.FileMode
@@ -147,10 +149,10 @@ func (f *FS) Root() (fs.Node, error) {
 
 // Object represents one drive object
 type Object struct {
-	client       *Drive
-	chunkManager *ChunkManager
-	object       *APIObject
-	buffer       *Buffer
+	client       *drive.Client
+	chunkManager *chunk.Manager
+	object       *drive.APIObject
+	buffer       *chunk.Buffer
 	uid          uint32
 	gid          uint32
 	umask        os.FileMode
@@ -235,7 +237,7 @@ func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Ope
 		return o, nil
 	}
 
-	buffer, err := GetBufferInstance(o.chunkManager, o.object)
+	buffer, err := chunk.GetBuffer(o.chunkManager, o.object)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return o, fuse.ENOENT
