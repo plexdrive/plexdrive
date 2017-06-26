@@ -152,7 +152,6 @@ type Object struct {
 	client       *drive.Client
 	chunkManager *chunk.Manager
 	object       *drive.APIObject
-	buffer       *chunk.Buffer
 	uid          uint32
 	gid          uint32
 	umask        os.FileMode
@@ -231,42 +230,42 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	}, nil
 }
 
-// Open opens a file for reading
-func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
-	if req.Dir {
-		return o, nil
-	}
+// // Open opens a file for reading
+// func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+// 	if req.Dir {
+// 		return o, nil
+// 	}
 
-	buffer, err := chunk.GetBuffer(o.chunkManager, o.object)
-	if nil != err {
-		Log.Warningf("%v", err)
-		return o, fuse.ENOENT
-	}
-	o.buffer = buffer
+// 	buffer, err := chunk.GetBuffer(o.chunkManager, o.object)
+// 	if nil != err {
+// 		Log.Warningf("%v", err)
+// 		return o, fuse.ENOENT
+// 	}
+// 	o.buffer = buffer
 
-	return o, nil
-}
+// 	return o, nil
+// }
 
-// Release a stream
-func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-	if nil != o.buffer {
-		if err := o.buffer.Close(); nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not close buffer stream")
-		}
-	}
-	return nil
-}
+// // Release a stream
+// func (o *Object) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+// 	if nil != o.buffer {
+// 		if err := o.buffer.Close(); nil != err {
+// 			Log.Debugf("%v", err)
+// 			Log.Warningf("Could not close buffer stream")
+// 		}
+// 	}
+// 	return nil
+// }
 
 // Read reads some bytes or the whole file
 func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	buf, err := o.buffer.ReadBytes(req.Offset, int64(req.Size))
+	bytes, err := o.chunkManager.GetChunk(o.object, req.Offset, int64(req.Size))
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
 	}
 
-	resp.Data = buf[:]
+	resp.Data = bytes[:]
 	return nil
 }
 

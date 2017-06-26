@@ -12,8 +12,8 @@ type Queue struct {
 }
 
 type QueueItem struct {
-	request  *ChunkRequest
-	response chan *ChunkResponse
+	// request  *ChunkRequest
+	// response chan *ChunkResponse
 }
 
 func NewQueue() *Queue {
@@ -24,49 +24,49 @@ func NewQueue() *Queue {
 	return q
 }
 
-func (q *Queue) PushLeft(req *ChunkRequest) <-chan *ChunkResponse {
-	res := make(chan *ChunkResponse)
+// func (q *Queue) PushLeft(req *ChunkRequest) <-chan *ChunkResponse {
+// 	res := make(chan *ChunkResponse)
 
-	q.lock.Lock()
-	q.items.PushFront(&QueueItem{
-		request:  req,
-		response: res,
-	})
-	q.listen <- 1
-	q.lock.Unlock()
+// 	q.lock.Lock()
+// 	q.items.PushFront(&QueueItem{
+// 		request:  req,
+// 		response: res,
+// 	})
+// 	q.listen <- 1
+// 	q.lock.Unlock()
 
-	return res
-}
+// 	return res
+// }
 
-func (q *Queue) PushRight(req *ChunkRequest) <-chan *ChunkResponse {
-	res := make(chan *ChunkResponse)
+// func (q *Queue) PushRight(req *ChunkRequest) <-chan *ChunkResponse {
+// 	res := make(chan *ChunkResponse)
 
-	q.lock.Lock()
-	q.items.PushBack(&QueueItem{
-		request:  req,
-		response: res,
-	})
-	q.listen <- 1
-	q.lock.Unlock()
+// 	q.lock.Lock()
+// 	q.items.PushBack(&QueueItem{
+// 		request:  req,
+// 		response: res,
+// 	})
+// 	q.listen <- 1
+// 	q.lock.Unlock()
 
-	return res
-}
+// 	return res
+// }
 
-func (q *Queue) Pop() (*ChunkRequest, chan *ChunkResponse) {
-	if q.items.Len() <= 0 {
-		<-q.listen
-	}
+// func (q *Queue) Pop() (*ChunkRequest, chan *ChunkResponse) {
+// 	if q.items.Len() <= 0 {
+// 		<-q.listen
+// 	}
 
-	q.lock.Lock()
-	item := q.items.Front()
-	if nil == item {
-		q.lock.Unlock()
-		return q.Pop()
-	}
+// 	q.lock.Lock()
+// 	item := q.items.Front()
+// 	if nil == item {
+// 		q.lock.Unlock()
+// 		return q.Pop()
+// 	}
 
-	q.items.Remove(item)
-	q.lock.Unlock()
+// 	q.items.Remove(item)
+// 	q.lock.Unlock()
 
-	result := item.Value.(*QueueItem)
-	return result.request, result.response
-}
+// 	result := item.Value.(*QueueItem)
+// 	return result.request, result.response
+// }

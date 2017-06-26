@@ -12,59 +12,95 @@ import (
 
 // Downloader handles concurrent chunk downloads
 type Downloader struct {
-	Client *http.Client
-	Queue  *Queue
+	Client  *http.Client
+	hpQueue chan *download
+	lpQueue chan *download
+}
+
+type download struct {
+	request  *Request
+	response chan *response
+}
+
+type response struct {
+	bytes []byte
+	err   error
 }
 
 // NewDownloader creates a new download manager
-func NewDownloader(threadCount int, client *http.Client) (*Downloader, error) {
+func NewDownloader(threads int, client *http.Client) (*Downloader, error) {
 	manager := Downloader{
-		Client: client,
-		Queue:  NewQueue(),
+		Client:  client,
+		hpQueue: make(chan *download, 100),
+		lpQueue: make(chan *download, 100),
 	}
 
-	if threadCount < 1 {
+	if threads < 1 {
 		return nil, fmt.Errorf("Number of threads for download manager must not be < 1")
 	}
 
-	for i := 0; i < threadCount; i++ {
-		go manager.downloadThread()
+	for i := 0; i < threads/2; i++ {
+		go manager.thread()
 	}
 
 	return &manager, nil
 }
 
-func (m *Downloader) downloadThread() {
+func (d *Downloader) Download(req *Request) ([]byte, error) {
+	rc := make(chan *response)
+
+	request := download{
+		request:  req,
+		response: rc,
+	}
+
+	if !req.preload {
+		d.hpQueue <- &request
+	} else {
+		d.lpQueue <- &request
+	}
+
+	res := <-rc
+	return res.bytes, res.err
+}
+
+func (d *Downloader) thread() {
 	for {
-		m.Download(m.Queue.Pop())
+		select {
+		case download := <-d.hpQueue:
+			bytes, err := downloadFromAPI(d.Client, download.request, 0)
+			download.response <- &response{
+				bytes: bytes,
+				err:   err,
+			}
+			close(download.response)
+			break
+		case download := <-d.lpQueue:
+			bytes, err := downloadFromAPI(d.Client, download.request, 0)
+			download.response <- &response{
+				bytes: bytes,
+				err:   err,
+			}
+			close(download.response)
+			break
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 }
 
-func (m *Downloader) RequestChunk(req *ChunkRequest) *ChunkResponse {
-	if req.Preload {
-		return <-m.Queue.PushRight(req)
-	}
-	return <-m.Queue.PushLeft(req)
-}
-
-func (m *Downloader) Download(req *ChunkRequest, res chan *ChunkResponse) {
-	res <- downloadFromAPI(m.Client, req, 0)
-}
-
-func downloadFromAPI(client *http.Client, request *ChunkRequest, delay int64) *ChunkResponse {
+func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte, error) {
 	// sleep if request is throttled
 	if delay > 0 {
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
 	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (preload: %v)",
-		request.Object.ObjectID, request.Object.Name, request.offsetStart, request.offsetEnd, request.Preload)
-	req, err := http.NewRequest("GET", request.Object.DownloadURL, nil)
+		request.object.ObjectID, request.object.Name, request.offsetStart, request.offsetEnd, request.preload)
+	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return &ChunkResponse{
-			Error: fmt.Errorf("Could not create request object %v (%v) from API", request.Object.ObjectID, request.Object.Name),
-		}
+		return nil, fmt.Errorf("Could not create request object %v (%v) from API", request.object.ObjectID, request.object.Name)
 	}
 
 	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", request.offsetStart, request.offsetEnd))
@@ -74,9 +110,7 @@ func downloadFromAPI(client *http.Client, request *ChunkRequest, delay int64) *C
 	res, err := client.Do(req)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return &ChunkResponse{
-			Error: fmt.Errorf("Could not request object %v (%v) from API", request.Object.ObjectID, request.Object.Name),
-		}
+		return nil, fmt.Errorf("Could not request object %v (%v) from API", request.object.ObjectID, request.object.Name)
 	}
 	defer res.Body.Close()
 	reader := res.Body
@@ -85,23 +119,17 @@ func downloadFromAPI(client *http.Client, request *ChunkRequest, delay int64) *C
 		if res.StatusCode != 403 {
 			Log.Debugf("Request\n----------\n%v\n----------\n", req)
 			Log.Debugf("Response\n----------\n%v\n----------\n", res)
-			return &ChunkResponse{
-				Error: fmt.Errorf("Wrong status code %v", res.StatusCode),
-			}
+			return nil, fmt.Errorf("Wrong status code %v", res.StatusCode)
 		}
 
 		// throttle requests
 		if delay > 8 {
-			return &ChunkResponse{
-				Error: fmt.Errorf("Maximum throttle interval has been reached"),
-			}
+			return nil, fmt.Errorf("Maximum throttle interval has been reached")
 		}
 		bytes, err := ioutil.ReadAll(reader)
 		if nil != err {
 			Log.Debugf("%v", err)
-			return &ChunkResponse{
-				Error: fmt.Errorf("Could not read body of 403 error"),
-			}
+			return nil, fmt.Errorf("Could not read body of 403 error")
 		}
 		body := string(bytes)
 		if strings.Contains(body, "dailyLimitExceeded") ||
@@ -118,21 +146,15 @@ func downloadFromAPI(client *http.Client, request *ChunkRequest, delay int64) *C
 
 		// return an error if other 403 error occurred
 		Log.Debugf("%v", body)
-		return &ChunkResponse{
-			Error: fmt.Errorf("Could not read object %v (%v) / StatusCode: %v",
-				request.Object.ObjectID, request.Object.Name, res.StatusCode),
-		}
+		return nil, fmt.Errorf("Could not read object %v (%v) / StatusCode: %v",
+			request.object.ObjectID, request.object.Name, res.StatusCode)
 	}
 
 	bytes, err := ioutil.ReadAll(reader)
 	if nil != err {
 		Log.Debugf("%v", err)
-		return &ChunkResponse{
-			Error: fmt.Errorf("Could not read objects %v (%v) API response", request.Object.ObjectID, request.Object.Name),
-		}
+		return nil, fmt.Errorf("Could not read objects %v (%v) API response", request.object.ObjectID, request.object.Name)
 	}
 
-	return &ChunkResponse{
-		Bytes: bytes,
-	}
+	return bytes, nil
 }
