@@ -123,7 +123,7 @@ func (s *Storage) thread() {
 }
 
 func (s *Storage) cleanThread() {
-	for _ = range time.Tick(10 * time.Second) {
+	for _ = range time.Tick(1 * time.Second) {
 		s.deleteChunks()
 	}
 }
