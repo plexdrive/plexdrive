@@ -117,7 +117,9 @@ func (s *Storage) thread() {
 }
 
 func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
+	s.chunksLock.Lock()
 	bytes, exists := s.chunks[id]
+	s.chunksLock.Unlock()
 	if !exists {
 		return nil, false
 	}
