@@ -113,6 +113,7 @@ func (d *Drive) checkChanges(firstCheck bool) {
 			break
 		}
 
+		objects := make([]*APIObject, 0)
 		for _, change := range results.Changes {
 			Log.Tracef("Change %v", change)
 
@@ -127,14 +128,15 @@ func (d *Drive) checkChanges(firstCheck bool) {
 					Log.Debugf("%v", err)
 					Log.Warningf("Could not map Google Drive file %v (%v) to object", change.File.Id, change.File.Name)
 				} else {
-					if err := d.cache.UpdateObject(object); nil != err {
-						Log.Warningf("%v", err)
-					}
+					objects = append(objects, object)
 					updatedItems++
 				}
 			}
 
 			processedItems++
+		}
+		if err := d.cache.BatchUpdateObjects(objects); nil != err {
+			Log.Warningf("%v", err)
 		}
 
 		if processedItems > 0 {

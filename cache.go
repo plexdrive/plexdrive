@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -8,19 +9,14 @@ import (
 
 	"time"
 
+	"github.com/boltdb/bolt"
 	. "github.com/claudetech/loggo/default"
 	"golang.org/x/oauth2"
-
-	"io"
-
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // Cache is the cache
 type Cache struct {
-	session   *mgo.Session
-	dbName    string
+	db        *bolt.DB
 	tokenPath string
 }
 
@@ -31,6 +27,12 @@ const (
 	DeleteAction = iota
 )
 
+var (
+	bObjects   = []byte("api_objects")
+	bParents   = []byte("idx_api_objects_py_parent")
+	bPageToken = []byte("page_token")
+)
+
 type cacheAction struct {
 	action  int
 	object  *APIObject
@@ -39,7 +41,7 @@ type cacheAction struct {
 
 // APIObject is a Google Drive file object
 type APIObject struct {
-	ObjectID     string `bson:"_id,omitempty"`
+	ObjectID     string
 	Name         string
 	IsDir        bool
 	Size         uint64
@@ -49,48 +51,42 @@ type APIObject struct {
 	CanTrash     bool
 }
 
-// PageToken is the last change id
-type PageToken struct {
-	ID    string `bson:"_id,omitempty"`
-	Token string
-}
-
 // NewCache creates a new cache instance
-func NewCache(mongoURL, mongoUser, mongoPass, mongoDatabase, cacheBasePath string, sqlDebug bool) (*Cache, error) {
+func NewCache(cacheBasePath string) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
 
-	session, err := mgo.Dial(mongoURL)
+	db, err := bolt.Open(filepath.Join(cacheBasePath, "cache.bolt"), 0600, nil)
 	if nil != err {
-		Log.Debugf("%v")
-		return nil, fmt.Errorf("Could not open mongo db connection")
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Could not open bolt db file")
 	}
 
 	cache := Cache{
-		session:   session,
-		dbName:    mongoDatabase,
+		db:        db,
 		tokenPath: filepath.Join(cacheBasePath, "token.json"),
 	}
 
-	// getting the db
-	db := session.DB(mongoDatabase)
+	// Make sure the necessary buckets exist
+	err = db.Update(func(tx *bolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists(bObjects); nil != err {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists(bParents); nil != err {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists(bPageToken); nil != err {
+			return err
+		}
+		return nil
+	})
 
-	// login
-	if "" != mongoUser && "" != mongoPass {
-		db.Login(mongoUser, mongoPass)
-	}
-
-	// create index
-	col := db.C("api_objects")
-	col.EnsureIndex(mgo.Index{Key: []string{"parents"}})
-	col.EnsureIndex(mgo.Index{Key: []string{"name"}})
-
-	return &cache, nil
+	return &cache, err
 }
 
 // Close closes all handles
 func (c *Cache) Close() error {
-	Log.Debugf("Closing cache connection")
-	c.session.Close()
+	Log.Debugf("Closing cache file")
+	c.db.Close()
 	return nil
 }
 
@@ -131,68 +127,98 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 }
 
 // GetObject gets an object by id
-func (c *Cache) GetObject(id string) (*APIObject, error) {
+func (c *Cache) GetObject(id string) (object *APIObject, err error) {
 	Log.Tracef("Getting object %v", id)
-	db := c.session.DB(c.dbName).C("api_objects")
 
-	var object APIObject
-	if err := db.Find(bson.M{"_id": id}).One(&object); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.GetObject(id)
-		}
-		return nil, fmt.Errorf("Could not find object %v in cache", id)
+	c.db.View(func(tx *bolt.Tx) error {
+		object, err = boltGetObject(tx, id)
+		return nil
+	})
+	if nil != err {
+		return nil, err
 	}
 
 	Log.Tracef("Got object from cache %v", object)
-	return &object, nil
+	return object, err
 }
 
 // GetObjectsByParent get all objects under parent id
 func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 	Log.Tracef("Getting children for %v", parent)
-	db := c.session.DB(c.dbName).C("api_objects")
 
-	var objects []*APIObject
-	if err := db.Find(bson.M{"parents": parent}).All(&objects); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.GetObjectsByParent(parent)
+	objects := make([]*APIObject, 0)
+	c.db.View(func(tx *bolt.Tx) error {
+		cr := tx.Bucket(bParents).Cursor()
+
+		// Iterate over all object ids stored under the parent in the index
+		objectIds := make([]string, 0)
+		prefix := []byte(parent + "/")
+		for k, v := cr.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = cr.Next() {
+			objectIds = append(objectIds, string(v))
 		}
-		return nil, fmt.Errorf("Could not find children for parent %v in cache", parent)
-	}
+
+		// Fetch all objects for the given ids
+		for _, id := range objectIds {
+			if object, err := boltGetObject(tx, id); nil == err {
+				objects = append(objects, object)
+			}
+		}
+		return nil
+	})
 
 	Log.Tracef("Got objects from cache %v", objects)
 	return objects, nil
 }
 
 // GetObjectByParentAndName finds a child element by name and its parent id
-func (c *Cache) GetObjectByParentAndName(parent, name string) (*APIObject, error) {
+func (c *Cache) GetObjectByParentAndName(parent, name string) (object *APIObject, err error) {
 	Log.Tracef("Getting object %v in parent %v", name, parent)
-	db := c.session.DB(c.dbName).C("api_objects")
 
-	var object APIObject
-	if err := db.Find(bson.M{"parents": parent, "name": name}).One(&object); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.GetObjectByParentAndName(parent, name)
+	c.db.View(func(tx *bolt.Tx) error {
+		// Look up object id in parent-name index
+		b := tx.Bucket(bParents)
+		v := b.Get([]byte(parent + "/" + name))
+		if nil == v {
+			return nil
 		}
+
+		// Fetch object for given id
+		object, err = boltGetObject(tx, string(v))
+		return nil
+	})
+	if nil != err {
+		return nil, err
+	}
+
+	if object == nil {
 		return nil, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 	}
 
 	Log.Tracef("Got object from cache %v", object)
-	return &object, nil
+	return object, nil
 }
 
 // DeleteObject deletes an object by id
 func (c *Cache) DeleteObject(id string) error {
-	db := c.session.DB(c.dbName).C("api_objects")
-
-	if err := db.Remove(bson.M{"_id": id}); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.DeleteObject(id)
+	err := c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bObjects)
+		object, _ := boltGetObject(tx, id)
+		if nil == object {
+			return nil
 		}
+
+		b.Delete([]byte(id))
+
+		// Remove object ids from the index
+		b = tx.Bucket(bParents)
+		for _, parent := range object.Parents {
+			b.Delete([]byte(parent + "/" + object.Name))
+		}
+
+		return nil
+	})
+	if nil != err {
+		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not delete object %v", id)
 	}
 
@@ -201,14 +227,76 @@ func (c *Cache) DeleteObject(id string) error {
 
 // UpdateObject updates an object
 func (c *Cache) UpdateObject(object *APIObject) error {
-	db := c.session.DB(c.dbName).C("api_objects")
+	err := c.db.Update(func(tx *bolt.Tx) error {
+		return boltUpdateObject(tx, object)
+	})
 
-	if _, err := db.Upsert(bson.M{"_id": object.ObjectID}, object); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.UpdateObject(object)
-		}
+	if nil != err {
+		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not update/save object %v (%v)", object.ObjectID, object.Name)
+	}
+
+	return nil
+}
+
+func boltStoreObject(tx *bolt.Tx, object *APIObject) error {
+	b := tx.Bucket(bObjects)
+	v, err := json.Marshal(object)
+	if nil != err {
+		return err
+	}
+	return b.Put([]byte(object.ObjectID), v)
+}
+
+func boltGetObject(tx *bolt.Tx, id string) (*APIObject, error) {
+	b := tx.Bucket(bObjects)
+	v := b.Get([]byte(id))
+	if v == nil {
+		return nil, fmt.Errorf("Could not find object %v in cache", id)
+	}
+
+	var object APIObject
+	err := json.Unmarshal(v, &object)
+	return &object, err
+}
+
+func boltUpdateObject(tx *bolt.Tx, object *APIObject) error {
+	prev, _ := boltGetObject(tx, object.ObjectID)
+	if nil != prev {
+		// Remove object ids from the index
+		b := tx.Bucket(bParents)
+		for _, parent := range object.Parents {
+			b.Delete([]byte(parent + "/" + object.Name))
+		}
+	}
+
+	if err := boltStoreObject(tx, object); nil != err {
+		return err
+	}
+
+	// Store the object id by parent-name in the index
+	b := tx.Bucket(bParents)
+	for _, parent := range object.Parents {
+		if err := b.Put([]byte(parent+"/"+object.Name), []byte(object.ObjectID)); nil != err {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Cache) BatchUpdateObjects(objects []*APIObject) error {
+	err := c.db.Update(func(tx *bolt.Tx) error {
+		for _, object := range objects {
+			if err := boltUpdateObject(tx, object); nil != err {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not update/save objects: %v", err)
 	}
 
 	return nil
@@ -217,13 +305,13 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 // StoreStartPageToken stores the page token for changes
 func (c *Cache) StoreStartPageToken(token string) error {
 	Log.Debugf("Storing page token %v in cache", token)
-	db := c.session.DB(c.dbName).C("page_token")
+	err := c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bPageToken)
+		return b.Put([]byte("t"), []byte(token))
+	})
 
-	if _, err := db.Upsert(bson.M{"_id": "t"}, &PageToken{ID: "t", Token: token}); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.StoreStartPageToken(token)
-		}
+	if nil != err {
+		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not store token %v", token)
 	}
 
@@ -232,18 +320,19 @@ func (c *Cache) StoreStartPageToken(token string) error {
 
 // GetStartPageToken gets the start page token
 func (c *Cache) GetStartPageToken() (string, error) {
-	Log.Debugf("Getting start page token from cache")
-	db := c.session.DB(c.dbName).C("page_token")
+	var pageToken string
 
-	var pageToken PageToken
-	if err := db.Find(nil).One(&pageToken); nil != err {
-		if io.EOF == err {
-			c.session.Refresh()
-			return c.GetStartPageToken()
-		}
-		return "", fmt.Errorf("Could not get token from cache")
+	Log.Debugf("Getting start page token from cache")
+	c.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bPageToken)
+		v := b.Get([]byte("t"))
+		pageToken = string(v)
+		return nil
+	})
+	if pageToken == "" {
+		return "", fmt.Errorf("Could not get token from cache, token is empty")
 	}
 
-	Log.Tracef("Got start page token %v", pageToken.Token)
-	return pageToken.Token, nil
+	Log.Tracef("Got start page token %v", pageToken)
+	return pageToken, nil
 }
