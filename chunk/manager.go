@@ -42,8 +42,8 @@ func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, clien
 	if chunkSize%1024 != 0 {
 		return nil, fmt.Errorf("Chunk size must be divideable by 1024")
 	}
-	if maxChunks < 10 {
-		return nil, fmt.Errorf("Max chunk count should be at least 10")
+	if maxChunks < 2 || maxChunks < loadAhead {
+		return nil, fmt.Errorf("max-chunk must be greater than 2 and bigger than the load ahead value")
 	}
 
 	downloader, err := NewDownloader(threads, client)

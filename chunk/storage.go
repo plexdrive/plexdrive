@@ -11,8 +11,6 @@ import (
 
 	"time"
 
-	"sort"
-
 	. "github.com/claudetech/loggo/default"
 )
 
@@ -23,18 +21,14 @@ type Storage struct {
 	queue      chan *Item
 	chunks     map[string][]byte
 	chunksLock sync.Mutex
-	toc        map[string]time.Time
+	toc        map[string]bool
 	tocLock    sync.Mutex
+	stack      *Stack
 }
 
 type Item struct {
 	id    string
 	bytes []byte
-}
-
-type SortChunk struct {
-	id     string
-	access time.Time
 }
 
 func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
@@ -44,11 +38,11 @@ func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 		MaxChunks: maxChunks,
 		queue:     make(chan *Item, 100),
 		chunks:    make(map[string][]byte),
-		toc:       make(map[string]time.Time),
+		toc:       make(map[string]bool),
+		stack:     NewStack(),
 	}
 
 	go storage.thread()
-	go storage.cleanThread()
 
 	return &storage
 }
@@ -66,7 +60,7 @@ func (s *Storage) ExistsOrCreate(id string) bool {
 		s.tocLock.Unlock()
 		return true
 	}
-	s.toc[id] = time.Now()
+	s.toc[id] = true
 	s.tocLock.Unlock()
 	return false
 }
@@ -122,12 +116,6 @@ func (s *Storage) thread() {
 	}
 }
 
-func (s *Storage) cleanThread() {
-	for _ = range time.Tick(1 * time.Second) {
-		s.deleteChunks()
-	}
-}
-
 func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
 	bytes, exists := s.chunks[id]
 	if !exists {
@@ -152,6 +140,8 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 	buf := make([]byte, size)
 	n, err := f.ReadAt(buf, offset)
 	if n > 0 && (nil == err || io.EOF == err || io.ErrUnexpectedEOF == err) {
+		s.stack.Touch(id)
+
 		eOffset := int64(math.Min(float64(size), float64(len(buf))))
 		return buf[:eOffset], true
 	}
@@ -162,6 +152,24 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 
 func (s *Storage) storeToDisk(id string, bytes []byte) error {
 	filename := filepath.Join(s.ChunkPath, id)
+
+	if s.stack.Len() >= s.MaxChunks {
+		deleteID := s.stack.Pop()
+
+		if "" != deleteID {
+			filename := filepath.Join(s.ChunkPath, deleteID)
+
+			Log.Debugf("Deleting chunk %v", filename)
+			if err := os.Remove(filename); nil != err {
+				Log.Debugf("%v", err)
+				Log.Warningf("Could not delete chunk %v", filename)
+			}
+
+			s.tocLock.Lock()
+			delete(s.toc, deleteID)
+			s.tocLock.Unlock()
+		}
+	}
 
 	if _, err := os.Stat(s.ChunkPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(s.ChunkPath, 0777); nil != err {
@@ -175,6 +183,8 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 			Log.Debugf("%v", err)
 			return fmt.Errorf("Could not write chunk temp file %v", filename)
 		}
+
+		s.stack.Push(id)
 	}
 
 	s.chunksLock.Lock()
@@ -182,51 +192,4 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 	s.chunksLock.Unlock()
 
 	return nil
-}
-
-func (s *Storage) deleteChunks() {
-	var chunkList []*SortChunk
-	filepath.Walk(s.ChunkPath, func(path string, f os.FileInfo, err error) error {
-		if nil != err {
-			Log.Tracef("%v", err)
-			return filepath.SkipDir
-		}
-		if nil == f {
-			return filepath.SkipDir
-		}
-
-		if !f.IsDir() {
-			chunkList = append(chunkList, &SortChunk{
-				id:     f.Name(),
-				access: f.ModTime(),
-			})
-		}
-		return nil
-	})
-
-	length := len(chunkList)
-
-	if length > s.MaxChunks {
-		sort.Slice(chunkList, func(a, b int) bool {
-			return chunkList[a].access.Before(chunkList[b].access)
-		})
-
-		for i := 0; i < s.MaxChunks-length; i++ {
-			chunk := chunkList[i]
-
-			filename := filepath.Join(s.ChunkPath, chunk.id)
-			if "" != filename {
-				Log.Debugf("Deleting chunk %v", filename)
-
-				s.tocLock.Lock()
-				delete(s.toc, chunk.id)
-				s.tocLock.Unlock()
-
-				if err := os.Remove(filename); nil != err {
-					Log.Debugf("%v", err)
-					Log.Warningf("Could not delete chunk %v", filename)
-				}
-			}
-		}
-	}
 }

@@ -46,14 +46,14 @@ func main() {
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()*2, "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 4, "The number of chunks that should be read ahead")
+	argMaxChunks := flag.Int("max-chunks", 10, "The maximum number of chunks to be stored on disk")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
-	argMaxChunks := flag.Int("max-chunks", 10, "The maximum number of chunks to keep (clean up is async)")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
-	argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
+	// argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
 	flag.Parse()
 
 	// display version information
@@ -127,13 +127,15 @@ func main() {
 	Log.Debugf("mongo-password       : %v", *argMongoPass)
 	Log.Debugf("mongo-database       : %v", *argMongoDatabase)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
-	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
+	Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
+	Log.Debugf("chunk-load-ahead     : %v", *argChunkLoadAhead)
 	Log.Debugf("max-chunks           : %v", *argMaxChunks)
+	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
 	Log.Debugf("Umask                : %v", umask)
-	Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
+	// Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
 	// version missing here
 
 	// create all directories
