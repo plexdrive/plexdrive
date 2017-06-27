@@ -12,81 +12,20 @@ import (
 
 // Downloader handles concurrent chunk downloads
 type Downloader struct {
-	Client  *http.Client
-	hpQueue chan *download
-	lpQueue chan *download
-}
-
-type download struct {
-	request  *Request
-	response chan *response
-}
-
-type response struct {
-	bytes []byte
-	err   error
+	Client *http.Client
 }
 
 // NewDownloader creates a new download manager
 func NewDownloader(threads int, client *http.Client) (*Downloader, error) {
 	manager := Downloader{
-		Client:  client,
-		hpQueue: make(chan *download, 100),
-		lpQueue: make(chan *download, 100),
-	}
-
-	if threads < 1 {
-		return nil, fmt.Errorf("Number of threads for download manager must not be < 1")
-	}
-
-	for i := 0; i < threads/2; i++ {
-		go manager.thread()
+		Client: client,
 	}
 
 	return &manager, nil
 }
 
 func (d *Downloader) Download(req *Request) ([]byte, error) {
-	rc := make(chan *response)
-
-	request := download{
-		request:  req,
-		response: rc,
-	}
-
-	if !req.preload {
-		d.hpQueue <- &request
-	} else {
-		d.lpQueue <- &request
-	}
-
-	res := <-rc
-	return res.bytes, res.err
-}
-
-func (d *Downloader) thread() {
-	for {
-		select {
-		case download := <-d.hpQueue:
-			bytes, err := downloadFromAPI(d.Client, download.request, 0)
-			download.response <- &response{
-				bytes: bytes,
-				err:   err,
-			}
-			close(download.response)
-			break
-		case download := <-d.lpQueue:
-			bytes, err := downloadFromAPI(d.Client, download.request, 0)
-			download.response <- &response{
-				bytes: bytes,
-				err:   err,
-			}
-			close(download.response)
-			break
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
+	return downloadFromAPI(d.Client, req, 0)
 }
 
 func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte, error) {

@@ -20,7 +20,6 @@ import (
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
 	"github.com/dweidenfeld/plexdrive/chunk"
-	"github.com/dweidenfeld/plexdrive/clean"
 	"github.com/dweidenfeld/plexdrive/config"
 	"github.com/dweidenfeld/plexdrive/drive"
 	"github.com/dweidenfeld/plexdrive/mount"
@@ -48,9 +47,7 @@ func main() {
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU(), "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 4, "The number of chunks that should be read ahead")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
-	argClearInterval := flag.Duration("clear-chunk-interval", 1*time.Minute, "The time to wait till clearing the chunk directory")
-	argClearChunkAge := flag.Duration("clear-chunk-age", 30*time.Minute, "The maximum age of a cached chunk file")
-	// argClearChunkMaxSize := flag.String("clear-chunk-max-size", "", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
+	argMaxTempSize := flag.String("max-temp-size", "1G", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
@@ -131,9 +128,7 @@ func main() {
 	Log.Debugf("mongo-database       : %v", *argMongoDatabase)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
-	Log.Debugf("clear-chunk-interval : %v", *argClearInterval)
-	Log.Debugf("clear-chunk-age      : %v", *argClearChunkAge)
-	// Log.Debugf("clear-chunk-max-size : %v", *argClearChunkMaxSize)
+	Log.Debugf("clear-chunk-max-size : %v", *argMaxTempSize)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
@@ -155,11 +150,11 @@ func main() {
 		Log.Errorf("%v", err)
 		os.Exit(2)
 	}
-	// clearMaxChunkSize, err := parseSizeArg(*argClearChunkMaxSize)
-	// if nil != err {
-	// 	Log.Errorf("%v", err)
-	// 	os.Exit(2)
-	// }
+	maxTempSize, err := parseSizeArg(*argMaxTempSize)
+	if nil != err {
+		Log.Errorf("%v", err)
+		os.Exit(2)
+	}
 
 	// read the configuration
 	configPath := filepath.Join(*argConfigPath, "config.json")
@@ -186,7 +181,13 @@ func main() {
 		os.Exit(4)
 	}
 
-	chunkManager, err := chunk.NewManager(chunkPath, chunkSize, *argChunkLoadAhead, *argChunkLoadThreads, client.GetNativeClient())
+	chunkManager, err := chunk.NewManager(
+		chunkPath,
+		chunkSize,
+		*argChunkLoadAhead,
+		*argChunkLoadThreads,
+		client.GetNativeClient(),
+		maxTempSize)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
@@ -194,7 +195,6 @@ func main() {
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
-	go clean.CleanChunkDir(chunkPath, *argClearInterval, *argClearChunkAge, 0 /*, clearMaxChunkSize*/)
 	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask); nil != err {
 		Log.Debugf("%v", err)
 		os.Exit(5)
