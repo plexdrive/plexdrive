@@ -11,11 +11,10 @@ import (
 
 	"time"
 
+	"sort"
+
 	. "github.com/claudetech/loggo/default"
 )
-
-const RAM = 1
-const DISK = 2
 
 type Storage struct {
 	ChunkPath  string
@@ -28,14 +27,14 @@ type Storage struct {
 	tocLock    sync.Mutex
 }
 
-type ChunkInfo struct {
-	location int
-	access   time.Time
-}
-
 type Item struct {
 	id    string
 	bytes []byte
+}
+
+type SortChunk struct {
+	id     string
+	access time.Time
 }
 
 func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
@@ -124,10 +123,8 @@ func (s *Storage) thread() {
 }
 
 func (s *Storage) cleanThread() {
-	for _ = range time.Tick(1 * time.Second) {
-		if len(s.toc) > s.MaxChunks {
-
-		}
+	for _ = range time.Tick(10 * time.Second) {
+		s.deleteChunks()
 	}
 }
 
@@ -187,9 +184,8 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 	return nil
 }
 
-func (s *Storage) deleteOldestChunk() {
-	var id string
-	oldestTime := time.Now()
+func (s *Storage) deleteChunks() {
+	var chunkList []*SortChunk
 	filepath.Walk(s.ChunkPath, func(path string, f os.FileInfo, err error) error {
 		if nil != err {
 			Log.Tracef("%v", err)
@@ -200,24 +196,37 @@ func (s *Storage) deleteOldestChunk() {
 		}
 
 		if !f.IsDir() {
-			if f.ModTime().Before(oldestTime) {
-				id = f.Name()
-			}
+			chunkList = append(chunkList, &SortChunk{
+				id:     f.Name(),
+				access: f.ModTime(),
+			})
 		}
 		return nil
 	})
 
-	filename := filepath.Join(s.ChunkPath, id)
+	length := len(chunkList)
 
-	if "" != filename {
-		Log.Debugf("Deleting chunk %v", filename)
-		if err := os.Remove(filename); nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not delete chunk %v", filename)
+	if length > s.MaxChunks {
+		sort.Slice(chunkList, func(a, b int) bool {
+			return chunkList[a].access.Before(chunkList[b].access)
+		})
+
+		for i := 0; i < s.MaxChunks-length; i++ {
+			chunk := chunkList[i]
+
+			filename := filepath.Join(s.ChunkPath, chunk.id)
+			if "" != filename {
+				Log.Debugf("Deleting chunk %v", filename)
+
+				s.tocLock.Lock()
+				delete(s.toc, chunk.id)
+				s.tocLock.Unlock()
+
+				if err := os.Remove(filename); nil != err {
+					Log.Debugf("%v", err)
+					Log.Warningf("Could not delete chunk %v", filename)
+				}
+			}
 		}
-
-		s.tocLock.Lock()
-		delete(s.toc, id)
-		s.tocLock.Unlock()
 	}
 }
