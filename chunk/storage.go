@@ -24,7 +24,7 @@ type Storage struct {
 	queue       chan *Item
 	chunks      map[string][]byte
 	chunksLock  sync.Mutex
-	toc         map[string]*ChunkInfo
+	toc         map[string]bool
 	tocLock     sync.Mutex
 }
 
@@ -45,7 +45,7 @@ func NewStorage(chunkPath string, chunkSize, maxTempSize int64) *Storage {
 		MaxTempSize: maxTempSize,
 		queue:       make(chan *Item, 100),
 		chunks:      make(map[string][]byte),
-		toc:         make(map[string]*ChunkInfo),
+		toc:         make(map[string]bool),
 	}
 
 	go storage.thread()
@@ -66,10 +66,7 @@ func (s *Storage) ExistsOrCreate(id string) bool {
 		s.tocLock.Unlock()
 		return true
 	}
-	s.toc[id] = &ChunkInfo{
-		location: RAM,
-		access:   time.Now(),
-	}
+	s.toc[id] = true
 	s.tocLock.Unlock()
 	return false
 }
@@ -93,25 +90,23 @@ func (s *Storage) Get(id string, offset, size int64) ([]byte, error) {
 	go func() {
 		for {
 			s.tocLock.Lock()
-			chunkInfo, exists := s.toc[id]
+			_, exists := s.toc[id]
 			s.tocLock.Unlock()
 			if exists {
-				if RAM == chunkInfo.location {
-					bytes, exists := s.loadFromRAM(id, offset, size)
-					if exists {
-						res <- bytes
-						return
-					}
-				} else if DISK == chunkInfo.location {
-					bytes, exists := s.loadFromDisk(id, offset, size)
-					if exists {
-						res <- bytes
-						return
-					}
+				bytes, exists := s.loadFromRAM(id, offset, size)
+				if exists {
+					res <- bytes
+					return
+				}
+
+				bytes, exists = s.loadFromDisk(id, offset, size)
+				if exists {
+					res <- bytes
+					return
 				}
 			}
 
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 
@@ -160,9 +155,9 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 }
 
 func (s *Storage) storeToDisk(id string, bytes []byte) error {
-	if s.getTempSize()+s.ChunkSize*2 > s.MaxTempSize {
-		s.deleteOldestChunk()
-	}
+	// if s.getTempSize()+s.ChunkSize*2 > s.MaxTempSize {
+	// 	s.deleteOldestChunk()
+	// }
 
 	filename := filepath.Join(s.ChunkPath, id)
 
@@ -180,13 +175,6 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 		}
 	}
 
-	s.tocLock.Lock()
-	info := s.toc[id]
-	if nil != info {
-		info.location = DISK
-	}
-	s.tocLock.Unlock()
-
 	s.chunksLock.Lock()
 	delete(s.chunks, id)
 	s.chunksLock.Unlock()
@@ -194,37 +182,37 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 	return nil
 }
 
-func (s *Storage) deleteOldestChunk() {
-	var oldestID string
-	oldestTime := time.Now()
-	for id, info := range s.toc {
-		if info.location == DISK && info.access.Before(oldestTime) {
-			oldestID = id
-		}
-	}
+// func (s *Storage) deleteOldestChunk() {
+// 	var oldestID string
+// 	oldestTime := time.Now()
+// 	for id, info := range s.toc {
+// 		if info.location == DISK && info.access.Before(oldestTime) {
+// 			oldestID = id
+// 		}
+// 	}
 
-	filename := filepath.Join(s.ChunkPath, oldestID)
+// 	filename := filepath.Join(s.ChunkPath, oldestID)
 
-	Log.Debugf("Deleting chunk %v", filename)
-	if err := os.Remove(filename); nil != err {
-		Log.Debugf("%v", err)
-		Log.Warningf("Could not delete chunk %v", filename)
-	}
+// 	Log.Debugf("Deleting chunk %v", filename)
+// 	if err := os.Remove(filename); nil != err {
+// 		Log.Debugf("%v", err)
+// 		Log.Warningf("Could not delete chunk %v", filename)
+// 	}
 
-	s.tocLock.Lock()
-	delete(s.toc, oldestID)
-	s.tocLock.Unlock()
-}
+// 	s.tocLock.Lock()
+// 	delete(s.toc, oldestID)
+// 	s.tocLock.Unlock()
+// }
 
-func (s *Storage) getTempSize() int64 {
-	count := int64(0)
-	s.tocLock.Lock()
-	for _, info := range s.toc {
-		if info.location == DISK {
-			count++
-		}
-	}
-	s.tocLock.Unlock()
+// func (s *Storage) getTempSize() int64 {
+// 	count := int64(0)
+// 	s.tocLock.Lock()
+// 	for _, info := range s.toc {
+// 		if info.location == DISK {
+// 			count++
+// 		}
+// 	}
+// 	s.tocLock.Unlock()
 
-	return count * s.ChunkSize
-}
+// 	return count * s.ChunkSize
+// }

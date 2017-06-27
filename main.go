@@ -44,7 +44,7 @@ func main() {
 	argMongoPass := flag.String("mongo-password", "", "MongoDB password")
 	argMongoDatabase := flag.String("mongo-database", "plexdrive", "MongoDB database")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
-	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU(), "The number of threads to use for downloading chunks")
+	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()*2, "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 4, "The number of chunks that should be read ahead")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argMaxTempSize := flag.String("max-temp-size", "1G", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
