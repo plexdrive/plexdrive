@@ -32,7 +32,7 @@ type Request struct {
 }
 
 // NewManager creates a new chunk manager
-func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, client *http.Client, maxTempSize int64) (*Manager, error) {
+func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, client *http.Client, maxChunks int) (*Manager, error) {
 	if "" == chunkPath {
 		return nil, fmt.Errorf("Path to chunk file must not be empty")
 	}
@@ -42,8 +42,8 @@ func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, clien
 	if chunkSize%1024 != 0 {
 		return nil, fmt.Errorf("Chunk size must be divideable by 1024")
 	}
-	if maxTempSize <= chunkSize*4 {
-		return nil, fmt.Errorf("Max temp size should be at least 4 * the chunk size")
+	if maxChunks < 10 {
+		return nil, fmt.Errorf("Max chunk count should be at least 10")
 	}
 
 	downloader, err := NewDownloader(threads, client)
@@ -58,7 +58,7 @@ func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, clien
 		downloader:   downloader,
 		queue:        make(chan *Request, 100),
 		preloadQueue: make(chan *Request, 100),
-		storage:      NewStorage(chunkPath, chunkSize, maxTempSize),
+		storage:      NewStorage(chunkPath, chunkSize, maxChunks),
 	}
 
 	if err := manager.storage.Clear(); nil != err {

@@ -47,7 +47,7 @@ func main() {
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()*2, "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 4, "The number of chunks that should be read ahead")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
-	argMaxTempSize := flag.String("max-temp-size", "1G", "The maximum size of the temporary chunk directory (units: B, K, M, G)")
+	argMaxChunks := flag.Int("max-chunks", 10, "The maximum number of chunks to keep (clean up is async)")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
@@ -128,7 +128,7 @@ func main() {
 	Log.Debugf("mongo-database       : %v", *argMongoDatabase)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
-	Log.Debugf("clear-chunk-max-size : %v", *argMaxTempSize)
+	Log.Debugf("max-chunks           : %v", *argMaxChunks)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
@@ -146,11 +146,6 @@ func main() {
 
 	// set the global buffer configuration
 	chunkSize, err := parseSizeArg(*argChunkSize)
-	if nil != err {
-		Log.Errorf("%v", err)
-		os.Exit(2)
-	}
-	maxTempSize, err := parseSizeArg(*argMaxTempSize)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(2)
@@ -187,7 +182,7 @@ func main() {
 		*argChunkLoadAhead,
 		*argChunkLoadThreads,
 		client.GetNativeClient(),
-		maxTempSize)
+		*argMaxChunks)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
