@@ -14,13 +14,15 @@ import (
 
 // Manager manages chunks on disk
 type Manager struct {
-	ChunkPath    string
-	ChunkSize    int64
-	LoadAhead    int
-	downloader   *Downloader
-	queue        chan *Request
-	preloadQueue chan *Request
-	storage      *Storage
+	ChunkPath      string
+	ChunkSize      int64
+	LoadAhead      int
+	Timeout        time.Duration
+	TimeoutRetries int
+	downloader     *Downloader
+	queue          chan *Request
+	preloadQueue   chan *Request
+	storage        *Storage
 }
 
 type Request struct {
@@ -32,7 +34,16 @@ type Request struct {
 }
 
 // NewManager creates a new chunk manager
-func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, client *http.Client, maxChunks int) (*Manager, error) {
+func NewManager(
+	chunkPath string,
+	chunkSize int64,
+	loadAhead,
+	threads int,
+	client *http.Client,
+	maxChunks int,
+	timeout time.Duration,
+	timeoutRetries int) (*Manager, error) {
+
 	if "" == chunkPath {
 		return nil, fmt.Errorf("Path to chunk file must not be empty")
 	}
@@ -52,13 +63,15 @@ func NewManager(chunkPath string, chunkSize int64, loadAhead, threads int, clien
 	}
 
 	manager := Manager{
-		ChunkPath:    chunkPath,
-		ChunkSize:    chunkSize,
-		LoadAhead:    loadAhead,
-		downloader:   downloader,
-		queue:        make(chan *Request, 100),
-		preloadQueue: make(chan *Request, 100),
-		storage:      NewStorage(chunkPath, chunkSize, maxChunks),
+		ChunkPath:      chunkPath,
+		ChunkSize:      chunkSize,
+		LoadAhead:      loadAhead,
+		Timeout:        timeout,
+		TimeoutRetries: timeoutRetries,
+		downloader:     downloader,
+		queue:          make(chan *Request, 100),
+		preloadQueue:   make(chan *Request, 100),
+		storage:        NewStorage(chunkPath, chunkSize, maxChunks),
 	}
 
 	if err := manager.storage.Clear(); nil != err {
@@ -101,7 +114,14 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 		}
 	}
 
-	return m.storage.Get(id, chunkOffset, size)
+	bytes, err := m.storage.Get(id, chunkOffset, size, m.Timeout)
+	retryCount := 0
+	for err == TIMEOUT && retryCount < m.TimeoutRetries {
+		Log.Debugf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
+		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
+		retryCount++
+	}
+	return bytes, err
 }
 
 func (m *Manager) thread() {

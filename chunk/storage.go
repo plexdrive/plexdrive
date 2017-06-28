@@ -1,6 +1,7 @@
 package chunk
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,6 +14,8 @@ import (
 
 	. "github.com/claudetech/loggo/default"
 )
+
+var TIMEOUT = errors.New("timeout")
 
 type Storage struct {
 	ChunkPath  string
@@ -78,7 +81,7 @@ func (s *Storage) Store(id string, bytes []byte) error {
 	return nil
 }
 
-func (s *Storage) Get(id string, offset, size int64) ([]byte, error) {
+func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
 	res := make(chan []byte)
 
 	go func() {
@@ -104,7 +107,12 @@ func (s *Storage) Get(id string, offset, size int64) ([]byte, error) {
 		}
 	}()
 
-	return <-res, nil
+	select {
+	case r := <-res:
+		return r, nil
+	case <-time.After(timeout):
+		return nil, TIMEOUT
+	}
 }
 
 func (s *Storage) thread() {

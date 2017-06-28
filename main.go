@@ -44,8 +44,10 @@ func main() {
 	argMongoPass := flag.String("mongo-password", "", "MongoDB password")
 	argMongoDatabase := flag.String("mongo-database", "plexdrive", "MongoDB database")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
-	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()*2, "The number of threads to use for downloading chunks")
-	argChunkLoadAhead := flag.Int("chunk-load-ahead", 4, "The number of chunks that should be read ahead")
+	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU(), "The number of threads to use for downloading chunks")
+	argChunkLoadAhead := flag.Int("chunk-load-ahead", (runtime.NumCPU()/2)-1, "The number of chunks that should be read ahead")
+	argChunkLoadTimeout := flag.Duration("chunk-load-timeout", 30*time.Second, "Duration to wait for a chunk to be loaded")
+	argChunkLoadRetries := flag.Int("chunk-load-retries", 3, "Number of retries to load a chunk")
 	argMaxChunks := flag.Int("max-chunks", 10, "The maximum number of chunks to be stored on disk")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
@@ -129,6 +131,8 @@ func main() {
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
 	Log.Debugf("chunk-load-ahead     : %v", *argChunkLoadAhead)
+	Log.Debugf("chunk-load-timeout   : %v", *argChunkLoadTimeout)
+	Log.Debugf("chunk-load-retries   : %v", *argChunkLoadRetries)
 	Log.Debugf("max-chunks           : %v", *argMaxChunks)
 	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
 	Log.Debugf("fuse-options         : %v", *argMountOptions)
@@ -184,7 +188,9 @@ func main() {
 		*argChunkLoadAhead,
 		*argChunkLoadThreads,
 		client.GetNativeClient(),
-		*argMaxChunks)
+		*argMaxChunks,
+		*argChunkLoadTimeout,
+		*argChunkLoadRetries)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
