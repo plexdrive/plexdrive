@@ -69,8 +69,8 @@ func NewManager(
 		Timeout:        timeout,
 		TimeoutRetries: timeoutRetries,
 		downloader:     downloader,
-		queue:          make(chan *Request, 100),
-		preloadQueue:   make(chan *Request, 100),
+		queue:          make(chan *Request, threads*100),
+		preloadQueue:   make(chan *Request, threads*loadAhead*100),
 		storage:        NewStorage(chunkPath, chunkSize, maxChunks),
 	}
 
