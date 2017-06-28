@@ -117,7 +117,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	bytes, err := m.storage.Get(id, chunkOffset, size, m.Timeout)
 	retryCount := 0
 	for err == TIMEOUT && retryCount < m.TimeoutRetries {
-		Log.Debugf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
+		Log.Warningf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
 		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
 		retryCount++
 	}
