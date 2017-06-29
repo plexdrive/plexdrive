@@ -4,7 +4,7 @@
 You have to install fuse on your system to run plexdrive/rclone. Please check your system on how to install fuse. 
 Normally you can use:
 ```
-apt-get install fuse
+apt-get install fuse mongodb
 ```
 
 ## Mounting the unencrypted volume with plexdrive
