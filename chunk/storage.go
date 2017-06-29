@@ -85,7 +85,7 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 	res := make(chan []byte)
 
 	go func() {
-		for _ = range time.Tick(time.Millisecond) {
+		for {
 			s.tocLock.Lock()
 			_, exists := s.toc[id]
 			s.tocLock.Unlock()
@@ -93,15 +93,19 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 				bytes, exists := s.loadFromRAM(id, offset, size)
 				if exists {
 					res <- bytes
+					close(res)
 					return
 				}
 
 				bytes, exists = s.loadFromDisk(id, offset, size)
 				if exists {
 					res <- bytes
+					close(res)
 					return
 				}
 			}
+
+			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 
