@@ -4,11 +4,17 @@
 You have to install fuse on your system to run plexdrive/rclone. Please check your system on how to install fuse. 
 Normally you can use:
 ```
-apt-get install fuse
+apt-get install fuse mongodb
 ```
 
 ## Mounting the unencrypted volume with plexdrive
-1. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
+1. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases) make it executeable and copy it to /usr/bin or location of your choice.
+```
+chmod +x ./plexdrive-linux-amd64
+```
+```
+cp ./plexdrive-linux-amd64 /usr/bin/plexdrive
+```
 2. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 3. Create a systemd startup script for automatic startup on boot
 ```
