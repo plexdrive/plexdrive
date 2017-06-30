@@ -74,7 +74,8 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		if strings.Contains(body, "dailyLimitExceeded") ||
 			strings.Contains(body, "userRateLimitExceeded") ||
 			strings.Contains(body, "rateLimitExceeded") ||
-			strings.Contains(body, "backendError") {
+			strings.Contains(body, "backendError") ||
+			strings.Contains(body, "internalError") {
 			if 0 == delay {
 				delay = 1
 			} else {
