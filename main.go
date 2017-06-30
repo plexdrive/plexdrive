@@ -39,10 +39,6 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
-	argMongoURL := flag.StringP("mongo-host", "m", "localhost", "MongoDB host")
-	argMongoUser := flag.String("mongo-user", "", "MongoDB username")
-	argMongoPass := flag.String("mongo-password", "", "MongoDB password")
-	argMongoDatabase := flag.String("mongo-database", "plexdrive", "MongoDB database")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU(), "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 2, "The number of chunks that should be read ahead")
@@ -70,16 +66,6 @@ func main() {
 		flag.Usage()
 		fmt.Println()
 		panic(fmt.Errorf("Mountpoint not specified"))
-	}
-	if "" == *argMongoURL {
-		flag.Usage()
-		fmt.Println()
-		panic(fmt.Errorf("MongoDB URL not specified"))
-	}
-	if "" == *argMongoDatabase {
-		flag.Usage()
-		fmt.Println()
-		panic(fmt.Errorf("MongoDB database not specified"))
 	}
 
 	// calculate uid / gid
@@ -124,10 +110,6 @@ func main() {
 	Log.Debugf("root-node-id         : %v", *argRootNodeID)
 	Log.Debugf("config               : %v", *argConfigPath)
 	Log.Debugf("temp                 : %v", *argTempPath)
-	Log.Debugf("mongo-host           : %v", *argMongoURL)
-	Log.Debugf("mongo-user           : %v", *argMongoUser)
-	Log.Debugf("mongo-password       : %v", *argMongoPass)
-	Log.Debugf("mongo-database       : %v", *argMongoDatabase)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
 	Log.Debugf("chunk-load-ahead     : %v", *argChunkLoadAhead)
@@ -169,7 +151,7 @@ func main() {
 		}
 	}
 
-	cache, err := drive.NewCache(*argMongoURL, *argMongoUser, *argMongoPass, *argMongoDatabase, *argConfigPath, *argLogLevel > 3)
+	cache, err := drive.NewCache(*argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)
