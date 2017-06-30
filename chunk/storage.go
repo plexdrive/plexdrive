@@ -15,8 +15,10 @@ import (
 	. "github.com/claudetech/loggo/default"
 )
 
-var TIMEOUT = errors.New("timeout")
+// ErrTimeout is a timeout error
+var ErrTimeout = errors.New("timeout")
 
+// Storage is a chunk storage
 type Storage struct {
 	ChunkPath  string
 	ChunkSize  int64
@@ -29,11 +31,13 @@ type Storage struct {
 	stack      *Stack
 }
 
+// Item represents a chunk in RAM
 type Item struct {
 	id    string
 	bytes []byte
 }
 
+// NewStorage creates a new storage
 func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 	storage := Storage{
 		ChunkPath: chunkPath,
@@ -50,6 +54,7 @@ func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 	return &storage
 }
 
+// Clear removes all old chunks on disk (will be called on each program start)
 func (s *Storage) Clear() error {
 	if err := os.RemoveAll(s.ChunkPath); nil != err {
 		return fmt.Errorf("Could not clear old chunks from disk")
@@ -57,6 +62,7 @@ func (s *Storage) Clear() error {
 	return nil
 }
 
+// ExistsOrCreate check if an item already exists, otherwise it will create a placeholder
 func (s *Storage) ExistsOrCreate(id string) bool {
 	s.tocLock.Lock()
 	if _, exists := s.toc[id]; exists {
@@ -68,6 +74,7 @@ func (s *Storage) ExistsOrCreate(id string) bool {
 	return false
 }
 
+// Store stores a chunk in the RAM and adds it to the disk storage queue
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.chunksLock.Lock()
 	s.chunks[id] = bytes
@@ -81,12 +88,14 @@ func (s *Storage) Store(id string, bytes []byte) error {
 	return nil
 }
 
+// Error is called to remove an item from the index if there has been an issue downloading the chunk
 func (s *Storage) Error(id string, err error) {
 	s.tocLock.Lock()
 	s.toc[id] = err
 	s.tocLock.Unlock()
 }
 
+// Get gets a chunk content (blocking)
 func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
 	res := make(chan []byte)
 	ec := make(chan error)
@@ -131,7 +140,7 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 		return nil, err
 	case <-time.After(timeout):
 		s.deleteFromToc(id)
-		return nil, TIMEOUT
+		return nil, ErrTimeout
 	}
 }
 

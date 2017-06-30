@@ -5,17 +5,20 @@ import (
 	"sync"
 )
 
+// Stack is a thread safe list/stack implementation
 type Stack struct {
 	items *list.List
 	lock  sync.Mutex
 }
 
+// NewStack creates a new stack
 func NewStack() *Stack {
 	return &Stack{
 		items: list.New(),
 	}
 }
 
+// Len returns the length of the current stack
 func (s *Stack) Len() int {
 	s.lock.Lock()
 	count := s.items.Len()
@@ -23,6 +26,7 @@ func (s *Stack) Len() int {
 	return count
 }
 
+// Pop pops the first item from the stack
 func (s *Stack) Pop() string {
 	s.lock.Lock()
 	item := s.items.Front()
@@ -36,6 +40,7 @@ func (s *Stack) Pop() string {
 	return item.Value.(string)
 }
 
+// Touch moves the specified item to the last position of the stack
 func (s *Stack) Touch(id string) {
 	s.lock.Lock()
 	for item := s.items.Front(); item != nil; item = item.Next() {
@@ -47,6 +52,7 @@ func (s *Stack) Touch(id string) {
 	s.lock.Unlock()
 }
 
+// Push adds a new item to the last position of the stack
 func (s *Stack) Push(id string) {
 	s.lock.Lock()
 	for item := s.items.Front(); item != nil; item = item.Next() {

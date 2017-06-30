@@ -24,6 +24,7 @@ func NewDownloader(threads int, client *http.Client) (*Downloader, error) {
 	return &manager, nil
 }
 
+// Download starts a new download request
 func (d *Downloader) Download(req *Request) ([]byte, error) {
 	return downloadFromAPI(d.Client, req, 0)
 }

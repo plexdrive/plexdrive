@@ -25,6 +25,7 @@ type Manager struct {
 	storage        *Storage
 }
 
+// Request represents a chunk request
 type Request struct {
 	id          string
 	object      *drive.APIObject
@@ -85,6 +86,7 @@ func NewManager(
 	return &manager, nil
 }
 
+// GetChunk loads one chunk and starts the preload for the next chunks
 func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte, error) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
@@ -116,7 +118,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 
 	bytes, err := m.storage.Get(id, chunkOffset, size, m.Timeout)
 	retryCount := 0
-	for err == TIMEOUT && retryCount < m.TimeoutRetries {
+	for err == ErrTimeout && retryCount < m.TimeoutRetries {
 		Log.Warningf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
 		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
 		retryCount++
