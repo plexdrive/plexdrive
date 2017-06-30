@@ -147,6 +147,7 @@ func (m *Manager) checkChunk(req *Request) {
 	bytes, err := m.downloader.Download(req)
 	if nil != err {
 		Log.Warningf("%v", err)
+		m.storage.Error(req.id, err)
 	}
 
 	if err := m.storage.Store(req.id, bytes); nil != err {

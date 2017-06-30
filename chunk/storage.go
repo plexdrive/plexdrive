@@ -24,7 +24,7 @@ type Storage struct {
 	queue      chan *Item
 	chunks     map[string][]byte
 	chunksLock sync.Mutex
-	toc        map[string]bool
+	toc        map[string]error
 	tocLock    sync.Mutex
 	stack      *Stack
 }
@@ -41,7 +41,7 @@ func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 		MaxChunks: maxChunks,
 		queue:     make(chan *Item, 100),
 		chunks:    make(map[string][]byte),
-		toc:       make(map[string]bool),
+		toc:       make(map[string]error),
 		stack:     NewStack(),
 	}
 
@@ -63,7 +63,7 @@ func (s *Storage) ExistsOrCreate(id string) bool {
 		s.tocLock.Unlock()
 		return true
 	}
-	s.toc[id] = true
+	s.toc[id] = nil
 	s.tocLock.Unlock()
 	return false
 }
@@ -81,18 +81,26 @@ func (s *Storage) Store(id string, bytes []byte) error {
 	return nil
 }
 
+func (s *Storage) Error(id string, err error) {
+	s.tocLock.Lock()
+	s.toc[id] = err
+	s.tocLock.Unlock()
+}
+
 func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
 	res := make(chan []byte)
+	ec := make(chan error)
 
 	go func() {
 		for {
 			s.tocLock.Lock()
-			_, exists := s.toc[id]
+			err, exists := s.toc[id]
 			s.tocLock.Unlock()
-			if exists {
+			if nil == err && exists {
 				bytes, exists := s.loadFromRAM(id, offset, size)
 				if exists {
 					res <- bytes
+					close(ec)
 					close(res)
 					return
 				}
@@ -100,9 +108,15 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 				bytes, exists = s.loadFromDisk(id, offset, size)
 				if exists {
 					res <- bytes
+					close(ec)
 					close(res)
 					return
 				}
+			} else if nil != err {
+				ec <- err
+				close(ec)
+				close(res)
+				return
 			}
 
 			time.Sleep(10 * time.Millisecond)
@@ -112,7 +126,11 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 	select {
 	case r := <-res:
 		return r, nil
+	case err := <-ec:
+		s.deleteFromToc(id)
+		return nil, err
 	case <-time.After(timeout):
+		s.deleteFromToc(id)
 		return nil, TIMEOUT
 	}
 }
@@ -124,6 +142,12 @@ func (s *Storage) thread() {
 			Log.Warningf("%v", err)
 		}
 	}
+}
+
+func (s *Storage) deleteFromToc(id string) {
+	s.tocLock.Lock()
+	delete(s.toc, id)
+	s.tocLock.Unlock()
 }
 
 func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
