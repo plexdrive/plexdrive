@@ -10,7 +10,7 @@ resources:
   type: git
   source:
     uri: https://github.com/dweidenfeld/plexdrive
-    branch: master
+    branch: develop
 
 - name: github-nightly-release
   type: github-release
