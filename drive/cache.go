@@ -259,8 +259,8 @@ func boltUpdateObject(tx *bolt.Tx, object *APIObject) error {
 	if nil != prev {
 		// Remove object ids from the index
 		b := tx.Bucket(bParents)
-		for _, parent := range object.Parents {
-			b.Delete([]byte(parent + "/" + object.Name))
+		for _, parent := range prev.Parents {
+			b.Delete([]byte(parent + "/" + prev.Name))
 		}
 	}
 
