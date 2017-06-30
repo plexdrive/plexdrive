@@ -344,6 +344,11 @@ func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, N
 	}
 	object.Parents = append(object.Parents, NewParent)
 
+	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
+		Log.Debugf("%v", err)
+		return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
+	}
+
 	if err := d.cache.UpdateObject(object); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not rename object %v (%v) from cache", object.ObjectID, object.Name)
