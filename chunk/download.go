@@ -55,7 +55,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 	reader := res.Body
 
 	if res.StatusCode != 206 {
-		if res.StatusCode != 403 {
+		if res.StatusCode != 403 && res.StatusCode != 500 {
 			Log.Debugf("Request\n----------\n%v\n----------\n", req)
 			Log.Debugf("Response\n----------\n%v\n----------\n", res)
 			return nil, fmt.Errorf("Wrong status code %v", res.StatusCode)
@@ -68,7 +68,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		bytes, err := ioutil.ReadAll(reader)
 		if nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not read body of 403 error")
+			return nil, fmt.Errorf("Could not read body of error")
 		}
 		body := string(bytes)
 		if strings.Contains(body, "dailyLimitExceeded") ||
@@ -83,7 +83,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 			return downloadFromAPI(client, request, delay)
 		}
 
-		// return an error if other 403 error occurred
+		// return an error if other error occurred
 		Log.Debugf("%v", body)
 		return nil, fmt.Errorf("Could not read object %v (%v) / StatusCode: %v",
 			request.object.ObjectID, request.object.Name, res.StatusCode)
