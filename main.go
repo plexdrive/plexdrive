@@ -17,13 +17,12 @@ import (
 
 	"runtime"
 
-	"github.com/claudetech/loggo"
-	. "github.com/claudetech/loggo/default"
 	"github.com/dweidenfeld/plexdrive/chunk"
 	"github.com/dweidenfeld/plexdrive/config"
 	"github.com/dweidenfeld/plexdrive/drive"
 	"github.com/dweidenfeld/plexdrive/mount"
 	flag "github.com/ogier/pflag"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -88,46 +87,47 @@ func main() {
 	}
 
 	// initialize the logger with the specific log level
-	var logLevel loggo.Level
+	var logLevel log.Level
 	switch *argLogLevel {
 	case 0:
-		logLevel = loggo.Error
+		logLevel = log.FatalLevel
 	case 1:
-		logLevel = loggo.Warning
+		logLevel = log.ErrorLevel
 	case 2:
-		logLevel = loggo.Info
+		logLevel = log.WarnLevel
 	case 3:
-		logLevel = loggo.Debug
+		logLevel = log.InfoLevel
 	case 4:
-		logLevel = loggo.Trace
+		logLevel = log.DebugLevel
 	default:
-		logLevel = loggo.Warning
+		logLevel = log.WarnLevel
 	}
-	Log.SetLevel(logLevel)
+	log.SetLevel(logLevel)
+	log.SetFormatter(&log.JSONFormatter{})
 
 	// debug all given parameters
-	Log.Debugf("verbosity            : %v", logLevel)
-	Log.Debugf("root-node-id         : %v", *argRootNodeID)
-	Log.Debugf("config               : %v", *argConfigPath)
-	Log.Debugf("temp                 : %v", *argTempPath)
-	Log.Debugf("chunk-size           : %v", *argChunkSize)
-	Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
-	Log.Debugf("chunk-load-ahead     : %v", *argChunkLoadAhead)
-	Log.Debugf("chunk-load-timeout   : %v", *argChunkLoadTimeout)
-	Log.Debugf("chunk-load-retries   : %v", *argChunkLoadRetries)
-	Log.Debugf("max-chunks           : %v", *argMaxChunks)
-	Log.Debugf("refresh-interval     : %v", *argRefreshInterval)
-	Log.Debugf("fuse-options         : %v", *argMountOptions)
-	Log.Debugf("UID                  : %v", uid)
-	Log.Debugf("GID                  : %v", gid)
-	Log.Debugf("Umask                : %v", umask)
+	log.WithField("value", logLevel).WithField("name", "verbosity").Info("Parameter")
+	log.WithField("value", *argRootNodeID).WithField("name", "root-node-id").Info("Parameter")
+	log.WithField("value", *argConfigPath).WithField("name", "config").Info("Parameter")
+	log.WithField("value", *argTempPath).WithField("name", "temp").Info("Parameter")
+	log.WithField("value", *argChunkSize).WithField("name", "chunk-size").Info("Parameter")
+	log.WithField("value", *argChunkLoadThreads).WithField("name", "chunk-load-threads").Info("Parameter")
+	log.WithField("value", *argChunkLoadAhead).WithField("name", "chunk-load-ahead").Info("Parameter")
+	log.WithField("value", *argChunkLoadTimeout).WithField("name", "chunk-load-timeout").Info("Parameter")
+	log.WithField("value", *argChunkLoadRetries).WithField("name", "chunk-load-retries").Info("Parameter")
+	log.WithField("value", *argMaxChunks).WithField("name", "max-chunks").Info("Parameter")
+	log.WithField("value", *argRefreshInterval).WithField("name", "refresh-interval").Info("Parameter")
+	log.WithField("value", *argMountOptions).WithField("name", "fuse-options").Info("Parameter")
+	log.WithField("value", uid).WithField("name", "UID").Info("Parameter")
+	log.WithField("value", gid).WithField("name", "GID").Info("Parameter")
+	log.WithField("value", umask).WithField("name", "Umask").Info("Parameter")
 	// Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
 	// version missing here
 
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
-		Log.Errorf("Could not create configuration directory")
-		Log.Debugf("%v", err)
+		log.Infof("%v", err)
+		log.Fatalf("Could not create configuration directory")
 		os.Exit(1)
 	}
 	chunkPath := filepath.Join(*argTempPath, "chunks")
@@ -135,7 +135,7 @@ func main() {
 	// set the global buffer configuration
 	chunkSize, err := parseSizeArg(*argChunkSize)
 	if nil != err {
-		Log.Errorf("%v", err)
+		log.Fatalf("%v", err)
 		os.Exit(2)
 	}
 
@@ -145,22 +145,22 @@ func main() {
 	if nil != err {
 		cfg, err = config.Create(configPath)
 		if nil != err {
-			Log.Errorf("Could not read configuration")
-			Log.Debugf("%v", err)
+			log.Infof("%v", err)
+			log.Fatalf("Could not read configuration")
 			os.Exit(3)
 		}
 	}
 
 	cache, err := drive.NewCache(*argConfigPath, *argLogLevel > 3)
 	if nil != err {
-		Log.Errorf("%v", err)
+		log.Fatalf("%v", err)
 		os.Exit(4)
 	}
 	defer cache.Close()
 
 	client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID)
 	if nil != err {
-		Log.Errorf("%v", err)
+		log.Fatalf("%v", err)
 		os.Exit(4)
 	}
 
@@ -174,14 +174,14 @@ func main() {
 		*argChunkLoadTimeout,
 		*argChunkLoadRetries)
 	if nil != err {
-		Log.Errorf("%v", err)
+		log.Fatalf("%v", err)
 		os.Exit(4)
 	}
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
 	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask); nil != err {
-		Log.Debugf("%v", err)
+		log.Fatalf("%v", err)
 		os.Exit(5)
 	}
 }
@@ -194,7 +194,7 @@ func checkOsSignals(mountpoint string) {
 		for sig := range signals {
 			if sig == syscall.SIGINT {
 				if err := mount.Unmount(mountpoint, false); nil != err {
-					Log.Warningf("%v", err)
+					log.Errorf("%v", err)
 				}
 			}
 		}
@@ -226,7 +226,7 @@ func parseSizeArg(input string) (int64, error) {
 	input = input[:len(input)-suffixLen]
 	value, err := strconv.ParseFloat(input, 64)
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Infof("%v", err)
 		return 0, fmt.Errorf("Could not parse numeric value %v", input)
 	}
 	if value < 0 {
