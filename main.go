@@ -118,12 +118,15 @@ func main() {
 	case "elastic":
 		client, err := elastic.NewClient(
 			elastic.SetURL(*argLogElasticURL),
-			elastic.SetBasicAuth(*argLogElasticUser, *argLogElasticPass))
+			elastic.SetBasicAuth(*argLogElasticUser, *argLogElasticPass),
+			elastic.SetSniff(false))
 		if err != nil {
+			flag.Usage()
 			log.Panic(err)
 		}
 		hook, err := elogrus.NewElasticHook(client, *argLogElasticURL, logLevel, *argLogElasticIndex)
 		if err != nil {
+			flag.Usage()
 			log.Panic(err)
 		}
 		log.AddHook(hook)
