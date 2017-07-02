@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	. "github.com/claudetech/loggo/default"
+	log "github.com/Sirupsen/logrus"
 )
 
 // Config describes the basic configuration architecture
@@ -37,23 +37,23 @@ func Create(configPath string) (*Config, error) {
 	fmt.Printf("7. Enter your generated client ID: ")
 	var config Config
 	if _, err := fmt.Scan(&config.ClientID); err != nil {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Unable to read client id")
 	}
 	fmt.Printf("8. Enter your generated client secret: ")
 	if _, err := fmt.Scan(&config.ClientSecret); err != nil {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Unable to read client secret")
 	}
 
 	configJSON, err := json.Marshal(&config)
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not generate config.json content")
 	}
 
 	if err := ioutil.WriteFile(configPath, configJSON, 0766); nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not generate config.json file")
 	}
 

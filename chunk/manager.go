@@ -5,7 +5,7 @@ import (
 
 	"net/http"
 
-	. "github.com/claudetech/loggo/default"
+	log "github.com/Sirupsen/logrus"
 
 	"time"
 
@@ -119,7 +119,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	bytes, err := m.storage.Get(id, chunkOffset, size, m.Timeout)
 	retryCount := 0
 	for err == ErrTimeout && retryCount < m.TimeoutRetries {
-		Log.Warningf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
+		log.Warningf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
 		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
 		retryCount++
 	}
@@ -148,11 +148,11 @@ func (m *Manager) checkChunk(req *Request) {
 
 	bytes, err := m.downloader.Download(req)
 	if nil != err {
-		Log.Warningf("%v", err)
+		log.Warningf("%v", err)
 		m.storage.Error(req.id, err)
 	}
 
 	if err := m.storage.Store(req.id, bytes); nil != err {
-		Log.Warningf("%v", err)
+		log.Warningf("%v", err)
 	}
 }

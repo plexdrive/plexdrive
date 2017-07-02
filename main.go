@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strconv"
 
+	elastic "gopkg.in/olivere/elastic.v5"
+	elogrus "gopkg.in/sohlich/elogrus.v2"
+
 	"time"
 
 	"strings"
@@ -17,12 +20,12 @@ import (
 
 	"runtime"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/dweidenfeld/plexdrive/chunk"
 	"github.com/dweidenfeld/plexdrive/config"
 	"github.com/dweidenfeld/plexdrive/drive"
 	"github.com/dweidenfeld/plexdrive/mount"
 	flag "github.com/ogier/pflag"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -38,6 +41,11 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
+	argLogFormat := flag.String("log-format", "console", "Logging format (console, json, elastic)")
+	argLogElasticURL := flag.String("log-elastic-url", "http://localhost:9200", "Elasticsearch URL")
+	argLogElasticUser := flag.String("log-elastic-user", "elastic", "Elasticsearch username")
+	argLogElasticPass := flag.String("log-elastic-pass", "changeme", "Elasticsearch password")
+	argLogElasticIndex := flag.String("log-elastic-index", "plexdrive", "Elasticsearch index")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU(), "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 2, "The number of chunks that should be read ahead")
@@ -103,13 +111,34 @@ func main() {
 		logLevel = log.WarnLevel
 	}
 	log.SetLevel(logLevel)
-	log.SetFormatter(&log.JSONFormatter{})
+
+	switch *argLogFormat {
+	case "json":
+		log.SetFormatter(&log.JSONFormatter{})
+	case "elastic":
+		client, err := elastic.NewClient(
+			elastic.SetURL(*argLogElasticURL),
+			elastic.SetBasicAuth(*argLogElasticUser, *argLogElasticPass))
+		if err != nil {
+			log.Panic(err)
+		}
+		hook, err := elogrus.NewElasticHook(client, *argLogElasticURL, logLevel, *argLogElasticIndex)
+		if err != nil {
+			log.Panic(err)
+		}
+		log.AddHook(hook)
+	}
 
 	// debug all given parameters
 	log.WithField("value", logLevel).WithField("name", "verbosity").Info("Parameter")
 	log.WithField("value", *argRootNodeID).WithField("name", "root-node-id").Info("Parameter")
 	log.WithField("value", *argConfigPath).WithField("name", "config").Info("Parameter")
 	log.WithField("value", *argTempPath).WithField("name", "temp").Info("Parameter")
+	if *argLogFormat == "elastic" {
+		log.WithField("value", *argLogElasticURL).WithField("name", "log-elastic-url").Info("Parameter")
+		log.WithField("value", *argLogElasticUser).WithField("name", "log-elastic-user").Info("Parameter")
+		log.WithField("value", *argLogElasticIndex).WithField("name", "log-elastic-index").Info("Parameter")
+	}
 	log.WithField("value", *argChunkSize).WithField("name", "chunk-size").Info("Parameter")
 	log.WithField("value", *argChunkLoadThreads).WithField("name", "chunk-load-threads").Info("Parameter")
 	log.WithField("value", *argChunkLoadAhead).WithField("name", "chunk-load-ahead").Info("Parameter")

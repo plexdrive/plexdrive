@@ -12,7 +12,7 @@ import (
 
 	"time"
 
-	. "github.com/claudetech/loggo/default"
+	log "github.com/Sirupsen/logrus"
 )
 
 // ErrTimeout is a timeout error
@@ -148,7 +148,7 @@ func (s *Storage) thread() {
 	for {
 		item := <-s.queue
 		if err := s.storeToDisk(item.id, item.bytes); nil != err {
-			Log.Warningf("%v", err)
+			log.Warningf("%v", err)
 		}
 	}
 }
@@ -177,7 +177,7 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 
 	f, err := os.Open(filename)
 	if nil != err {
-		Log.Tracef("%v", err)
+		log.Debugf("%v", err)
 		return nil, false
 	}
 	defer f.Close()
@@ -191,7 +191,7 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 		return buf[:eOffset], true
 	}
 
-	Log.Tracef("%v", err)
+	log.Debugf("%v", err)
 	return nil, false
 }
 
@@ -204,10 +204,10 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 		if "" != deleteID {
 			filename := filepath.Join(s.ChunkPath, deleteID)
 
-			Log.Debugf("Deleting chunk %v", filename)
+			log.Debugf("Deleting chunk %v", filename)
 			if err := os.Remove(filename); nil != err {
-				Log.Debugf("%v", err)
-				Log.Warningf("Could not delete chunk %v", filename)
+				log.Debugf("%v", err)
+				log.Warningf("Could not delete chunk %v", filename)
 			}
 
 			s.tocLock.Lock()
@@ -218,14 +218,14 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 
 	if _, err := os.Stat(s.ChunkPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(s.ChunkPath, 0777); nil != err {
-			Log.Debugf("%v", err)
+			log.Debugf("%v", err)
 			return fmt.Errorf("Could not create chunk temp path %v", s.ChunkPath)
 		}
 	}
 
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
-			Log.Debugf("%v", err)
+			log.Debugf("%v", err)
 			return fmt.Errorf("Could not write chunk temp file %v", filename)
 		}
 

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	. "github.com/claudetech/loggo/default"
+	log "github.com/Sirupsen/logrus"
 	"github.com/dweidenfeld/plexdrive/config"
 	"golang.org/x/oauth2"
 	gdrive "google.golang.org/api/drive/v3"
@@ -76,12 +76,12 @@ func (d *Client) checkChanges(firstCheck bool) {
 	}
 	d.changesChecking = true
 
-	Log.Debugf("Checking for changes")
+	log.Debugf("Checking for changes")
 
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
-		Log.Warningf("Could not get Google Drive client to watch for changes")
+		log.Debugf("%v", err)
+		log.Warningf("Could not get Google Drive client to watch for changes")
 		return
 	}
 
@@ -89,13 +89,13 @@ func (d *Client) checkChanges(firstCheck bool) {
 	pageToken, err := d.cache.GetStartPageToken()
 	if nil != err {
 		pageToken = "1"
-		Log.Info("No last change id found, starting from beginning...")
+		log.Info("No last change id found, starting from beginning...")
 	} else {
-		Log.Debugf("Last change id found, continuing getting changes (%v)", pageToken)
+		log.Debugf("Last change id found, continuing getting changes (%v)", pageToken)
 	}
 
 	if firstCheck {
-		Log.Infof("First cache build process started...")
+		log.Infof("First cache build process started...")
 	}
 
 	deletedItems := 0
@@ -109,25 +109,25 @@ func (d *Client) checkChanges(firstCheck bool) {
 
 		results, err := query.Do()
 		if nil != err {
-			Log.Debugf("%v", err)
-			Log.Warningf("Could not get changes")
+			log.Debugf("%v", err)
+			log.Warningf("Could not get changes")
 			break
 		}
 
 		objects := make([]*APIObject, 0)
 		for _, change := range results.Changes {
-			Log.Tracef("Change %v", change)
+			log.Debugf("Change %v", change)
 
 			if change.Removed || (nil != change.File && change.File.ExplicitlyTrashed) {
 				if err := d.cache.DeleteObject(change.FileId); nil != err {
-					Log.Tracef("%v", err)
+					log.Debugf("%v", err)
 				}
 				deletedItems++
 			} else {
 				object, err := d.mapFileToObject(change.File)
 				if nil != err {
-					Log.Debugf("%v", err)
-					Log.Warningf("Could not map Google Drive file %v (%v) to object", change.File.Id, change.File.Name)
+					log.Debugf("%v", err)
+					log.Warningf("Could not map Google Drive file %v (%v) to object", change.File.Id, change.File.Name)
 				} else {
 					objects = append(objects, object)
 					updatedItems++
@@ -136,13 +136,13 @@ func (d *Client) checkChanges(firstCheck bool) {
 
 			processedItems++
 		}
-		if err := d.cache.BatchUpdateObjects(objects); nil != err {
-			Log.Warningf("%v", err)
+		if err := d.cache.batchUpdateObjects(objects); nil != err {
+			log.Warningf("%v", err)
 			return
 		}
 
 		if processedItems > 0 {
-			Log.Infof("Processed %v items / deleted %v items / updated %v items",
+			log.Infof("Processed %v items / deleted %v items / updated %v items",
 				processedItems, deletedItems, updatedItems)
 		}
 
@@ -157,18 +157,18 @@ func (d *Client) checkChanges(firstCheck bool) {
 	}
 
 	if firstCheck {
-		Log.Infof("First cache build process finished!")
+		log.Infof("First cache build process finished!")
 	}
 
 	d.changesChecking = false
 }
 
 func (d *Client) authorize() error {
-	Log.Debugf("Authorizing against Google Drive API")
+	log.Debugf("Authorizing against Google Drive API")
 
 	token, err := d.cache.LoadToken()
 	if nil != err {
-		Log.Debugf("Token could not be found, fetching new one")
+		log.Debugf("Token could not be found, fetching new one")
 
 		t, err := getTokenFromWeb(d.config)
 		if nil != err {
@@ -215,11 +215,11 @@ func (d *Client) GetNativeClient() *http.Client {
 
 // GetRoot gets the root node directly from the API
 func (d *Client) GetRoot() (*APIObject, error) {
-	Log.Debugf("Getting root from API")
+	log.Debugf("Getting root from API")
 
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
@@ -228,7 +228,7 @@ func (d *Client) GetRoot() (*APIObject, error) {
 		Fields(googleapi.Field(Fields)).
 		Do()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object %v from API", d.rootNodeID)
 	}
 
@@ -236,7 +236,7 @@ func (d *Client) GetRoot() (*APIObject, error) {
 	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.Size {
 		res, err := client.Files.Get(d.rootNodeID).Download()
 		if nil != err {
-			Log.Debugf("%v", err)
+			log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not get file size for object %v", d.rootNodeID)
 		}
 		file.Size = res.ContentLength
@@ -264,24 +264,24 @@ func (d *Client) GetObjectByParentAndName(parent, name string) (*APIObject, erro
 func (d *Client) Remove(object *APIObject, parent string) error {
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return fmt.Errorf("Could not get Google Drive client")
 	}
 
 	if object.CanTrash {
 		if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Trashed: true}).Do(); nil != err {
-			Log.Debugf("%v", err)
+			log.Debugf("%v", err)
 			return fmt.Errorf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
 		}
 	} else {
 		if _, err := client.Files.Update(object.ObjectID, nil).RemoveParents(parent).Do(); nil != err {
-			Log.Debugf("%v", err)
+			log.Debugf("%v", err)
 			return fmt.Errorf("Could not unsubscribe object %v (%v) from API", object.ObjectID, object.Name)
 		}
 	}
 
 	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
 	}
 
@@ -292,30 +292,30 @@ func (d *Client) Remove(object *APIObject, parent string) error {
 func (d *Client) Mkdir(parent string, Name string) (*APIObject, error) {
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
 	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: "application/vnd.google-apps.folder"}).Do()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not create object(%v) from API", Name)
 	}
 
 	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(Fields)).Do()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object fields %v from API", created.Id)
 	}
 
 	Obj, err := d.mapFileToObject(file)
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not map file to object %v (%v)", file.Id, file.Name)
 	}
 
 	if err := d.cache.UpdateObject(Obj); nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not create object %v (%v) from cache", Obj.ObjectID, Obj.Name)
 	}
 
@@ -326,12 +326,12 @@ func (d *Client) Mkdir(parent string, Name string) (*APIObject, error) {
 func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, NewName string) error {
 	client, err := d.getClient()
 	if nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return fmt.Errorf("Could not get Google Drive client")
 	}
 
 	if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(OldParent).AddParents(NewParent).Do(); nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return fmt.Errorf("Could not rename object %v (%v) from API", object.ObjectID, object.Name)
 	}
 
@@ -345,7 +345,7 @@ func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, N
 	object.Parents = append(object.Parents, NewParent)
 
 	if err := d.cache.UpdateObject(object); nil != err {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return fmt.Errorf("Could not rename object %v (%v) from cache", object.ObjectID, object.Name)
 	}
 
@@ -354,12 +354,12 @@ func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, N
 
 // mapFileToObject maps a Google Drive file to APIObject
 func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
-	Log.Tracef("Converting Google Drive file: %v", file)
+	log.Debugf("Converting Google Drive file: %v", file)
 
 	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
 	if nil != err {
-		Log.Debugf("%v", err)
-		Log.Warningf("Could not parse last modified date for object %v (%v)", file.Id, file.Name)
+		log.Debugf("%v", err)
+		log.Warningf("Could not parse last modified date for object %v (%v)", file.Id, file.Name)
 		lastModified = time.Now()
 	}
 
