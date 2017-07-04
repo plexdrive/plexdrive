@@ -26,7 +26,8 @@ func Mount(
 	mountpoint string,
 	mountOptions []string,
 	uid, gid uint32,
-	umask os.FileMode) error {
+	umask os.FileMode,
+	fuseLogging bool) error {
 
 	log.WithField("Mountpath", mountpoint).Infof("Mounting")
 
@@ -38,8 +39,10 @@ func Mount(
 		}
 	}
 
-	fuse.Debug = func(msg interface{}) {
-		log.WithField("Mountpath", mountpoint).WithField("FUSE", true).Debug(msg)
+	if fuseLogging {
+		fuse.Debug = func(msg interface{}) {
+			log.WithField("Mountpath", mountpoint).WithField("FUSE", true).Debug(msg)
+		}
 	}
 
 	// Set mount options

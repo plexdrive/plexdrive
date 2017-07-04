@@ -122,8 +122,6 @@ func (c *Cache) StoreToken(token *oauth2.Token) error {
 
 // GetObject gets an object by id
 func (c *Cache) GetObject(id string) (object *APIObject, err error) {
-	log.Debugf("Getting object %v", id)
-
 	c.db.View(func(tx *bolt.Tx) error {
 		object, err = boltGetObject(tx, id)
 		return nil
@@ -138,8 +136,6 @@ func (c *Cache) GetObject(id string) (object *APIObject, err error) {
 
 // GetObjectsByParent get all objects under parent id
 func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
-	log.Debugf("Getting children for %v", parent)
-
 	objects := make([]*APIObject, 0)
 	c.db.View(func(tx *bolt.Tx) error {
 		cr := tx.Bucket(bParents).Cursor()
@@ -166,8 +162,6 @@ func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 
 // GetObjectByParentAndName finds a child element by name and its parent id
 func (c *Cache) GetObjectByParentAndName(parent, name string) (object *APIObject, err error) {
-	log.Debugf("Getting object %v in parent %v", name, parent)
-
 	c.db.View(func(tx *bolt.Tx) error {
 		// Look up object id in parent-name index
 		b := tx.Bucket(bParents)

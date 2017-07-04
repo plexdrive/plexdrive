@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// parse the command line arguments
-	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
+	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace, 5 = trace + fuse)")
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
@@ -96,6 +96,7 @@ func main() {
 
 	// initialize the logger with the specific log level
 	var logLevel log.Level
+	fuseLogging := false
 	switch *argLogLevel {
 	case 0:
 		logLevel = log.FatalLevel
@@ -107,6 +108,9 @@ func main() {
 		logLevel = log.InfoLevel
 	case 4:
 		logLevel = log.DebugLevel
+	case 5:
+		logLevel = log.DebugLevel
+		fuseLogging = true
 	default:
 		logLevel = log.WarnLevel
 	}
@@ -213,7 +217,7 @@ func main() {
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
-	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask); nil != err {
+	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask, fuseLogging); nil != err {
 		log.Fatalf("%v", err)
 		os.Exit(5)
 	}
