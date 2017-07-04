@@ -37,6 +37,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 
 	log.WithField("ObjectID", request.object.ObjectID).
 		WithField("ObjectName", request.object.Name).
+		WithField("ID", request.id).
 		WithField("OffsetStart", request.offsetStart).
 		WithField("OffsetEnd", request.offsetEnd).
 		WithField("Preload", request.preload).
@@ -45,6 +46,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 	if nil != err {
 		log.WithField("ObjectID", request.object.ObjectID).
 			WithField("ObjectName", request.object.Name).
+			WithField("ID", request.id).
 			WithField("OffsetStart", request.offsetStart).
 			WithField("OffsetEnd", request.offsetEnd).
 			WithField("Preload", request.preload).
@@ -57,6 +59,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 
 	log.WithField("ObjectID", request.object.ObjectID).
 		WithField("ObjectName", request.object.Name).
+		WithField("ID", request.id).
 		WithField("OffsetStart", request.offsetStart).
 		WithField("OffsetEnd", request.offsetEnd).
 		WithField("Preload", request.preload).
@@ -67,6 +70,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 	if nil != err {
 		log.WithField("ObjectID", request.object.ObjectID).
 			WithField("ObjectName", request.object.Name).
+			WithField("ID", request.id).
 			WithField("OffsetStart", request.offsetStart).
 			WithField("OffsetEnd", request.offsetEnd).
 			WithField("Preload", request.preload).
@@ -81,6 +85,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		if res.StatusCode != 403 && res.StatusCode != 500 {
 			log.WithField("ObjectID", request.object.ObjectID).
 				WithField("ObjectName", request.object.Name).
+				WithField("ID", request.id).
 				WithField("OffsetStart", request.offsetStart).
 				WithField("OffsetEnd", request.offsetEnd).
 				WithField("Preload", request.preload).
@@ -99,6 +104,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		if nil != err {
 			log.WithField("ObjectID", request.object.ObjectID).
 				WithField("ObjectName", request.object.Name).
+				WithField("ID", request.id).
 				WithField("OffsetStart", request.offsetStart).
 				WithField("OffsetEnd", request.offsetEnd).
 				WithField("Preload", request.preload).
@@ -123,6 +129,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		// return an error if other error occurred
 		log.WithField("ObjectID", request.object.ObjectID).
 			WithField("ObjectName", request.object.Name).
+			WithField("ID", request.id).
 			WithField("OffsetStart", request.offsetStart).
 			WithField("OffsetEnd", request.offsetEnd).
 			WithField("Preload", request.preload).
@@ -137,6 +144,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 	if nil != err {
 		log.WithField("ObjectID", request.object.ObjectID).
 			WithField("ObjectName", request.object.Name).
+			WithField("ID", request.id).
 			WithField("OffsetStart", request.offsetStart).
 			WithField("OffsetEnd", request.offsetEnd).
 			WithField("Preload", request.preload).

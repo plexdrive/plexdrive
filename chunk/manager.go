@@ -116,15 +116,16 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 		}
 	}
 
-	bytes, err := m.storage.Get(id, chunkOffset, size, m.Timeout)
+	bytes, err := m.storage.Get(object, id, chunkOffset, size, m.Timeout)
 	retryCount := 0
 	for err == ErrTimeout && retryCount < m.TimeoutRetries {
 		log.WithField("ObjectID", object.ObjectID).
 			WithField("ObjectName", object.Name).
+			WithField("ID", id).
 			WithField("Retry", (retryCount+1)).
 			WithField("RetryMaximum", m.TimeoutRetries).
 			Warning("Timeout while requesting chunk")
-		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
+		bytes, err = m.storage.Get(object, id, chunkOffset, size, m.Timeout)
 		retryCount++
 	}
 	return bytes, err
@@ -136,6 +137,7 @@ func (m *Manager) thread(id int) {
 		case req := <-m.queue:
 			log.WithField("ObjectID", req.object.ObjectID).
 				WithField("ObjectName", req.object.Name).
+				WithField("ID", req.id).
 				WithField("Preload", req.preload).
 				WithField("ThreadID", id).
 				Debug("Got chunk checking request")
@@ -144,6 +146,7 @@ func (m *Manager) thread(id int) {
 		case req := <-m.preloadQueue:
 			log.WithField("ObjectID", req.object.ObjectID).
 				WithField("ObjectName", req.object.Name).
+				WithField("ID", req.id).
 				WithField("Preload", req.preload).
 				WithField("ThreadID", id).
 				Debug("Got chunk checking request")
@@ -165,6 +168,7 @@ func (m *Manager) checkChunk(req *Request) {
 	if nil != err {
 		log.WithField("ObjectID", req.object.ObjectID).
 			WithField("ObjectName", req.object.Name).
+			WithField("ID", req.id).
 			WithField("Error", err).
 			Warning("Error")
 		m.storage.Error(req.id, err)
@@ -172,12 +176,14 @@ func (m *Manager) checkChunk(req *Request) {
 	}
 	log.WithField("ObjectID", req.object.ObjectID).
 		WithField("ObjectName", req.object.Name).
+		WithField("ID", req.id).
 		WithField("Took", time.Now().Sub(before)).
 		Debug("Download Time")
 
-	if err := m.storage.Store(req.id, bytes); nil != err {
+	if err := m.storage.Store(req.object, req.id, bytes); nil != err {
 		log.WithField("ObjectID", req.object.ObjectID).
 			WithField("ObjectName", req.object.Name).
+			WithField("ID", req.id).
 			WithField("Error", err).
 			Warning("Error")
 	}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/dweidenfeld/plexdrive/drive"
 )
 
 // ErrTimeout is a timeout error
@@ -33,8 +34,9 @@ type Storage struct {
 
 // Item represents a chunk in RAM
 type Item struct {
-	id    string
-	bytes []byte
+	object *drive.APIObject
+	id     string
+	bytes  []byte
 }
 
 // NewStorage creates a new storage
@@ -75,14 +77,15 @@ func (s *Storage) ExistsOrCreate(id string) bool {
 }
 
 // Store stores a chunk in the RAM and adds it to the disk storage queue
-func (s *Storage) Store(id string, bytes []byte) error {
+func (s *Storage) Store(object *drive.APIObject, id string, bytes []byte) error {
 	s.chunksLock.Lock()
 	s.chunks[id] = bytes
 	s.chunksLock.Unlock()
 
 	s.queue <- &Item{
-		id:    id,
-		bytes: bytes,
+		object: object,
+		id:     id,
+		bytes:  bytes,
 	}
 
 	return nil
@@ -96,7 +99,7 @@ func (s *Storage) Error(id string, err error) {
 }
 
 // Get gets a chunk content (blocking)
-func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
+func (s *Storage) Get(object *drive.APIObject, id string, offset, size int64, timeout time.Duration) ([]byte, error) {
 	res := make(chan []byte)
 	ec := make(chan error)
 
@@ -106,17 +109,25 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 			err, exists := s.toc[id]
 			s.tocLock.Unlock()
 			if nil == err && exists {
-				bytes, exists := s.loadFromRAM(id, offset, size)
+				bytes, exists := s.loadFromRAM(object, id, offset, size)
 				if exists {
 					res <- bytes
+					log.WithField("ObjectID", object.ObjectID).
+						WithField("ObjectName", object.Name).
+						WithField("ID", id).
+						Debug("Got chunk from RAM")
 					close(ec)
 					close(res)
 					return
 				}
 
-				bytes, exists = s.loadFromDisk(id, offset, size)
+				bytes, exists = s.loadFromDisk(object, id, offset, size)
 				if exists {
 					res <- bytes
+					log.WithField("ObjectID", object.ObjectID).
+						WithField("ObjectName", object.Name).
+						WithField("ID", id).
+						Debug("Got chunk from disk")
 					close(ec)
 					close(res)
 					return
@@ -147,8 +158,12 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 func (s *Storage) thread() {
 	for {
 		item := <-s.queue
-		if err := s.storeToDisk(item.id, item.bytes); nil != err {
-			log.Warningf("%v", err)
+		if err := s.storeToDisk(item.object, item.id, item.bytes); nil != err {
+			log.WithField("ObjectID", item.object.ObjectID).
+				WithField("ObjectName", item.object.Name).
+				WithField("ID", item.id).
+				WithField("Error", err).
+				Warning("Could not store chunk to disk")
 		}
 	}
 }
@@ -159,7 +174,7 @@ func (s *Storage) deleteFromToc(id string) {
 	s.tocLock.Unlock()
 }
 
-func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
+func (s *Storage) loadFromRAM(object *drive.APIObject, id string, offset, size int64) ([]byte, bool) {
 	s.chunksLock.Lock()
 	bytes, exists := s.chunks[id]
 	s.chunksLock.Unlock()
@@ -172,12 +187,21 @@ func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
 	return bytes[sOffset:eOffset], true
 }
 
-func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
+func (s *Storage) loadFromDisk(object *drive.APIObject, id string, offset, size int64) ([]byte, bool) {
 	filename := filepath.Join(s.ChunkPath, id)
+
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil, false
+	}
 
 	f, err := os.Open(filename)
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("ObjectID", object.ObjectID).
+			WithField("ObjectName", object.Name).
+			WithField("ID", id).
+			WithField("File", filename).
+			WithField("Error", err).
+			Debug("Could not open chunk on disk")
 		return nil, false
 	}
 	defer f.Close()
@@ -191,11 +215,16 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 		return buf[:eOffset], true
 	}
 
-	log.Debugf("%v", err)
+	log.WithField("ObjectID", object.ObjectID).
+		WithField("ObjectName", object.Name).
+		WithField("ID", id).
+		WithField("File", filename).
+		WithField("Error", err).
+		Debug("Could not load chunk from disk")
 	return nil, false
 }
 
-func (s *Storage) storeToDisk(id string, bytes []byte) error {
+func (s *Storage) storeToDisk(object *drive.APIObject, id string, bytes []byte) error {
 	filename := filepath.Join(s.ChunkPath, id)
 
 	if s.stack.Len() >= s.MaxChunks {
@@ -204,10 +233,18 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 		if "" != deleteID {
 			filename := filepath.Join(s.ChunkPath, deleteID)
 
-			log.Debugf("Deleting chunk %v", filename)
+			log.WithField("ObjectID", object.ObjectID).
+				WithField("ObjectName", object.Name).
+				WithField("ID", id).
+				WithField("File", filename).
+				Debug("Deleting chunk")
 			if err := os.Remove(filename); nil != err {
-				log.Debugf("%v", err)
-				log.Warningf("Could not delete chunk %v", filename)
+				log.WithField("ObjectID", object.ObjectID).
+					WithField("ObjectName", object.Name).
+					WithField("ID", id).
+					WithField("File", filename).
+					WithField("Error", err).
+					Warning("Could not delete chunk")
 			}
 
 			s.tocLock.Lock()
@@ -218,14 +255,24 @@ func (s *Storage) storeToDisk(id string, bytes []byte) error {
 
 	if _, err := os.Stat(s.ChunkPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(s.ChunkPath, 0777); nil != err {
-			log.Debugf("%v", err)
+			log.WithField("ObjectID", object.ObjectID).
+				WithField("ObjectName", object.Name).
+				WithField("ID", id).
+				WithField("ChunkPath", s.ChunkPath).
+				WithField("Error", err).
+				Debug("Could not create chunk temp path")
 			return fmt.Errorf("Could not create chunk temp path %v", s.ChunkPath)
 		}
 	}
 
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
-			log.Debugf("%v", err)
+			log.WithField("ObjectID", object.ObjectID).
+				WithField("ObjectName", object.Name).
+				WithField("ID", id).
+				WithField("File", filename).
+				WithField("Error", err).
+				Debug("Could not write chunk to disk")
 			return fmt.Errorf("Could not write chunk temp file %v", filename)
 		}
 
