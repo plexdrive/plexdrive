@@ -29,7 +29,7 @@ func Mount(
 	umask os.FileMode,
 	fuseLogging bool) error {
 
-	log.WithField("Mountpath", mountpoint).Infof("Mounting")
+	alog.WithField("Mountpath", mountpoint).Infof("Mounting")
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
 		log.WithField("Mountpath", mountpoint).Debug("Path doesn't exist, creating...")
