@@ -165,7 +165,8 @@ func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 		return nil
 	})
 
-	log.Debugf("Got objects from cache %v", objects)
+	log.WithField("Objects", objects).
+		Debug("Got object from cache")
 	return objects, nil
 }
 
@@ -191,7 +192,9 @@ func (c *Cache) GetObjectByParentAndName(parent, name string) (object *APIObject
 		return nil, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 	}
 
-	log.Debugf("Got object from cache %v", object)
+	log.WithField("ObjectID", object.ObjectID).
+		WithField("ObjectName", object.Name).
+		Debug("Got object from cache")
 	return object, nil
 }
 
@@ -214,8 +217,11 @@ func (c *Cache) DeleteObject(id string) error {
 
 		return nil
 	})
+
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("ObjectID", id).
+			WithField("Error", err).
+			Debug("Could not delete object")
 		return fmt.Errorf("Could not delete object %v", id)
 	}
 
@@ -229,7 +235,10 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 	})
 
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("ObjectID", object.ObjectID).
+			WithField("ObjectName", object.Name).
+			WithField("Error", err).
+			Debug("Could not update/save object")
 		return fmt.Errorf("Could not update/save object %v (%v)", object.ObjectID, object.Name)
 	}
 
@@ -292,7 +301,6 @@ func (c *Cache) batchUpdateObjects(objects []*APIObject) error {
 	})
 
 	if nil != err {
-		log.Debugf("%v", err)
 		return fmt.Errorf("Could not update/save objects: %v", err)
 	}
 
@@ -301,14 +309,13 @@ func (c *Cache) batchUpdateObjects(objects []*APIObject) error {
 
 // StoreStartPageToken stores the page token for changes
 func (c *Cache) StoreStartPageToken(token string) error {
-	log.Debugf("Storing page token %v in cache", token)
 	err := c.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bPageToken)
 		return b.Put([]byte("t"), []byte(token))
 	})
 
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("Token", token).Debug("Could not store token")
 		return fmt.Errorf("Could not store token %v", token)
 	}
 
@@ -319,7 +326,6 @@ func (c *Cache) StoreStartPageToken(token string) error {
 func (c *Cache) GetStartPageToken() (string, error) {
 	var pageToken string
 
-	log.Debugf("Getting start page token from cache")
 	c.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bPageToken)
 		v := b.Get([]byte("t"))
@@ -330,6 +336,5 @@ func (c *Cache) GetStartPageToken() (string, error) {
 		return "", fmt.Errorf("Could not get token from cache, token is empty")
 	}
 
-	log.Debugf("Got start page token %v", pageToken)
 	return pageToken, nil
 }
