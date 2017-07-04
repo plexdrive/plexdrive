@@ -135,22 +135,10 @@ func (m *Manager) thread(id int) {
 	for {
 		select {
 		case req := <-m.queue:
-			log.WithField("ObjectID", req.object.ObjectID).
-				WithField("ObjectName", req.object.Name).
-				WithField("ID", req.id).
-				WithField("Preload", req.preload).
-				WithField("ThreadID", id).
-				Debug("Got chunk checking request")
-			m.checkChunk(req)
+			m.checkChunk(req, id)
 			break
 		case req := <-m.preloadQueue:
-			log.WithField("ObjectID", req.object.ObjectID).
-				WithField("ObjectName", req.object.Name).
-				WithField("ID", req.id).
-				WithField("Preload", req.preload).
-				WithField("ThreadID", id).
-				Debug("Got chunk checking request")
-			m.checkChunk(req)
+			m.checkChunk(req, id)
 			break
 		default:
 			time.Sleep(10 * time.Millisecond)
@@ -158,10 +146,17 @@ func (m *Manager) thread(id int) {
 	}
 }
 
-func (m *Manager) checkChunk(req *Request) {
+func (m *Manager) checkChunk(req *Request, threadID int) {
 	if m.storage.ExistsOrCreate(req.id) {
 		return
 	}
+
+	log.WithField("ObjectID", req.object.ObjectID).
+		WithField("ObjectName", req.object.Name).
+		WithField("ID", req.id).
+		WithField("Preload", req.preload).
+		WithField("ThreadID", threadID).
+		Debug("Got chunk checking request")
 
 	before := time.Now()
 	bytes, err := m.downloader.Download(req)
