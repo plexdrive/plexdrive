@@ -80,7 +80,7 @@ func NewManager(
 	}
 
 	for i := 0; i < threads; i++ {
-		go manager.thread()
+		go manager.thread(i)
 	}
 
 	return &manager, nil
@@ -119,20 +119,34 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	bytes, err := m.storage.Get(id, chunkOffset, size, m.Timeout)
 	retryCount := 0
 	for err == ErrTimeout && retryCount < m.TimeoutRetries {
-		log.Warningf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
+		log.WithField("ObjectID", object.ObjectID).
+			WithField("ObjectName", object.Name).
+			WithField("Retry", (retryCount+1)).
+			WithField("RetryMaximum", m.TimeoutRetries).
+			Warning("Timeout while requesting chunk")
 		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
 		retryCount++
 	}
 	return bytes, err
 }
 
-func (m *Manager) thread() {
+func (m *Manager) thread(id int) {
 	for {
 		select {
 		case req := <-m.queue:
+			log.WithField("ObjectID", req.object.ObjectID).
+				WithField("ObjectName", req.object.Name).
+				WithField("Preload", req.preload).
+				WithField("ThreadID", id).
+				Debug("Got chunk checking request")
 			m.checkChunk(req)
 			break
 		case req := <-m.preloadQueue:
+			log.WithField("ObjectID", req.object.ObjectID).
+				WithField("ObjectName", req.object.Name).
+				WithField("Preload", req.preload).
+				WithField("ThreadID", id).
+				Debug("Got chunk checking request")
 			m.checkChunk(req)
 			break
 		default:
@@ -146,13 +160,25 @@ func (m *Manager) checkChunk(req *Request) {
 		return
 	}
 
+	before := time.Now()
 	bytes, err := m.downloader.Download(req)
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", req.object.ObjectID).
+			WithField("ObjectName", req.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		m.storage.Error(req.id, err)
+		return
 	}
+	log.WithField("ObjectID", req.object.ObjectID).
+		WithField("ObjectName", req.object.Name).
+		WithField("Took", time.Now().Sub(before)).
+		Debug("Download Time")
 
 	if err := m.storage.Store(req.id, bytes); nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", req.object.ObjectID).
+			WithField("ObjectName", req.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 	}
 }

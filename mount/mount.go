@@ -9,6 +9,8 @@ import (
 
 	"strconv"
 
+	"time"
+
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	log "github.com/Sirupsen/logrus"
@@ -26,18 +28,18 @@ func Mount(
 	uid, gid uint32,
 	umask os.FileMode) error {
 
-	log.Infof("Mounting path %v", mountpoint)
+	log.WithField("Mountpath", mountpoint).Infof("Mounting")
 
 	if _, err := os.Stat(mountpoint); os.IsNotExist(err) {
-		log.Debugf("Mountpoint doesn't exist, creating...")
+		log.WithField("Mountpath", mountpoint).Debug("Path doesn't exist, creating...")
 		if err := os.MkdirAll(mountpoint, 0644); nil != err {
-			log.Debugf("%v", err)
+			log.WithField("Mountpath", mountpoint).WithField("Error", err).Debug("Error")
 			return fmt.Errorf("Could not create mount directory %v", mountpoint)
 		}
 	}
 
 	fuse.Debug = func(msg interface{}) {
-		log.Debugf("FUSE %v", msg)
+		log.WithField("Mountpath", mountpoint).WithField("FUSE", true).Debug(msg)
 	}
 
 	// Set mount options
@@ -60,7 +62,9 @@ func Mount(
 			data := strings.Split(option, "=")
 			value, err := strconv.ParseUint(data[1], 10, 32)
 			if nil != err {
-				log.Debugf("%v", err)
+				log.WithField("Mountpath", mountpoint).
+					WithField("Error", err).
+					Debug("Could not parse max_readahead value")
 				return fmt.Errorf("Could not parse max_readahead value")
 			}
 			options = append(options, fuse.MaxReadahead(uint32(value)))
@@ -81,7 +85,9 @@ func Mount(
 		} else if "read_only" == option {
 			options = append(options, fuse.ReadOnly())
 		} else {
-			log.Warningf("Fuse option %v is not supported, yet", option)
+			log.WithField("Mountpath", mountpoint).
+				WithField("Option", option).
+				Warning("Fuse option is not supported, yet")
 		}
 	}
 
@@ -105,7 +111,9 @@ func Mount(
 	// check if the mount process has an error to report
 	<-c.Ready
 	if err := c.MountError; nil != err {
-		log.Debugf("%v", err)
+		log.WithField("Mountpath", mountpoint).
+			WithField("Error", err).
+			Debug("Error")
 		return fmt.Errorf("Error mounting FUSE")
 	}
 
@@ -115,7 +123,7 @@ func Mount(
 // Unmount unmounts the mountpoint
 func Unmount(mountpoint string, notify bool) error {
 	if notify {
-		log.Infof("Unmounting path %v", mountpoint)
+		log.WithField("Mountpath", mountpoint).Info("Unmounting path")
 	}
 	fuse.Unmount(mountpoint)
 	return nil
@@ -134,7 +142,7 @@ type FS struct {
 func (f *FS) Root() (fs.Node, error) {
 	object, err := f.client.GetRoot()
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("Error", err).Warning("Could not get root object")
 		return nil, fmt.Errorf("Could not get root object")
 	}
 	return &Object{
@@ -191,7 +199,10 @@ func (o *Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	objects, err := o.client.GetObjectsByParent(o.object.ObjectID)
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Debug("Error")
 		return nil, fuse.ENOENT
 	}
 
@@ -216,7 +227,10 @@ func (o *Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	object, err := o.client.GetObjectByParentAndName(o.object.ObjectID, name)
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Debug("Error")
 		return nil, fuse.ENOENT
 	}
 
@@ -232,9 +246,17 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 // Read reads some bytes or the whole file
 func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	before := time.Now()
 	bytes, err := o.chunkManager.GetChunk(o.object, req.Offset, int64(req.Size))
+	log.WithField("ObjectID", o.object.ObjectID).
+		WithField("ObjectName", o.object.Name).
+		WithField("Took", time.Now().Sub(before)).
+		Debug("Get chunk time")
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return fuse.EIO
 	}
 
@@ -246,13 +268,19 @@ func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Rea
 func (o *Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	obj, err := o.client.GetObjectByParentAndName(o.object.ObjectID, req.Name)
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return fuse.EIO
 	}
 
 	err = o.client.Remove(obj, o.object.ObjectID)
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return fuse.EIO
 	}
 
@@ -263,7 +291,10 @@ func (o *Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 func (o *Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	newObj, err := o.client.Mkdir(o.object.ObjectID, req.Name)
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return nil, fuse.EIO
 	}
 
@@ -280,19 +311,28 @@ func (o *Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, er
 func (o *Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	obj, err := o.client.GetObjectByParentAndName(o.object.ObjectID, req.OldName)
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return fuse.EIO
 	}
 
 	destDir, ok := newDir.(*Object)
 	if !ok {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return fuse.EIO
 	}
 
 	err = o.client.Rename(obj, o.object.ObjectID, destDir.object.ObjectID, req.NewName)
 	if nil != err {
-		log.Warningf("%v", err)
+		log.WithField("ObjectID", o.object.ObjectID).
+			WithField("ObjectName", o.object.Name).
+			WithField("Error", err).
+			Warning("Error")
 		return fuse.EIO
 	}
 
