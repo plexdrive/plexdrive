@@ -20,7 +20,8 @@ import (
 
 	"runtime"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
+	"github.com/dweidenfeld/plexdrive/alog"
 	"github.com/dweidenfeld/plexdrive/chunk"
 	"github.com/dweidenfeld/plexdrive/config"
 	"github.com/dweidenfeld/plexdrive/drive"
@@ -95,30 +96,33 @@ func main() {
 	}
 
 	// initialize the logger with the specific log level
-	var logLevel log.Level
+	alog.Start()
+	var logLevel logrus.Level
 	fuseLogging := false
 	switch *argLogLevel {
 	case 0:
-		logLevel = log.FatalLevel
+		logLevel = logrus.FatalLevel
 	case 1:
-		logLevel = log.ErrorLevel
+		logLevel = logrus.ErrorLevel
 	case 2:
-		logLevel = log.WarnLevel
+		logLevel = logrus.WarnLevel
 	case 3:
-		logLevel = log.InfoLevel
+		logLevel = logrus.InfoLevel
 	case 4:
-		logLevel = log.DebugLevel
+		logLevel = logrus.DebugLevel
 	case 5:
-		logLevel = log.DebugLevel
+		logLevel = logrus.DebugLevel
 		fuseLogging = true
 	default:
-		logLevel = log.WarnLevel
+		logLevel = logrus.WarnLevel
 	}
-	log.SetLevel(logLevel)
+	logger := logrus.New()
+	alog.SetLogger(logger)
+	logger.Level = logLevel
 
 	switch *argLogFormat {
 	case "json":
-		log.SetFormatter(&log.JSONFormatter{})
+		logger.Formatter = &logrus.JSONFormatter{}
 	case "elastic":
 		client, err := elastic.NewClient(
 			elastic.SetURL(*argLogElasticURL),
@@ -126,18 +130,18 @@ func main() {
 			elastic.SetSniff(false))
 		if err != nil {
 			flag.Usage()
-			log.Panic(err)
+			alog.Panic(nil, err)
 		}
 		hook, err := elogrus.NewElasticHook(client, *argLogElasticURL, logLevel, *argLogElasticIndex)
 		if err != nil {
 			flag.Usage()
-			log.Panic(err)
+			alog.Panic(nil, err)
 		}
-		log.AddHook(hook)
+		logger.Hooks.Add(hook)
 	}
 
 	// debug all given parameters
-	pLog := log.WithField("verbosity", logLevel)
+	pLog := logrus.WithField("verbosity", logLevel)
 	pLog = pLog.WithField("root-node-id", *argRootNodeID)
 	pLog = pLog.WithField("config", *argConfigPath)
 	pLog = pLog.WithField("temp", *argTempPath)
@@ -163,8 +167,9 @@ func main() {
 
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
-		log.Infof("%v", err)
-		log.Fatalf("Could not create configuration directory")
+		alog.Info(map[string]interface{}{
+			"Error": err,
+		}, "Could not create configuration directory")
 		os.Exit(1)
 	}
 	chunkPath := filepath.Join(*argTempPath, "chunks")
@@ -172,7 +177,7 @@ func main() {
 	// set the global buffer configuration
 	chunkSize, err := parseSizeArg(*argChunkSize)
 	if nil != err {
-		log.Fatalf("%v", err)
+		// log.Fatalf("%v", err)
 		os.Exit(2)
 	}
 
@@ -182,22 +187,22 @@ func main() {
 	if nil != err {
 		cfg, err = config.Create(configPath)
 		if nil != err {
-			log.Infof("%v", err)
-			log.Fatalf("Could not read configuration")
+			// log.Infof("%v", err)
+			// log.Fatalf("Could not read configuration")
 			os.Exit(3)
 		}
 	}
 
 	cache, err := drive.NewCache(*argConfigPath, *argLogLevel > 3)
 	if nil != err {
-		log.Fatalf("%v", err)
+		// log.Fatalf("%v", err)
 		os.Exit(4)
 	}
 	defer cache.Close()
 
 	client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID)
 	if nil != err {
-		log.Fatalf("%v", err)
+		// log.Fatalf("%v", err)
 		os.Exit(4)
 	}
 
@@ -211,14 +216,14 @@ func main() {
 		*argChunkLoadTimeout,
 		*argChunkLoadRetries)
 	if nil != err {
-		log.Fatalf("%v", err)
+		// log.Fatalf("%v", err)
 		os.Exit(4)
 	}
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
 	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask, fuseLogging); nil != err {
-		log.Fatalf("%v", err)
+		// log.Fatalf("%v", err)
 		os.Exit(5)
 	}
 }
@@ -231,7 +236,7 @@ func checkOsSignals(mountpoint string) {
 		for sig := range signals {
 			if sig == syscall.SIGINT {
 				if err := mount.Unmount(mountpoint, false); nil != err {
-					log.Errorf("%v", err)
+					// log.Errorf("%v", err)
 				}
 			}
 		}
@@ -263,7 +268,7 @@ func parseSizeArg(input string) (int64, error) {
 	input = input[:len(input)-suffixLen]
 	value, err := strconv.ParseFloat(input, 64)
 	if nil != err {
-		log.Infof("%v", err)
+		// log.Infof("%v", err)
 		return 0, fmt.Errorf("Could not parse numeric value %v", input)
 	}
 	if value < 0 {
