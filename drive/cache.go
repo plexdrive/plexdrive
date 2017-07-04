@@ -47,11 +47,12 @@ type PageToken struct {
 
 // NewCache creates a new cache instance
 func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
-	log.Debugf("Opening cache connection")
+	log.Debug("Opening cache connection")
 
 	db, err := bolt.Open(filepath.Join(cacheBasePath, "cache.bolt"), 0600, nil)
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("Error", err).
+			Debug("Could not open cache file")
 		return nil, fmt.Errorf("Could not open cache file")
 	}
 
@@ -79,41 +80,47 @@ func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 
 // Close closes all handles
 func (c *Cache) Close() error {
-	log.Debugf("Closing cache file")
+	log.Debug("Closing cache file")
 	c.db.Close()
 	return nil
 }
 
 // LoadToken loads a token from cache
 func (c *Cache) LoadToken() (*oauth2.Token, error) {
-	log.Debugf("Loading token from cache")
-
 	tokenFile, err := ioutil.ReadFile(c.tokenPath)
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("TokenPath", c.tokenPath).
+			WithField("Error", err).
+			Debug("Could not read token file")
 		return nil, fmt.Errorf("Could not read token file in %v", c.tokenPath)
 	}
 
 	var token oauth2.Token
 	json.Unmarshal(tokenFile, &token)
 
-	log.Debugf("Got token from cache %v", token)
+	log.WithField("TokenPath", c.tokenPath).
+		WithField("Token", token).
+		Debug("Got token from cache")
 
 	return &token, nil
 }
 
 // StoreToken stores a token in the cache or updates the existing token element
 func (c *Cache) StoreToken(token *oauth2.Token) error {
-	log.Debugf("Storing token to cache")
-
 	tokenJSON, err := json.Marshal(token)
 	if nil != err {
-		log.Debugf("%v", err)
+		log.WithField("TokenPath", c.tokenPath).
+			WithField("Token", token).
+			WithField("Error", err).
+			Debug("Could not generate token.json content")
 		return fmt.Errorf("Could not generate token.json content")
 	}
 
 	if err := ioutil.WriteFile(c.tokenPath, tokenJSON, 0644); nil != err {
-		log.Debugf("%v", err)
+		log.WithField("TokenPath", c.tokenPath).
+			WithField("Token", token).
+			WithField("Error", err).
+			Debug("Could not generate token.json file")
 		return fmt.Errorf("Could not generate token.json file")
 	}
 
@@ -130,7 +137,9 @@ func (c *Cache) GetObject(id string) (object *APIObject, err error) {
 		return nil, err
 	}
 
-	log.Debugf("Got object from cache %v", object)
+	log.WithField("ObjectID", object.ObjectID).
+		WithField("ObjectName", object.Name).
+		Debug("Got object from cache")
 	return object, err
 }
 
