@@ -80,7 +80,7 @@ func NewManager(
 	}
 
 	for i := 0; i < threads; i++ {
-		go manager.thread()
+		go manager.thread(i)
 	}
 
 	return &manager, nil
@@ -126,14 +126,14 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	return bytes, err
 }
 
-func (m *Manager) thread() {
+func (m *Manager) thread(threadID int) {
 	for {
 		select {
 		case req := <-m.queue:
-			m.checkChunk(req)
+			m.checkChunk(req, threadID)
 			break
 		case req := <-m.preloadQueue:
-			m.checkChunk(req)
+			m.checkChunk(req, threadID)
 			break
 		default:
 			time.Sleep(10 * time.Millisecond)
@@ -141,10 +141,13 @@ func (m *Manager) thread() {
 	}
 }
 
-func (m *Manager) checkChunk(req *Request) {
+func (m *Manager) checkChunk(req *Request, threadID int) {
 	if m.storage.ExistsOrCreate(req.id) {
 		return
 	}
+
+	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (preload: %v | thread: %v)",
+		req.object.ObjectID, req.object.Name, req.offsetStart, req.offsetEnd, req.preload, threadID)
 
 	bytes, err := m.downloader.Download(req)
 	if nil != err {

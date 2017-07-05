@@ -35,8 +35,6 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
-	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (preload: %v)",
-		request.object.ObjectID, request.object.Name, request.offsetStart, request.offsetEnd, request.preload)
 	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
