@@ -141,28 +141,28 @@ func main() {
 	}
 
 	// debug all given parameters
-	pLog := logrus.WithField("verbosity", logLevel)
-	pLog = pLog.WithField("root-node-id", *argRootNodeID)
-	pLog = pLog.WithField("config", *argConfigPath)
-	pLog = pLog.WithField("temp", *argTempPath)
-	if *argLogFormat == "elastic" {
-		pLog = pLog.WithField("log-elastic-url", *argLogElasticURL)
-		pLog = pLog.WithField("log-elastic-user", *argLogElasticUser)
-		pLog = pLog.WithField("log-elastic-index", *argLogElasticIndex)
-	}
-	pLog = pLog.WithField("chunk-size", *argChunkSize)
-	pLog = pLog.WithField("chunk-load-threads", *argChunkLoadThreads)
-	pLog = pLog.WithField("chunk-load-ahead", *argChunkLoadAhead)
-	pLog = pLog.WithField("chunk-load-timeout", *argChunkLoadTimeout)
-	pLog = pLog.WithField("chunk-load-retries", *argChunkLoadRetries)
-	pLog = pLog.WithField("max-chunks", *argMaxChunks)
-	pLog = pLog.WithField("refresh-interval", *argRefreshInterval)
-	pLog = pLog.WithField("fuse-options", *argMountOptions)
-	pLog = pLog.WithField("UID", uid)
-	pLog = pLog.WithField("GID", gid)
-	pLog = pLog.WithField("umask", umask)
-	pLog.Info("Parameters")
-	// Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
+	alog.Info(map[string]interface{}{
+		"verbosity":          logLevel,
+		"root-node-id":       *argRootNodeID,
+		"config":             *argConfigPath,
+		"temp":               *argTempPath,
+		"log-format":         *argLogFormat,
+		"log-elastic-url":    *argLogElasticURL,
+		"log-elastic-user":   *argLogElasticUser,
+		"log-elastic-index":  *argLogElasticIndex,
+		"chunk-size":         *argChunkSize,
+		"chunk-load-threads": *argChunkLoadThreads,
+		"chunk-load-ahead":   *argChunkLoadAhead,
+		"chunk-load-timeout": *argChunkLoadTimeout,
+		"chunk-load-retries": *argChunkLoadRetries,
+		"max-chunks":         *argMaxChunks,
+		"refresh-interval":   *argRefreshInterval,
+		"fuse-options":       *argMountOptions,
+		"UID":                uid,
+		"GID":                gid,
+		"umask":              umask,
+	}, "Parameters")
+	// speedlimit missing
 	// version missing here
 
 	// create all directories
@@ -177,7 +177,9 @@ func main() {
 	// set the global buffer configuration
 	chunkSize, err := parseSizeArg(*argChunkSize)
 	if nil != err {
-		// log.Fatalf("%v", err)
+		alog.Fatal(map[string]interface{}{
+			"Error": err,
+		}, "Could not parse chunk size")
 		os.Exit(2)
 	}
 
@@ -187,22 +189,27 @@ func main() {
 	if nil != err {
 		cfg, err = config.Create(configPath)
 		if nil != err {
-			// log.Infof("%v", err)
-			// log.Fatalf("Could not read configuration")
+			alog.Fatal(map[string]interface{}{
+				"Error": err,
+			}, "Could not read configuration")
 			os.Exit(3)
 		}
 	}
 
 	cache, err := drive.NewCache(*argConfigPath, *argLogLevel > 3)
 	if nil != err {
-		// log.Fatalf("%v", err)
+		alog.Fatal(map[string]interface{}{
+			"Error": err,
+		}, "Could not create cache instance")
 		os.Exit(4)
 	}
 	defer cache.Close()
 
 	client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID)
 	if nil != err {
-		// log.Fatalf("%v", err)
+		alog.Fatal(map[string]interface{}{
+			"Error": err,
+		}, "Could not create Google Drive client")
 		os.Exit(4)
 	}
 
@@ -216,14 +223,18 @@ func main() {
 		*argChunkLoadTimeout,
 		*argChunkLoadRetries)
 	if nil != err {
-		// log.Fatalf("%v", err)
+		alog.Fatal(map[string]interface{}{
+			"Error": err,
+		}, "Could not create chunk manager")
 		os.Exit(4)
 	}
 
 	// check os signals like SIGINT/TERM
 	checkOsSignals(argMountPoint)
 	if err := mount.Mount(client, chunkManager, argMountPoint, mountOptions, uid, gid, umask, fuseLogging); nil != err {
-		// log.Fatalf("%v", err)
+		alog.Fatal(map[string]interface{}{
+			"Error": err,
+		}, "Could not mount path")
 		os.Exit(5)
 	}
 }
@@ -236,7 +247,9 @@ func checkOsSignals(mountpoint string) {
 		for sig := range signals {
 			if sig == syscall.SIGINT {
 				if err := mount.Unmount(mountpoint, false); nil != err {
-					// log.Errorf("%v", err)
+					alog.Error(map[string]interface{}{
+						"Error": err,
+					}, "Could not unmount path")
 				}
 			}
 		}

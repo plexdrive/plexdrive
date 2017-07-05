@@ -6,18 +6,18 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-type LogEntry struct {
+type logEntry struct {
 	Fields    logrus.Fields
-	Type      string
+	Type      logrus.Level
 	Content   []interface{}
 	Timestamp time.Time
 }
 
 var gLogger *logrus.Logger
-var logQueue chan LogEntry
+var logQueue chan logEntry
 
 func init() {
-	logQueue = make(chan LogEntry, 999)
+	logQueue = make(chan logEntry, 999)
 }
 
 func Start() {
@@ -26,8 +26,18 @@ func Start() {
 			entry := <-logQueue
 			lr := gLogger.WithFields(entry.Fields)
 			switch entry.Type {
-			case "panic":
-				lr.Panic(entry.Content)
+			case logrus.DebugLevel:
+				lr.Debug(entry.Content...)
+			case logrus.InfoLevel:
+				lr.Info(entry.Content...)
+			case logrus.WarnLevel:
+				lr.Warning(entry.Content...)
+			case logrus.ErrorLevel:
+				lr.Error(entry.Content...)
+			case logrus.FatalLevel:
+				lr.Fatal(entry.Content...)
+			case logrus.PanicLevel:
+				lr.Panic(entry.Content...)
 			}
 		}
 	}()
@@ -37,20 +47,35 @@ func SetLogger(logger *logrus.Logger) {
 	gLogger = logger
 }
 
-func Panic(fields logrus.Fields, object ...interface{}) {
-	logQueue <- LogEntry{
+func Log(level logrus.Level, fields logrus.Fields, object ...interface{}) {
+	logQueue <- logEntry{
 		Fields:    fields,
-		Type:      "panic",
+		Type:      level,
 		Content:   object,
 		Timestamp: time.Now(),
 	}
 }
 
+func Debug(fields logrus.Fields, object ...interface{}) {
+	Log(logrus.DebugLevel, fields, object...)
+}
+
 func Info(fields logrus.Fields, object ...interface{}) {
-	logQueue <- LogEntry{
-		Fields:    fields,
-		Type:      "info",
-		Content:   object,
-		Timestamp: time.Now(),
-	}
+	Log(logrus.InfoLevel, fields, object...)
+}
+
+func Warn(fields logrus.Fields, object ...interface{}) {
+	Log(logrus.WarnLevel, fields, object...)
+}
+
+func Error(fields logrus.Fields, object ...interface{}) {
+	Log(logrus.ErrorLevel, fields, object...)
+}
+
+func Fatal(fields logrus.Fields, object ...interface{}) {
+	Log(logrus.FatalLevel, fields, object...)
+}
+
+func Panic(fields logrus.Fields, object ...interface{}) {
+	Log(logrus.PanicLevel, fields, object...)
 }
