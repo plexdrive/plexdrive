@@ -5,10 +5,9 @@ import (
 
 	"net/http"
 
-	log "github.com/Sirupsen/logrus"
-
 	"time"
 
+	"github.com/dweidenfeld/plexdrive/alog"
 	"github.com/dweidenfeld/plexdrive/drive"
 )
 
@@ -119,12 +118,13 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	bytes, err := m.storage.Get(object, id, chunkOffset, size, m.Timeout)
 	retryCount := 0
 	for err == ErrTimeout && retryCount < m.TimeoutRetries {
-		log.WithField("ObjectID", object.ObjectID).
-			WithField("ObjectName", object.Name).
-			WithField("ID", id).
-			WithField("Retry", (retryCount+1)).
-			WithField("RetryMaximum", m.TimeoutRetries).
-			Warning("Timeout while requesting chunk")
+		alog.Warn(map[string]interface{}{
+			"ObjectID":     object.ObjectID,
+			"ObjectName":   object.Name,
+			"ID":           id,
+			"Retry":        (retryCount + 1),
+			"RetryMaximum": m.TimeoutRetries,
+		}, "Timeout while requesting chunk")
 		bytes, err = m.storage.Get(object, id, chunkOffset, size, m.Timeout)
 		retryCount++
 	}
@@ -151,35 +151,43 @@ func (m *Manager) checkChunk(req *Request, threadID int) {
 		return
 	}
 
-	log.WithField("ObjectID", req.object.ObjectID).
-		WithField("ObjectName", req.object.Name).
-		WithField("ID", req.id).
-		WithField("Preload", req.preload).
-		WithField("ThreadID", threadID).
-		Debug("Got chunk checking request")
+	alog.Debug(map[string]interface{}{
+		"ObjectID":   req.object.ObjectID,
+		"ObjectName": req.object.Name,
+		"ID":         req.id,
+		"Preload":    req.preload,
+		"ThreadID":   threadID,
+	}, "Got chunk checking request")
 
 	before := time.Now()
 	bytes, err := m.downloader.Download(req)
 	if nil != err {
-		log.WithField("ObjectID", req.object.ObjectID).
-			WithField("ObjectName", req.object.Name).
-			WithField("ID", req.id).
-			WithField("Error", err).
-			Warning("Error")
+		alog.Warn(map[string]interface{}{
+			"ObjectID":   req.object.ObjectID,
+			"ObjectName": req.object.Name,
+			"ID":         req.id,
+			"Preload":    req.preload,
+			"Error":      err,
+		}, "Could not download chunk")
 		m.storage.Error(req.id, err)
 		return
 	}
-	log.WithField("ObjectID", req.object.ObjectID).
-		WithField("ObjectName", req.object.Name).
-		WithField("ID", req.id).
-		WithField("Took", time.Now().Sub(before)).
-		Debug("Download Time")
+
+	alog.Debug(map[string]interface{}{
+		"ObjectID":   req.object.ObjectID,
+		"ObjectName": req.object.Name,
+		"ID":         req.id,
+		"Preload":    req.preload,
+		"Took":       time.Now().Sub(before),
+	}, "Download Time")
 
 	if err := m.storage.Store(req.object, req.id, bytes); nil != err {
-		log.WithField("ObjectID", req.object.ObjectID).
-			WithField("ObjectName", req.object.Name).
-			WithField("ID", req.id).
-			WithField("Error", err).
-			Warning("Error")
+		alog.Warn(map[string]interface{}{
+			"ObjectID":   req.object.ObjectID,
+			"ObjectName": req.object.Name,
+			"ID":         req.id,
+			"Preload":    req.preload,
+			"Error":      err,
+		}, "Could not store chunk")
 	}
 }

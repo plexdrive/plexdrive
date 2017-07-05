@@ -9,10 +9,10 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"golang.org/x/oauth2"
 
 	"github.com/boltdb/bolt"
+	"github.com/dweidenfeld/plexdrive/alog"
 )
 
 // Cache is the cache
@@ -47,12 +47,13 @@ type PageToken struct {
 
 // NewCache creates a new cache instance
 func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
-	log.Debug("Opening cache connection")
+	alog.Debug(nil, "Opening cache connection")
 
 	db, err := bolt.Open(filepath.Join(cacheBasePath, "cache.bolt"), 0600, nil)
 	if nil != err {
-		log.WithField("Error", err).
-			Debug("Could not open cache file")
+		alog.Debug(map[string]interface{}{
+			"Error": err,
+		}, "Could not open cache file")
 		return nil, fmt.Errorf("Could not open cache file")
 	}
 
@@ -80,7 +81,7 @@ func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 
 // Close closes all handles
 func (c *Cache) Close() error {
-	log.Debug("Closing cache file")
+	alog.Debug(nil, "Closing cache file")
 	c.db.Close()
 	return nil
 }
@@ -89,18 +90,20 @@ func (c *Cache) Close() error {
 func (c *Cache) LoadToken() (*oauth2.Token, error) {
 	tokenFile, err := ioutil.ReadFile(c.tokenPath)
 	if nil != err {
-		log.WithField("TokenPath", c.tokenPath).
-			WithField("Error", err).
-			Debug("Could not read token file")
+		alog.Debug(map[string]interface{}{
+			"TokenPath": c.tokenPath,
+			"Error":     err,
+		}, "Could not read token file")
 		return nil, fmt.Errorf("Could not read token file in %v", c.tokenPath)
 	}
 
 	var token oauth2.Token
 	json.Unmarshal(tokenFile, &token)
 
-	log.WithField("TokenPath", c.tokenPath).
-		WithField("Token", token).
-		Debug("Got token from cache")
+	alog.Debug(map[string]interface{}{
+		"TokenPath": c.tokenPath,
+		"Token":     token,
+	}, "Got token from cache")
 
 	return &token, nil
 }
@@ -109,18 +112,20 @@ func (c *Cache) LoadToken() (*oauth2.Token, error) {
 func (c *Cache) StoreToken(token *oauth2.Token) error {
 	tokenJSON, err := json.Marshal(token)
 	if nil != err {
-		log.WithField("TokenPath", c.tokenPath).
-			WithField("Token", token).
-			WithField("Error", err).
-			Debug("Could not generate token.json content")
+		alog.Debug(map[string]interface{}{
+			"TokenPath": c.tokenPath,
+			"Token":     token,
+			"Error":     err,
+		}, "Could not generate token.json content")
 		return fmt.Errorf("Could not generate token.json content")
 	}
 
 	if err := ioutil.WriteFile(c.tokenPath, tokenJSON, 0644); nil != err {
-		log.WithField("TokenPath", c.tokenPath).
-			WithField("Token", token).
-			WithField("Error", err).
-			Debug("Could not generate token.json file")
+		alog.Debug(map[string]interface{}{
+			"TokenPath": c.tokenPath,
+			"Token":     token,
+			"Error":     err,
+		}, "Could not generate token.json file")
 		return fmt.Errorf("Could not generate token.json file")
 	}
 
@@ -137,9 +142,11 @@ func (c *Cache) GetObject(id string) (object *APIObject, err error) {
 		return nil, err
 	}
 
-	log.WithField("ObjectID", object.ObjectID).
-		WithField("ObjectName", object.Name).
-		Debug("Got object from cache")
+	alog.Debug(map[string]interface{}{
+		"ObjectID":   object.ObjectID,
+		"ObjectName": object.Name,
+	}, "Got object from cache")
+
 	return object, err
 }
 
@@ -165,8 +172,9 @@ func (c *Cache) GetObjectsByParent(parent string) ([]*APIObject, error) {
 		return nil
 	})
 
-	log.WithField("Objects", objects).
-		Debug("Got object from cache")
+	alog.Debug(map[string]interface{}{
+		"Objects": objects,
+	}, "Got objects from cache")
 	return objects, nil
 }
 
@@ -192,9 +200,11 @@ func (c *Cache) GetObjectByParentAndName(parent, name string) (object *APIObject
 		return nil, fmt.Errorf("Could not find object with name %v in parent %v", name, parent)
 	}
 
-	log.WithField("ObjectID", object.ObjectID).
-		WithField("ObjectName", object.Name).
-		Debug("Got object from cache")
+	alog.Debug(map[string]interface{}{
+		"ObjectID":   object.ObjectID,
+		"ObjectName": object.Name,
+	}, "Got objects from cache")
+
 	return object, nil
 }
 
@@ -219,9 +229,10 @@ func (c *Cache) DeleteObject(id string) error {
 	})
 
 	if nil != err {
-		log.WithField("ObjectID", id).
-			WithField("Error", err).
-			Debug("Could not delete object")
+		alog.Debug(map[string]interface{}{
+			"ObjectID": id,
+			"Error":    err,
+		}, "Could not delete object")
 		return fmt.Errorf("Could not delete object %v", id)
 	}
 
@@ -235,10 +246,11 @@ func (c *Cache) UpdateObject(object *APIObject) error {
 	})
 
 	if nil != err {
-		log.WithField("ObjectID", object.ObjectID).
-			WithField("ObjectName", object.Name).
-			WithField("Error", err).
-			Debug("Could not update/save object")
+		alog.Debug(map[string]interface{}{
+			"ObjectID":   object.ObjectID,
+			"ObjectName": object.Name,
+			"Error":      err,
+		}, "Could not update/save object")
 		return fmt.Errorf("Could not update/save object %v (%v)", object.ObjectID, object.Name)
 	}
 
@@ -315,7 +327,10 @@ func (c *Cache) StoreStartPageToken(token string) error {
 	})
 
 	if nil != err {
-		log.WithField("Token", token).Debug("Could not store token")
+		alog.Debug(map[string]interface{}{
+			"Token": token,
+		}, "Could not store token")
+
 		return fmt.Errorf("Could not store token %v", token)
 	}
 

@@ -12,7 +12,7 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/dweidenfeld/plexdrive/alog"
 	"github.com/dweidenfeld/plexdrive/drive"
 )
 
@@ -112,10 +112,11 @@ func (s *Storage) Get(object *drive.APIObject, id string, offset, size int64, ti
 				bytes, exists := s.loadFromRAM(object, id, offset, size)
 				if exists {
 					res <- bytes
-					log.WithField("ObjectID", object.ObjectID).
-						WithField("ObjectName", object.Name).
-						WithField("ID", id).
-						Debug("Got chunk from RAM")
+					alog.Debug(map[string]interface{}{
+						"ObjectID":   object.ObjectID,
+						"ObjectName": object.Name,
+						"ID":         id,
+					}, "Got chunk from RAM")
 					close(ec)
 					close(res)
 					return
@@ -124,10 +125,11 @@ func (s *Storage) Get(object *drive.APIObject, id string, offset, size int64, ti
 				bytes, exists = s.loadFromDisk(object, id, offset, size)
 				if exists {
 					res <- bytes
-					log.WithField("ObjectID", object.ObjectID).
-						WithField("ObjectName", object.Name).
-						WithField("ID", id).
-						Debug("Got chunk from disk")
+					alog.Debug(map[string]interface{}{
+						"ObjectID":   object.ObjectID,
+						"ObjectName": object.Name,
+						"ID":         id,
+					}, "Got chunk from disk")
 					close(ec)
 					close(res)
 					return
@@ -159,11 +161,12 @@ func (s *Storage) thread() {
 	for {
 		item := <-s.queue
 		if err := s.storeToDisk(item.object, item.id, item.bytes); nil != err {
-			log.WithField("ObjectID", item.object.ObjectID).
-				WithField("ObjectName", item.object.Name).
-				WithField("ID", item.id).
-				WithField("Error", err).
-				Warning("Could not store chunk to disk")
+			alog.Warn(map[string]interface{}{
+				"ObjectID":   item.object.ObjectID,
+				"ObjectName": item.object.Name,
+				"ID":         item.id,
+				"Error":      err,
+			}, "Could not store chunk to disk")
 		}
 	}
 }
@@ -196,12 +199,13 @@ func (s *Storage) loadFromDisk(object *drive.APIObject, id string, offset, size 
 
 	f, err := os.Open(filename)
 	if nil != err {
-		log.WithField("ObjectID", object.ObjectID).
-			WithField("ObjectName", object.Name).
-			WithField("ID", id).
-			WithField("File", filename).
-			WithField("Error", err).
-			Debug("Could not open chunk on disk")
+		alog.Debug(map[string]interface{}{
+			"ObjectID":   object.ObjectID,
+			"ObjectName": object.Name,
+			"ID":         id,
+			"File":       filename,
+			"Error":      err,
+		}, "Could not open chunk on disk")
 		return nil, false
 	}
 	defer f.Close()
@@ -215,12 +219,13 @@ func (s *Storage) loadFromDisk(object *drive.APIObject, id string, offset, size 
 		return buf[:eOffset], true
 	}
 
-	log.WithField("ObjectID", object.ObjectID).
-		WithField("ObjectName", object.Name).
-		WithField("ID", id).
-		WithField("File", filename).
-		WithField("Error", err).
-		Debug("Could not load chunk from disk")
+	alog.Debug(map[string]interface{}{
+		"ObjectID":   object.ObjectID,
+		"ObjectName": object.Name,
+		"ID":         id,
+		"File":       filename,
+		"Error":      err,
+	}, "Could not load chunk from disk")
 	return nil, false
 }
 
@@ -233,18 +238,20 @@ func (s *Storage) storeToDisk(object *drive.APIObject, id string, bytes []byte) 
 		if "" != deleteID {
 			filename := filepath.Join(s.ChunkPath, deleteID)
 
-			log.WithField("ObjectID", object.ObjectID).
-				WithField("ObjectName", object.Name).
-				WithField("ID", id).
-				WithField("File", filename).
-				Debug("Deleting chunk")
+			alog.Debug(map[string]interface{}{
+				"ObjectID":   object.ObjectID,
+				"ObjectName": object.Name,
+				"ID":         id,
+				"File":       filename,
+			}, "Deleting chunk")
 			if err := os.Remove(filename); nil != err {
-				log.WithField("ObjectID", object.ObjectID).
-					WithField("ObjectName", object.Name).
-					WithField("ID", id).
-					WithField("File", filename).
-					WithField("Error", err).
-					Warning("Could not delete chunk")
+				alog.Warn(map[string]interface{}{
+					"ObjectID":   object.ObjectID,
+					"ObjectName": object.Name,
+					"ID":         id,
+					"File":       filename,
+					"Error":      err,
+				}, "Could not delete chunk")
 			}
 
 			s.tocLock.Lock()
@@ -255,24 +262,26 @@ func (s *Storage) storeToDisk(object *drive.APIObject, id string, bytes []byte) 
 
 	if _, err := os.Stat(s.ChunkPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(s.ChunkPath, 0777); nil != err {
-			log.WithField("ObjectID", object.ObjectID).
-				WithField("ObjectName", object.Name).
-				WithField("ID", id).
-				WithField("ChunkPath", s.ChunkPath).
-				WithField("Error", err).
-				Debug("Could not create chunk temp path")
+			alog.Debug(map[string]interface{}{
+				"ObjectID":   object.ObjectID,
+				"ObjectName": object.Name,
+				"ID":         id,
+				"ChunkPath":  s.ChunkPath,
+				"Error":      err,
+			}, "Could not create chunk temp path")
 			return fmt.Errorf("Could not create chunk temp path %v", s.ChunkPath)
 		}
 	}
 
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		if err := ioutil.WriteFile(filename, bytes, 0777); nil != err {
-			log.WithField("ObjectID", object.ObjectID).
-				WithField("ObjectName", object.Name).
-				WithField("ID", id).
-				WithField("File", filename).
-				WithField("Error", err).
-				Debug("Could not write chunk to disk")
+			alog.Debug(map[string]interface{}{
+				"ObjectID":   object.ObjectID,
+				"ObjectName": object.Name,
+				"ID":         id,
+				"File":       filename,
+				"Error":      err,
+			}, "Could not write chunk to disk")
 			return fmt.Errorf("Could not write chunk temp file %v", filename)
 		}
 
