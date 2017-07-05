@@ -175,6 +175,10 @@ func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
 func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 	filename := filepath.Join(s.ChunkPath, id)
 
+	if _, err := os.Stat(filename); os.IsExist(err) {
+		return nil, false
+	}
+
 	f, err := os.Open(filename)
 	if nil != err {
 		Log.Tracef("%v", err)
