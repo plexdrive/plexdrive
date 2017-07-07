@@ -127,8 +127,6 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 				close(res)
 				return
 			}
-
-			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 
