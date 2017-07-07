@@ -39,6 +39,7 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
+	argCacheFile := flag.String("cache-file", filepath.Join(user.HomeDir, ".plexdrive", "cache.bolt"), "Path the the cache file")
 	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU(), "The number of threads to use for downloading chunks")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 2, "The number of chunks that should be read ahead")
@@ -110,6 +111,7 @@ func main() {
 	Log.Debugf("root-node-id         : %v", *argRootNodeID)
 	Log.Debugf("config               : %v", *argConfigPath)
 	Log.Debugf("temp                 : %v", *argTempPath)
+	Log.Debugf("cache-file           : %v", *argCacheFile)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
 	Log.Debugf("chunk-load-ahead     : %v", *argChunkLoadAhead)
@@ -127,6 +129,11 @@ func main() {
 	// create all directories
 	if err := os.MkdirAll(*argConfigPath, 0766); nil != err {
 		Log.Errorf("Could not create configuration directory")
+		Log.Debugf("%v", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(filepath.Dir(*argCacheFile), 0766); nil != err {
+		Log.Errorf("Could not create cache file directory")
 		Log.Debugf("%v", err)
 		os.Exit(1)
 	}
@@ -151,7 +158,7 @@ func main() {
 		}
 	}
 
-	cache, err := drive.NewCache(*argConfigPath, *argLogLevel > 3)
+	cache, err := drive.NewCache(*argCacheFile, *argConfigPath, *argLogLevel > 3)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)

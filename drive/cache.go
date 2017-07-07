@@ -46,10 +46,10 @@ type PageToken struct {
 }
 
 // NewCache creates a new cache instance
-func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
+func NewCache(cacheFile, configPath string, sqlDebug bool) (*Cache, error) {
 	Log.Debugf("Opening cache connection")
 
-	db, err := bolt.Open(filepath.Join(cacheBasePath, "cache.bolt"), 0600, nil)
+	db, err := bolt.Open(cacheFile, 0600, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not open cache file")
@@ -57,7 +57,7 @@ func NewCache(cacheBasePath string, sqlDebug bool) (*Cache, error) {
 
 	cache := Cache{
 		db:        db,
-		tokenPath: filepath.Join(cacheBasePath, "token.json"),
+		tokenPath: filepath.Join(configPath, "token.json"),
 	}
 
 	// Make sure the necessary buckets exist
