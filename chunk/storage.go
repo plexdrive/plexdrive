@@ -97,48 +97,26 @@ func (s *Storage) Error(id string, err error) {
 
 // Get gets a chunk content (blocking)
 func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
-	res := make(chan []byte)
-	ec := make(chan error)
+	// TODO: use timeout
 
-	go func() {
-		for {
-			s.tocLock.Lock()
-			err, exists := s.toc[id]
-			s.tocLock.Unlock()
-			if nil == err && exists {
-				bytes, exists := s.loadFromRAM(id, offset, size)
-				if exists {
-					res <- bytes
-					close(ec)
-					close(res)
-					return
-				}
-
-				bytes, exists = s.loadFromDisk(id, offset, size)
-				if exists {
-					res <- bytes
-					close(ec)
-					close(res)
-					return
-				}
-			} else if nil != err {
-				ec <- err
-				close(ec)
-				close(res)
-				return
+	for {
+		s.tocLock.Lock()
+		err, exists := s.toc[id]
+		s.tocLock.Unlock()
+		if nil == err && exists {
+			bytes, exists := s.loadFromRAM(id, offset, size)
+			if exists {
+				return bytes, nil
 			}
-		}
-	}()
 
-	select {
-	case r := <-res:
-		return r, nil
-	case err := <-ec:
-		s.deleteFromToc(id)
-		return nil, err
-	case <-time.After(timeout):
-		s.deleteFromToc(id)
-		return nil, ErrTimeout
+			bytes, exists = s.loadFromDisk(id, offset, size)
+			if exists {
+				return bytes, nil
+			}
+		} else if nil != err {
+			s.deleteFromToc(id)
+			return nil, err
+		}
 	}
 }
 
