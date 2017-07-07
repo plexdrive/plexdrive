@@ -91,12 +91,14 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	offsetEnd := offsetStart + m.ChunkSize
 	id := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
-	m.queue <- &Request{
-		id:          id,
-		object:      object,
-		offsetStart: offsetStart,
-		offsetEnd:   offsetEnd,
-		preload:     false,
+	if !m.storage.ExistsOrCreate(id) {
+		m.queue <- &Request{
+			id:          id,
+			object:      object,
+			offsetStart: offsetStart,
+			offsetEnd:   offsetEnd,
+			preload:     false,
+		}
 	}
 
 	for i := m.ChunkSize; i < (m.ChunkSize * int64(m.LoadAhead+1)); i += m.ChunkSize {
@@ -104,12 +106,14 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 		aheadOffsetEnd := aheadOffsetStart + m.ChunkSize
 		if uint64(aheadOffsetStart) < object.Size && uint64(aheadOffsetEnd) < object.Size {
 			id := fmt.Sprintf("%v:%v", object.ObjectID, aheadOffsetStart)
-			m.queue <- &Request{
-				id:          id,
-				object:      object,
-				offsetStart: aheadOffsetStart,
-				offsetEnd:   aheadOffsetEnd,
-				preload:     true,
+			if !m.storage.ExistsOrCreate(id) {
+				m.queue <- &Request{
+					id:          id,
+					object:      object,
+					offsetStart: aheadOffsetStart,
+					offsetEnd:   aheadOffsetEnd,
+					preload:     true,
+				}
 			}
 		}
 	}
@@ -131,10 +135,6 @@ func (m *Manager) thread(threadID int) {
 }
 
 func (m *Manager) checkChunk(req *Request, threadID int) {
-	if m.storage.ExistsOrCreate(req.id) {
-		return
-	}
-
 	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (preload: %v | thread: %v)",
 		req.object.ObjectID, req.object.Name, req.offsetStart, req.offsetEnd, req.preload, threadID)
 
