@@ -163,7 +163,7 @@ func (s *Storage) loadFromDisk(id string, offset, size int64) ([]byte, bool) {
 	if n > 0 && (nil == err || io.EOF == err || io.ErrUnexpectedEOF == err) {
 		s.stack.Touch(id)
 
-		eOffset := int64(math.Min(float64(size), float64(len(buf))))
+		eOffset := int64(math.Min(float64(size), float64(n)))
 		return buf[:eOffset], true
 	}
 
