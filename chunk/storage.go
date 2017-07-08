@@ -97,8 +97,7 @@ func (s *Storage) Error(id string, err error) {
 
 // Get gets a chunk content (blocking)
 func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
-	// TODO: use timeout
-
+	start := time.Now()
 	for {
 		s.tocLock.Lock()
 		err, exists := s.toc[id]
@@ -116,6 +115,8 @@ func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]b
 		} else if nil != err {
 			s.deleteFromToc(id)
 			return nil, err
+		} else if time.Now().Sub(start) > timeout {
+			return nil, ErrTimeout
 		}
 	}
 }

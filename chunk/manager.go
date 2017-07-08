@@ -21,6 +21,7 @@ type Manager struct {
 	TimeoutRetries int
 	downloader     *Downloader
 	queue          chan *Request
+	queue2         chan *Request
 	storage        *Storage
 }
 
@@ -69,7 +70,8 @@ func NewManager(
 		Timeout:        timeout,
 		TimeoutRetries: timeoutRetries,
 		downloader:     downloader,
-		queue:          make(chan *Request, 500),
+		queue:          make(chan *Request, 20),
+		queue2:         make(chan *Request, 80),
 		storage:        NewStorage(chunkPath, chunkSize, maxChunks),
 	}
 
@@ -107,7 +109,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 		if uint64(aheadOffsetStart) < object.Size && uint64(aheadOffsetEnd) < object.Size {
 			id := fmt.Sprintf("%v:%v", object.ObjectID, aheadOffsetStart)
 			if !m.storage.ExistsOrCreate(id) {
-				m.queue <- &Request{
+				m.queue2 <- &Request{
 					id:          id,
 					object:      object,
 					offsetStart: aheadOffsetStart,
@@ -130,7 +132,12 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 
 func (m *Manager) thread(threadID int) {
 	for {
-		m.checkChunk(<-m.queue, threadID)
+		select {
+		case req := <-m.queue:
+			m.checkChunk(req, threadID)
+		case req := <-m.queue2:
+			m.checkChunk(req, threadID)
+		}
 	}
 }
 
