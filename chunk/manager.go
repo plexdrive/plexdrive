@@ -3,8 +3,6 @@ package chunk
 import (
 	"fmt"
 
-	"net/http"
-
 	. "github.com/claudetech/loggo/default"
 
 	"time"
@@ -40,7 +38,7 @@ func NewManager(
 	chunkSize int64,
 	loadAhead,
 	threads int,
-	client *http.Client,
+	client *drive.Client,
 	maxChunks int,
 	timeout time.Duration,
 	timeoutRetries int) (*Manager, error) {
@@ -126,6 +124,9 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 		Log.Warningf("Timeout while requesting chunk %v. Retrying (%v / %v)", id, (retryCount + 1), m.TimeoutRetries)
 		bytes, err = m.storage.Get(id, chunkOffset, size, m.Timeout)
 		retryCount++
+	}
+	if nil != err {
+		m.storage.Error(id, err)
 	}
 	return bytes, err
 }

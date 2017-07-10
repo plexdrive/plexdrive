@@ -176,7 +176,7 @@ func main() {
 		chunkSize,
 		*argChunkLoadAhead,
 		*argChunkLoadThreads,
-		client.GetNativeClient(),
+		client,
 		*argMaxChunks,
 		*argChunkLoadTimeout,
 		*argChunkLoadRetries)

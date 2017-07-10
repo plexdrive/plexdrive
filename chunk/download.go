@@ -8,15 +8,16 @@ import (
 	"time"
 
 	. "github.com/claudetech/loggo/default"
+	"github.com/dweidenfeld/plexdrive/drive"
 )
 
 // Downloader handles concurrent chunk downloads
 type Downloader struct {
-	Client *http.Client
+	Client *drive.Client
 }
 
 // NewDownloader creates a new download manager
-func NewDownloader(threads int, client *http.Client) (*Downloader, error) {
+func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 	manager := Downloader{
 		Client: client,
 	}
@@ -26,7 +27,7 @@ func NewDownloader(threads int, client *http.Client) (*Downloader, error) {
 
 // Download starts a new download request
 func (d *Downloader) Download(req *Request) ([]byte, error) {
-	return downloadFromAPI(d.Client, req, 0)
+	return downloadFromAPI(d.Client.GetNativeClient(), req, 0)
 }
 
 func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte, error) {
