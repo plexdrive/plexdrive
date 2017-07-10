@@ -25,9 +25,9 @@ type Storage struct {
 	MaxChunks  int
 	queue      chan *Item
 	chunks     map[string][]byte
-	chunksLock sync.Mutex
+	chunksLock sync.RWMutex
 	toc        map[string]error
-	tocLock    sync.Mutex
+	tocLock    sync.RWMutex
 	stack      *Stack
 }
 
@@ -99,9 +99,9 @@ func (s *Storage) Error(id string, err error) {
 func (s *Storage) Get(id string, offset, size int64, timeout time.Duration) ([]byte, error) {
 	start := time.Now()
 	for {
-		s.tocLock.Lock()
+		s.tocLock.RLock()
 		err, exists := s.toc[id]
-		s.tocLock.Unlock()
+		s.tocLock.RUnlock()
 		if nil == err && exists {
 			bytes, exists := s.loadFromRAM(id, offset, size)
 			if exists {
@@ -137,9 +137,9 @@ func (s *Storage) deleteFromToc(id string) {
 }
 
 func (s *Storage) loadFromRAM(id string, offset, size int64) ([]byte, bool) {
-	s.chunksLock.Lock()
+	s.chunksLock.RLock()
 	bytes, exists := s.chunks[id]
-	s.chunksLock.Unlock()
+	s.chunksLock.RUnlock()
 	if !exists {
 		return nil, false
 	}

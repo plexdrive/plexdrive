@@ -8,7 +8,7 @@ import (
 // Stack is a thread safe list/stack implementation
 type Stack struct {
 	items *list.List
-	lock  sync.Mutex
+	lock  sync.RWMutex
 }
 
 // NewStack creates a new stack
@@ -20,9 +20,9 @@ func NewStack() *Stack {
 
 // Len returns the length of the current stack
 func (s *Stack) Len() int {
-	s.lock.Lock()
+	s.lock.RLock()
 	count := s.items.Len()
-	s.lock.Unlock()
+	s.lock.RUnlock()
 	return count
 }
 
