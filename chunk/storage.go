@@ -65,7 +65,7 @@ func (s *Storage) Clear() error {
 // ExistsOrCreate check if an item already exists, otherwise it will create a placeholder
 func (s *Storage) ExistsOrCreate(id string) bool {
 	s.tocLock.Lock()
-	if err, exists := s.toc[id]; exists && nil != err {
+	if err, exists := s.toc[id]; exists && nil == err {
 		s.tocLock.Unlock()
 		return true
 	}
