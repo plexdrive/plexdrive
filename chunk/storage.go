@@ -64,7 +64,6 @@ func (s *Storage) LoadOrCreate(id string) ([]byte, bool) {
 // Store stores a chunk in the RAM and adds it to the disk storage queue
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.Lock()
-	s.stack = append(s.stack, id)
 	if len(s.stack) > s.MaxChunks {
 		deleteID := s.stack[0]
 		if "" != deleteID {
@@ -74,6 +73,7 @@ func (s *Storage) Store(id string, bytes []byte) error {
 		}
 	}
 	s.chunks[id] = bytes
+	s.stack = append(s.stack, id)
 	s.lock.Unlock()
 
 	return nil
