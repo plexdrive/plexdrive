@@ -45,7 +45,7 @@ func main() {
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", 2, "The number of chunks that should be read ahead")
 	argChunkLoadTimeout := flag.Duration("chunk-load-timeout", 10*time.Second, "Duration to wait for a chunk to be loaded")
 	argChunkLoadRetries := flag.Int("chunk-load-retries", 3, "Number of retries to load a chunk")
-	argMaxChunks := flag.Int("max-chunks", 10, "The maximum number of chunks to be stored on disk")
+	argMaxChunks := flag.Int("max-chunks", 200, "The maximum number of chunks to be stored on disk")
 	argRefreshInterval := flag.Duration("refresh-interval", 5*time.Minute, "The time to wait till checking for changes")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
