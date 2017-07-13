@@ -166,6 +166,7 @@ func (m *Manager) checkChunk(req *Request, threadID int) {
 			req.response <- Response{err: err}
 			close(req.response)
 		}
+		return
 	}
 
 	if nil != req.response {
