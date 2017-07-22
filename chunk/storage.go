@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	. "github.com/claudetech/loggo/default"
 )
 
 // ErrTimeout is a timeout error
@@ -16,6 +18,7 @@ type Storage struct {
 	ChunkSize int64
 	MaxChunks int
 	chunks    map[string][]byte
+	stack     *Stack
 	lock      sync.Mutex
 }
 
@@ -32,6 +35,7 @@ func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 		ChunkSize: chunkSize,
 		MaxChunks: maxChunks,
 		chunks:    make(map[string][]byte),
+		stack:     NewStack(maxChunks),
 	}
 
 	return &storage
@@ -50,6 +54,7 @@ func (s *Storage) Load(id string) []byte {
 	s.lock.Lock()
 	if chunk, exists := s.chunks[id]; exists {
 		s.lock.Unlock()
+		s.stack.Touch(id)
 		return chunk
 	}
 	s.lock.Unlock()
@@ -60,19 +65,16 @@ func (s *Storage) Load(id string) []byte {
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.Lock()
 
-	// // delete chunk
-	// for s.stackSize > s.MaxChunks {
-	// 	Log.Debugf("%v / %v", s.stackSize, s.MaxChunks)
+	// delete oldest chunk
+	if s.stack.Len() >= s.MaxChunks-1 {
+		deleteID := s.stack.Pop()
+		delete(s.chunks, deleteID)
 
-	// 	deleteID := s.stack[0]
-	// 	s.stack = s.stack[1:]
-	// 	s.stackSize--
-
-	// 	Log.Debugf("Deleting chunk %v", deleteID)
-	// 	delete(s.chunks, deleteID)
-	// }
+		Log.Debugf("Deleted chunk %v", deleteID)
+	}
 
 	s.chunks[id] = bytes
+	s.stack.Push(id)
 	s.lock.Unlock()
 
 	return nil

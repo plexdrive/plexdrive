@@ -16,28 +16,30 @@ import (
 type Downloader struct {
 	Client    *drive.Client
 	queue     chan *Request
-	callbacks map[string][]ResponseFunc
-	lock      sync.RWMutex
+	callbacks map[string][]DownloadCallback
+	lock      sync.Mutex
 }
+
+type DownloadCallback func(error, []byte)
 
 // NewDownloader creates a new download manager
 func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 	manager := Downloader{
 		Client:    client,
 		queue:     make(chan *Request, 100),
-		callbacks: make(map[string][]ResponseFunc, 100),
+		callbacks: make(map[string][]DownloadCallback, 100),
 	}
 
-	for i := 0; i < threads; i++ {
-		Log.Debugf("Starting download thread %v", i)
-		go manager.thread(i)
-	}
+	// for i := 0; i < threads/2; i++ {
+	// Log.Debugf("Starting download thread %v", i)
+	go manager.thread(1)
+	// }
 
 	return &manager, nil
 }
 
 // Download starts a new download request
-func (d *Downloader) Download(req *Request, callback ResponseFunc) {
+func (d *Downloader) Download(req *Request, callback DownloadCallback) {
 	d.lock.Lock()
 	_, exists := d.callbacks[req.id]
 	d.callbacks[req.id] = append(d.callbacks[req.id], callback)
@@ -50,20 +52,21 @@ func (d *Downloader) Download(req *Request, callback ResponseFunc) {
 func (d *Downloader) thread(threadID int) {
 	for {
 		req := <-d.queue
-		d.lock.RLock()
-		callbacks := d.callbacks[req.id]
-		d.lock.RUnlock()
-		d.download(d.Client.GetNativeClient(), req, callbacks)
+		d.download(d.Client.GetNativeClient(), req)
 	}
 }
 
-func (d *Downloader) download(client *http.Client, req *Request, callbacks []ResponseFunc) {
-	Log.Debugf("Starting download %v", req.id)
+func (d *Downloader) download(client *http.Client, req *Request) {
+	Log.Debugf("Starting download %v (preload: %v)", req.id, req.preload)
 	bytes, err := downloadFromAPI(client, req, 0)
 
+	d.lock.Lock()
+	callbacks := d.callbacks[req.id]
 	for _, callback := range callbacks {
 		callback(err, bytes)
 	}
+	delete(d.callbacks, req.id)
+	d.lock.Unlock()
 }
 
 func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte, error) {
