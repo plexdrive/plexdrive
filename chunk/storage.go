@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-
-	. "github.com/claudetech/loggo/default"
 )
 
 // ErrTimeout is a timeout error
@@ -18,9 +16,7 @@ type Storage struct {
 	ChunkSize int64
 	MaxChunks int
 	chunks    map[string][]byte
-	stack     []string
-	stackSize int
-	lock      sync.RWMutex
+	lock      sync.Mutex
 }
 
 // Item represents a chunk in RAM
@@ -36,7 +32,6 @@ func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 		ChunkSize: chunkSize,
 		MaxChunks: maxChunks,
 		chunks:    make(map[string][]byte),
-		stack:     make([]string, 0),
 	}
 
 	return &storage
@@ -50,45 +45,35 @@ func (s *Storage) Clear() error {
 	return nil
 }
 
-// LoadOrCreate loads a chunk from ram or creates it
-func (s *Storage) LoadOrCreate(id string) ([]byte, bool) {
+// Load a chunk from ram or creates it
+func (s *Storage) Load(id string) []byte {
 	s.lock.Lock()
 	if chunk, exists := s.chunks[id]; exists {
 		s.lock.Unlock()
-		return chunk, true
+		return chunk
 	}
-	s.chunks[id] = nil
 	s.lock.Unlock()
-	return nil, false
+	return nil
 }
 
 // Store stores a chunk in the RAM and adds it to the disk storage queue
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.Lock()
 
-	// delete chunk
-	for s.stackSize > s.MaxChunks {
-		Log.Debugf("%v / %v", s.stackSize, s.MaxChunks)
+	// // delete chunk
+	// for s.stackSize > s.MaxChunks {
+	// 	Log.Debugf("%v / %v", s.stackSize, s.MaxChunks)
 
-		deleteID := s.stack[0]
-		s.stack = s.stack[1:]
-		s.stackSize--
+	// 	deleteID := s.stack[0]
+	// 	s.stack = s.stack[1:]
+	// 	s.stackSize--
 
-		Log.Debugf("Deleting chunk %v", deleteID)
-		delete(s.chunks, deleteID)
-	}
+	// 	Log.Debugf("Deleting chunk %v", deleteID)
+	// 	delete(s.chunks, deleteID)
+	// }
 
 	s.chunks[id] = bytes
-	s.stack = append(s.stack, id)
-	s.stackSize++
 	s.lock.Unlock()
 
 	return nil
-}
-
-// Error is called to remove an item from the index if there has been an issue downloading the chunk
-func (s *Storage) Error(id string) {
-	s.lock.Lock()
-	delete(s.chunks, id)
-	s.lock.Unlock()
 }

@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/claudetech/loggo/default"
@@ -13,21 +14,56 @@ import (
 
 // Downloader handles concurrent chunk downloads
 type Downloader struct {
-	Client *drive.Client
+	Client    *drive.Client
+	queue     chan *Request
+	callbacks map[string][]ResponseFunc
+	lock      sync.RWMutex
 }
 
 // NewDownloader creates a new download manager
 func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 	manager := Downloader{
-		Client: client,
+		Client:    client,
+		queue:     make(chan *Request, 100),
+		callbacks: make(map[string][]ResponseFunc, 100),
+	}
+
+	for i := 0; i < threads; i++ {
+		Log.Debugf("Starting download thread %v", i)
+		go manager.thread(i)
 	}
 
 	return &manager, nil
 }
 
 // Download starts a new download request
-func (d *Downloader) Download(req *Request) ([]byte, error) {
-	return downloadFromAPI(d.Client.GetNativeClient(), req, 0)
+func (d *Downloader) Download(req *Request, callback ResponseFunc) {
+	d.lock.Lock()
+	_, exists := d.callbacks[req.id]
+	d.callbacks[req.id] = append(d.callbacks[req.id], callback)
+	if !exists {
+		d.queue <- req
+	}
+	d.lock.Unlock()
+}
+
+func (d *Downloader) thread(threadID int) {
+	for {
+		req := <-d.queue
+		d.lock.RLock()
+		callbacks := d.callbacks[req.id]
+		d.lock.RUnlock()
+		d.download(d.Client.GetNativeClient(), req, callbacks)
+	}
+}
+
+func (d *Downloader) download(client *http.Client, req *Request, callbacks []ResponseFunc) {
+	Log.Debugf("Starting download %v", req.id)
+	bytes, err := downloadFromAPI(client, req, 0)
+
+	for _, callback := range callbacks {
+		callback(err, bytes)
+	}
 }
 
 func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte, error) {
