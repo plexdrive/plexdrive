@@ -96,7 +96,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		if res.StatusCode != 403 && res.StatusCode != 500 {
 			Log.Debugf("Request\n----------\n%v\n----------\n", req)
 			Log.Debugf("Response\n----------\n%v\n----------\n", res)
-			return nil, fmt.Errorf("Wrong status code %v", res.StatusCode)
+			return nil, fmt.Errorf("Wrong status code %v for %v", res.StatusCode, request.object)
 		}
 
 		// throttle requests

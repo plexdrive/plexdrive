@@ -7,6 +7,8 @@ import (
 
 	"time"
 
+	"math"
+
 	"github.com/dweidenfeld/plexdrive/drive"
 )
 
@@ -145,10 +147,10 @@ func (m *Manager) thread() {
 }
 
 func (m *Manager) checkChunk(req *Request, response chan Response) {
-	if chunk := m.storage.Load(req.id); nil != chunk {
+	if bytes := m.storage.Load(req.id); nil != bytes {
 		if nil != response {
 			response <- Response{
-				Bytes: chunk[req.chunkOffset:req.chunkOffsetEnd],
+				Bytes: adjustResponseChunk(req, bytes),
 			}
 			close(response)
 		}
@@ -167,8 +169,9 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 		}
 
 		if nil != response {
+
 			response <- Response{
-				Bytes: bytes[req.chunkOffset:req.chunkOffsetEnd],
+				Bytes: adjustResponseChunk(req, bytes),
 			}
 			close(response)
 		}
@@ -177,4 +180,11 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 			Log.Warningf("Coult not store chunk %v", req.id)
 		}
 	})
+}
+
+func adjustResponseChunk(req *Request, bytes []byte) []byte {
+	sOffset := int64(math.Min(float64(req.chunkOffset), float64(len(bytes))))
+	eOffset := int64(math.Min(float64(req.chunkOffsetEnd), float64(len(bytes))))
+
+	return bytes[sOffset:eOffset]
 }
