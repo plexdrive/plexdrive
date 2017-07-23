@@ -65,8 +65,7 @@ func (s *Storage) Load(id string) []byte {
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.Lock()
 
-	// delete oldest chunk
-	if s.stack.Len() >= s.MaxChunks-1 {
+	for s.stack.Len() >= s.MaxChunks-1 {
 		deleteID := s.stack.Pop()
 		delete(s.chunks, deleteID)
 

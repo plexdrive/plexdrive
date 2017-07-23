@@ -30,10 +30,9 @@ func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 		callbacks: make(map[string][]DownloadCallback, 100),
 	}
 
-	// for i := 0; i < threads/2; i++ {
-	// Log.Debugf("Starting download thread %v", i)
-	go manager.thread(1)
-	// }
+	for i := 0; i < threads; i++ {
+		go manager.thread()
+	}
 
 	return &manager, nil
 }
@@ -49,7 +48,7 @@ func (d *Downloader) Download(req *Request, callback DownloadCallback) {
 	d.lock.Unlock()
 }
 
-func (d *Downloader) thread(threadID int) {
+func (d *Downloader) thread() {
 	for {
 		req := <-d.queue
 		d.download(d.Client.GetNativeClient(), req)

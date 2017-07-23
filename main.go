@@ -40,9 +40,10 @@ func main() {
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argTempPath := flag.StringP("temp", "t", os.TempDir(), "Path to a temporary directory to store temporary data")
 	argCacheFile := flag.String("cache-file", filepath.Join(user.HomeDir, ".plexdrive", "cache.bolt"), "Path the the cache file")
-	argChunkSize := flag.String("chunk-size", "5M", "The size of each chunk that is downloaded (units: B, K, M, G)")
-	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()-1, "The number of threads to use for downloading chunks")
-	argChunkLoadAhead := flag.Int("chunk-load-ahead", 2, "The number of chunks that should be read ahead")
+	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
+	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()/2, "The number of threads to use for downloading chunks")
+	argChunkCheckThreads := flag.Int("chunk-check-threads", runtime.NumCPU()/2, "The number of threads to use for checking chunk existence")
+	argChunkLoadAhead := flag.Int("chunk-load-ahead", 1, "The number of chunks that should be read ahead")
 	argChunkLoadTimeout := flag.Duration("chunk-load-timeout", 10*time.Second, "Duration to wait for a chunk to be loaded")
 	argChunkLoadRetries := flag.Int("chunk-load-retries", 3, "Number of retries to load a chunk")
 	argMaxChunks := flag.Int("max-chunks", 10, "The maximum number of chunks to be stored on disk")
@@ -114,6 +115,7 @@ func main() {
 	Log.Debugf("cache-file           : %v", *argCacheFile)
 	Log.Debugf("chunk-size           : %v", *argChunkSize)
 	Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
+	Log.Debugf("chunk-check-threads  : %v", *argChunkCheckThreads)
 	Log.Debugf("chunk-load-ahead     : %v", *argChunkLoadAhead)
 	Log.Debugf("chunk-load-timeout   : %v", *argChunkLoadTimeout)
 	Log.Debugf("chunk-load-retries   : %v", *argChunkLoadRetries)
@@ -175,6 +177,7 @@ func main() {
 		chunkPath,
 		chunkSize,
 		*argChunkLoadAhead,
+		*argChunkCheckThreads,
 		*argChunkLoadThreads,
 		client,
 		*argMaxChunks,

@@ -49,7 +49,8 @@ func NewManager(
 	chunkPath string,
 	chunkSize int64,
 	loadAhead,
-	threads int,
+	checkThreads int,
+	loadThreads int,
 	client *drive.Client,
 	maxChunks int,
 	timeout time.Duration,
@@ -68,7 +69,7 @@ func NewManager(
 		return nil, fmt.Errorf("max-chunk must be greater than 2 and bigger than the load ahead value")
 	}
 
-	downloader, err := NewDownloader(threads, client)
+	downloader, err := NewDownloader(loadThreads, client)
 	if nil != err {
 		return nil, err
 	}
@@ -88,8 +89,8 @@ func NewManager(
 		return nil, err
 	}
 
-	for i := 0; i < threads; i++ {
-		go manager.thread(i)
+	for i := 0; i < checkThreads; i++ {
+		go manager.thread()
 	}
 
 	return &manager, nil
@@ -136,7 +137,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64, response
 	}
 }
 
-func (m *Manager) thread(threadID int) {
+func (m *Manager) thread() {
 	for {
 		queueEntry := <-m.queue
 		m.checkChunk(queueEntry.request, queueEntry.response)
