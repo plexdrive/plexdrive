@@ -53,6 +53,8 @@ sudo launchctl start plexdrive
 1. Download and install rclone
 ```
 curl -O https://downloads.rclone.org/rclone-current-osx-amd64.zip -o rclone.zip
+unzip rclone.zip
+mv rclone-current-osx-amd64.zip/rclone /usr/bin/rclone
 ```
 2. Configure a new rclone remote:
 ```
