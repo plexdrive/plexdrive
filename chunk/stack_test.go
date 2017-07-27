@@ -3,14 +3,14 @@ package chunk
 import "testing"
 
 func TestOOB(t *testing.T) {
-	stack := NewStack()
+	stack := NewStack(1)
 
 	stack.Push("1")
 	stack.Touch("1")
 }
 
 func TestAddToStack(t *testing.T) {
-	stack := NewStack()
+	stack := NewStack(1)
 
 	stack.Push("1")
 	stack.Push("2")
