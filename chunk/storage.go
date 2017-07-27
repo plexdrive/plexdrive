@@ -2,8 +2,6 @@ package chunk
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"sync"
 
 	. "github.com/claudetech/loggo/default"
@@ -14,7 +12,6 @@ var ErrTimeout = errors.New("timeout")
 
 // Storage is a chunk storage
 type Storage struct {
-	ChunkPath string
 	ChunkSize int64
 	MaxChunks int
 	chunks    map[string][]byte
@@ -29,9 +26,8 @@ type Item struct {
 }
 
 // NewStorage creates a new storage
-func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
+func NewStorage(chunkSize int64, maxChunks int) *Storage {
 	storage := Storage{
-		ChunkPath: chunkPath,
 		ChunkSize: chunkSize,
 		MaxChunks: maxChunks,
 		chunks:    make(map[string][]byte),
@@ -43,9 +39,6 @@ func NewStorage(chunkPath string, chunkSize int64, maxChunks int) *Storage {
 
 // Clear removes all old chunks on disk (will be called on each program start)
 func (s *Storage) Clear() error {
-	if err := os.RemoveAll(s.ChunkPath); nil != err {
-		return fmt.Errorf("Could not clear old chunks from disk")
-	}
 	return nil
 }
 

@@ -5,8 +5,6 @@ import (
 
 	. "github.com/claudetech/loggo/default"
 
-	"time"
-
 	"math"
 
 	"github.com/dweidenfeld/plexdrive/drive"
@@ -14,14 +12,11 @@ import (
 
 // Manager manages chunks on disk
 type Manager struct {
-	ChunkPath      string
-	ChunkSize      int64
-	LoadAhead      int
-	Timeout        time.Duration
-	TimeoutRetries int
-	downloader     *Downloader
-	storage        *Storage
-	queue          chan *QueueEntry
+	ChunkSize  int64
+	LoadAhead  int
+	downloader *Downloader
+	storage    *Storage
+	queue      chan *QueueEntry
 }
 
 type QueueEntry struct {
@@ -48,19 +43,13 @@ type Response struct {
 
 // NewManager creates a new chunk manager
 func NewManager(
-	chunkPath string,
 	chunkSize int64,
 	loadAhead,
 	checkThreads int,
 	loadThreads int,
 	client *drive.Client,
-	maxChunks int,
-	timeout time.Duration,
-	timeoutRetries int) (*Manager, error) {
+	maxChunks int) (*Manager, error) {
 
-	if "" == chunkPath {
-		return nil, fmt.Errorf("Path to chunk file must not be empty")
-	}
 	if chunkSize < 4096 {
 		return nil, fmt.Errorf("Chunk size must not be < 4096")
 	}
@@ -77,14 +66,11 @@ func NewManager(
 	}
 
 	manager := Manager{
-		ChunkPath:      chunkPath,
-		ChunkSize:      chunkSize,
-		LoadAhead:      loadAhead,
-		Timeout:        timeout,
-		TimeoutRetries: timeoutRetries,
-		downloader:     downloader,
-		storage:        NewStorage(chunkPath, chunkSize, maxChunks),
-		queue:          make(chan *QueueEntry, 100),
+		ChunkSize:  chunkSize,
+		LoadAhead:  loadAhead,
+		downloader: downloader,
+		storage:    NewStorage(chunkSize, maxChunks),
+		queue:      make(chan *QueueEntry, 100),
 	}
 
 	if err := manager.storage.Clear(); nil != err {
