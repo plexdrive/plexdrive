@@ -7,31 +7,38 @@ import (
 
 // Stack is a thread safe list/stack implementation
 type Stack struct {
-	items *list.List
-	index map[string]*list.Element
-	len   int
-	lock  sync.RWMutex
+	items   *list.List
+	index   map[string]*list.Element
+	len     int
+	lock    sync.RWMutex
+	maxSize int
 }
 
 // NewStack creates a new stack
 func NewStack(maxChunks int) *Stack {
 	return &Stack{
-		items: list.New(),
-		index: make(map[string]*list.Element, maxChunks),
+		items:   list.New(),
+		index:   make(map[string]*list.Element, maxChunks),
+		maxSize: maxChunks,
 	}
 }
 
-// Len returns the length of the current stack
-func (s *Stack) Len() int {
-	s.lock.RLock()
-	len := s.len
-	s.lock.RUnlock()
-	return len
-}
+// // Len returns the length of the current stack
+// func (s *Stack) Len() int {
+// 	s.lock.RLock()
+// 	len := s.len
+// 	s.lock.RUnlock()
+// 	return len
+// }
 
 // Pop pops the first item from the stack
 func (s *Stack) Pop() string {
 	s.lock.Lock()
+	if s.len < s.maxSize {
+		s.lock.Unlock()
+		return ""
+	}
+
 	item := s.items.Front()
 	if nil == item {
 		s.lock.Unlock()

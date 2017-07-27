@@ -65,8 +65,8 @@ func (s *Storage) Load(id string) []byte {
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.Lock()
 
-	for s.stack.Len() >= s.MaxChunks-1 {
-		deleteID := s.stack.Pop()
+	deleteID := s.stack.Pop()
+	if "" != deleteID {
 		delete(s.chunks, deleteID)
 
 		Log.Debugf("Deleted chunk %v", deleteID)
