@@ -29,16 +29,16 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 ## Usage
 ```
 Usage of ./plexdrive:
+  --cache-file string
+    	Path the the cache file (default "~/.plexdrive/cache.bolt")
+  --chunk-check-threads int
+    	The number of threads to use for checking chunk existence (default 2)
   --chunk-load-ahead int
-    	The number of chunks that should be read ahead (default 2)
-  --chunk-load-retries int
-    	Number of retries to load a chunk (default 3)
+    	The number of chunks that should be read ahead (default 3)
   --chunk-load-threads int
-    	The number of threads to use for downloading chunks (default 4)
-  --chunk-load-timeout duration
-    	Duration to wait for a chunk to be loaded (default 10s)
+    	The number of threads to use for downloading chunks (default 2)
   --chunk-size string
-    	The size of each chunk that is downloaded (units: B, K, M, G) (default "5M")
+    	The size of each chunk that is downloaded (units: B, K, M, G) (default "10M")
   -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
@@ -48,11 +48,9 @@ Usage of ./plexdrive:
   --max-chunks int
     	The maximum number of chunks to be stored on disk (default 10)
   --refresh-interval duration
-    	The time to wait till checking for changes (default 5m0s)
+    	The time to wait till checking for changes (default 1m0s)
   --root-node-id string
     	The ID of the root node to mount (use this for only mount a sub directory) (default "root")
-  -t, --temp string
-    	Path to a temporary directory to store temporary data (default "/tmp")
   --uid int
     	Set the mounts UID (-1 = default permissions) (default -1)
   --umask value

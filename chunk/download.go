@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/claudetech/loggo/default"
@@ -13,21 +14,58 @@ import (
 
 // Downloader handles concurrent chunk downloads
 type Downloader struct {
-	Client *drive.Client
+	Client    *drive.Client
+	queue     chan *Request
+	callbacks map[string][]DownloadCallback
+	lock      sync.Mutex
 }
+
+type DownloadCallback func(error, []byte)
 
 // NewDownloader creates a new download manager
 func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 	manager := Downloader{
-		Client: client,
+		Client:    client,
+		queue:     make(chan *Request, 100),
+		callbacks: make(map[string][]DownloadCallback, 100),
+	}
+
+	for i := 0; i < threads; i++ {
+		go manager.thread()
 	}
 
 	return &manager, nil
 }
 
 // Download starts a new download request
-func (d *Downloader) Download(req *Request) ([]byte, error) {
-	return downloadFromAPI(d.Client.GetNativeClient(), req, 0)
+func (d *Downloader) Download(req *Request, callback DownloadCallback) {
+	d.lock.Lock()
+	_, exists := d.callbacks[req.id]
+	d.callbacks[req.id] = append(d.callbacks[req.id], callback)
+	if !exists {
+		d.queue <- req
+	}
+	d.lock.Unlock()
+}
+
+func (d *Downloader) thread() {
+	for {
+		req := <-d.queue
+		d.download(d.Client.GetNativeClient(), req)
+	}
+}
+
+func (d *Downloader) download(client *http.Client, req *Request) {
+	Log.Debugf("Starting download %v (preload: %v)", req.id, req.preload)
+	bytes, err := downloadFromAPI(client, req, 0)
+
+	d.lock.Lock()
+	callbacks := d.callbacks[req.id]
+	for _, callback := range callbacks {
+		callback(err, bytes)
+	}
+	delete(d.callbacks, req.id)
+	d.lock.Unlock()
 }
 
 func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte, error) {
@@ -58,7 +96,7 @@ func downloadFromAPI(client *http.Client, request *Request, delay int64) ([]byte
 		if res.StatusCode != 403 && res.StatusCode != 500 {
 			Log.Debugf("Request\n----------\n%v\n----------\n", req)
 			Log.Debugf("Response\n----------\n%v\n----------\n", res)
-			return nil, fmt.Errorf("Wrong status code %v", res.StatusCode)
+			return nil, fmt.Errorf("Wrong status code %v for %v", res.StatusCode, request.object)
 		}
 
 		// throttle requests

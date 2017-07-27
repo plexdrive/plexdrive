@@ -232,13 +232,16 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 // Read reads some bytes or the whole file
 func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	bytes, err := o.chunkManager.GetChunk(o.object, req.Offset, int64(req.Size))
-	if nil != err {
-		Log.Warningf("%v", err)
+	response := make(chan chunk.Response)
+	o.chunkManager.GetChunk(o.object, req.Offset, int64(req.Size), response)
+	res := <-response
+
+	if nil != res.Error {
+		Log.Warningf("%v", res.Error)
 		return fuse.EIO
 	}
 
-	resp.Data = bytes[:]
+	resp.Data = res.Bytes
 	return nil
 }
 

@@ -2,58 +2,54 @@ package chunk
 
 import (
 	"fmt"
-	"math"
 
 	. "github.com/claudetech/loggo/default"
 
-	"time"
+	"math"
 
 	"github.com/dweidenfeld/plexdrive/drive"
 )
 
 // Manager manages chunks on disk
 type Manager struct {
-	ChunkPath      string
-	ChunkSize      int64
-	LoadAhead      int
-	Timeout        time.Duration
-	TimeoutRetries int
-	downloader     *Downloader
-	queue          chan *Request
-	queue2         chan *Request
-	storage        *Storage
+	ChunkSize  int64
+	LoadAhead  int
+	downloader *Downloader
+	storage    *Storage
+	queue      chan *QueueEntry
+}
+
+type QueueEntry struct {
+	request  *Request
+	response chan Response
 }
 
 // Request represents a chunk request
 type Request struct {
-	id          string
-	object      *drive.APIObject
-	preload     bool
-	offsetStart int64
-	offsetEnd   int64
-	response    chan Response
+	id             string
+	object         *drive.APIObject
+	offsetStart    int64
+	offsetEnd      int64
+	chunkOffset    int64
+	chunkOffsetEnd int64
+	preload        bool
 }
 
-// Response represents a chunk responses
+// Response represetns a chunk response
 type Response struct {
-	err   error
-	bytes []byte
+	Error error
+	Bytes []byte
 }
 
 // NewManager creates a new chunk manager
 func NewManager(
-	chunkPath string,
 	chunkSize int64,
 	loadAhead,
-	threads int,
+	checkThreads int,
+	loadThreads int,
 	client *drive.Client,
-	maxChunks int,
-	timeout time.Duration,
-	timeoutRetries int) (*Manager, error) {
+	maxChunks int) (*Manager, error) {
 
-	if "" == chunkPath {
-		return nil, fmt.Errorf("Path to chunk file must not be empty")
-	}
 	if chunkSize < 4096 {
 		return nil, fmt.Errorf("Chunk size must not be < 4096")
 	}
@@ -64,49 +60,50 @@ func NewManager(
 		return nil, fmt.Errorf("max-chunk must be greater than 2 and bigger than the load ahead value")
 	}
 
-	downloader, err := NewDownloader(threads, client)
+	downloader, err := NewDownloader(loadThreads, client)
 	if nil != err {
 		return nil, err
 	}
 
 	manager := Manager{
-		ChunkPath:      chunkPath,
-		ChunkSize:      chunkSize,
-		LoadAhead:      loadAhead,
-		Timeout:        timeout,
-		TimeoutRetries: timeoutRetries,
-		downloader:     downloader,
-		queue:          make(chan *Request, 20),
-		queue2:         make(chan *Request, 80),
-		storage:        NewStorage(chunkPath, chunkSize, maxChunks),
+		ChunkSize:  chunkSize,
+		LoadAhead:  loadAhead,
+		downloader: downloader,
+		storage:    NewStorage(chunkSize, maxChunks),
+		queue:      make(chan *QueueEntry, 100),
 	}
 
 	if err := manager.storage.Clear(); nil != err {
 		return nil, err
 	}
 
-	for i := 0; i < threads; i++ {
-		go manager.thread(i)
+	for i := 0; i < checkThreads; i++ {
+		go manager.thread()
 	}
 
 	return &manager, nil
 }
 
 // GetChunk loads one chunk and starts the preload for the next chunks
-func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte, error) {
+func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64, response chan Response) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
 	offsetEnd := offsetStart + m.ChunkSize
 	id := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
-	response := make(chan Response)
-	m.queue <- &Request{
-		id:          id,
-		object:      object,
-		offsetStart: offsetStart,
-		offsetEnd:   offsetEnd,
-		preload:     false,
-		response:    response,
+	request := &Request{
+		id:             id,
+		object:         object,
+		offsetStart:    offsetStart,
+		offsetEnd:      offsetEnd,
+		chunkOffset:    chunkOffset,
+		chunkOffsetEnd: chunkOffset + size,
+		preload:        false,
+	}
+
+	m.queue <- &QueueEntry{
+		request:  request,
+		response: response,
 	}
 
 	for i := m.ChunkSize; i < (m.ChunkSize * int64(m.LoadAhead+1)); i += m.ChunkSize {
@@ -114,67 +111,66 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 		aheadOffsetEnd := aheadOffsetStart + m.ChunkSize
 		if uint64(aheadOffsetStart) < object.Size && uint64(aheadOffsetEnd) < object.Size {
 			id := fmt.Sprintf("%v:%v", object.ObjectID, aheadOffsetStart)
-			m.queue2 <- &Request{
+			request := &Request{
 				id:          id,
 				object:      object,
 				offsetStart: aheadOffsetStart,
 				offsetEnd:   aheadOffsetEnd,
 				preload:     true,
 			}
+			m.queue <- &QueueEntry{
+				request: request,
+			}
 		}
 	}
-
-	res := <-response
-	if nil != res.err {
-		return nil, res.err
-	}
-
-	sOffset := int64(math.Min(float64(len(res.bytes)), float64(chunkOffset)))
-	eOffset := int64(math.Min(float64(len(res.bytes)), float64(chunkOffset+size)))
-	return res.bytes[sOffset:eOffset], nil
 }
 
-func (m *Manager) thread(threadID int) {
+func (m *Manager) thread() {
 	for {
-		select {
-		case req := <-m.queue:
-			m.checkChunk(req, threadID)
-		case req := <-m.queue2:
-			m.checkChunk(req, threadID)
-		}
+		queueEntry := <-m.queue
+		m.checkChunk(queueEntry.request, queueEntry.response)
 	}
 }
 
-func (m *Manager) checkChunk(req *Request, threadID int) {
-	if chunk, exists := m.storage.LoadOrCreate(req.id); exists {
-		if nil != req.response {
-			req.response <- Response{bytes: chunk}
-			close(req.response)
+func (m *Manager) checkChunk(req *Request, response chan Response) {
+	if bytes := m.storage.Load(req.id); nil != bytes {
+		if nil != response {
+			response <- Response{
+				Bytes: adjustResponseChunk(req, bytes),
+			}
+			close(response)
 		}
 		return
 	}
 
-	Log.Debugf("Requesting object %v (%v) bytes %v - %v from API (preload: %v | thread: %v)",
-		req.object.ObjectID, req.object.Name, req.offsetStart, req.offsetEnd, req.preload, threadID)
-
-	bytes, err := m.downloader.Download(req)
-	if nil != err {
-		Log.Warningf("%v", err)
-		m.storage.Error(req.id)
-
-		if nil != req.response {
-			req.response <- Response{err: err}
-			close(req.response)
+	m.downloader.Download(req, func(err error, bytes []byte) {
+		if nil != err {
+			if nil != response {
+				response <- Response{
+					Error: err,
+				}
+				close(response)
+			}
+			return
 		}
-		return
-	}
 
-	if nil != req.response {
-		req.response <- Response{bytes: bytes}
-		close(req.response)
-	}
+		if nil != response {
 
-	if err := m.storage.Store(req.id, bytes); nil != err {
-		Log.Warningf("%v", err)
-	}
+			response <- Response{
+				Bytes: adjustResponseChunk(req, bytes),
+			}
+			close(response)
+		}
+
+		if err := m.storage.Store(req.id, bytes); nil != err {
+			Log.Warningf("Coult not store chunk %v", req.id)
+		}
+	})
+}
+
+func adjustResponseChunk(req *Request, bytes []byte) []byte {
+	sOffset := int64(math.Min(float64(req.chunkOffset), float64(len(bytes))))
+	eOffset := int64(math.Min(float64(req.chunkOffsetEnd), float64(len(bytes))))
+
+	return bytes[sOffset:eOffset]
 }
