@@ -32,7 +32,7 @@ type Client struct {
 }
 
 // NewClient creates a new Google Drive client
-func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duration, rootNodeID string) (*Client, error) {
+func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duration, rootNodeID string, suppressOutput bool) (*Client, error) {
 	client := Client{
 		cache:   cache,
 		context: context.Background(),
@@ -54,7 +54,7 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 		client.rootNodeID = "root"
 	}
 
-	if err := client.authorize(); nil != err {
+	if err := client.authorize(suppressOutput); nil != err {
 		return nil, err
 	}
 
@@ -163,14 +163,14 @@ func (d *Client) checkChanges(firstCheck bool) {
 	d.changesChecking = false
 }
 
-func (d *Client) authorize() error {
+func (d *Client) authorize(suppressOutput bool) error {
 	Log.Debugf("Authorizing against Google Drive API")
 
 	token, err := d.cache.LoadToken()
 	if nil != err {
 		Log.Debugf("Token could not be found, fetching new one")
 
-		t, err := getTokenFromWeb(d.config)
+		t, err := getTokenFromWeb(d.config, suppressOutput)
 		if nil != err {
 			return err
 		}
@@ -186,10 +186,14 @@ func (d *Client) authorize() error {
 
 // getTokenFromWeb uses Config to request a Token.
 // It returns the retrieved Token.
-func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
+func getTokenFromWeb(config *oauth2.Config, suppressOutput bool) (*oauth2.Token, error) {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser %v\n", authURL)
-	fmt.Printf("Paste the authorization code: ")
+	if !suppressOutput {
+		fmt.Printf("Go to the following link in your browser %v\n", authURL)
+		fmt.Printf("Paste the authorization code: ")
+	} else {
+		fmt.Printf("%v\n", authURL)
+	}
 
 	var code string
 	if _, err := fmt.Scan(&code); err != nil {

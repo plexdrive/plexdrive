@@ -39,6 +39,10 @@ Usage of ./plexdrive:
     	The number of threads to use for downloading chunks (default 2)
   --chunk-size string
     	The size of each chunk that is downloaded (units: B, K, M, G) (default "10M")
+  --client-id string
+    	The client-id of your Google Drive API
+  --client-secret string
+    	The client-secret of your Google Drive API
   -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
