@@ -50,8 +50,6 @@ func main() {
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
-	argClientID := flag.String("client-id", "", "The client-id of your Google Drive API")
-	argClientSecret := flag.String("client-secret", "", "The client-secret of your Google Drive API")
 	// argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
 	flag.Parse()
 
@@ -121,8 +119,6 @@ func main() {
 	Log.Debugf("UID                  : %v", uid)
 	Log.Debugf("GID                  : %v", gid)
 	Log.Debugf("umask                : %v", umask)
-	Log.Debugf("client-id						 : %v", *argClientID)
-	Log.Debugf("client-secret				 : %v", *argClientSecret)
 	// Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
 	// version missing here
 
@@ -149,7 +145,7 @@ func main() {
 	configPath := filepath.Join(*argConfigPath, "config.json")
 	cfg, err := config.Read(configPath)
 	if nil != err {
-		cfg, err = config.Create(configPath, *argClientID, *argClientSecret)
+		cfg, err = config.Create(configPath)
 		if nil != err {
 			Log.Errorf("Could not read configuration")
 			Log.Debugf("%v", err)
@@ -164,7 +160,7 @@ func main() {
 	}
 	defer cache.Close()
 
-	client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID, "" != *argClientID && "" != *argClientSecret)
+	client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID)
 	if nil != err {
 		Log.Errorf("%v", err)
 		os.Exit(4)

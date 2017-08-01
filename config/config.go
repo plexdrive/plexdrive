@@ -27,30 +27,24 @@ func Read(configPath string) (*Config, error) {
 }
 
 // Create creates the configuration by requesting from stdin
-func Create(configPath, clientID, clientSecret string) (*Config, error) {
+func Create(configPath string) (*Config, error) {
 	var config Config
+	fmt.Println("1. Please go to https://console.developers.google.com/")
+	fmt.Println("2. Create a new project")
+	fmt.Println("3. Go to library and activate the Google Drive API")
+	fmt.Println("4. Go to credentials and create an OAuth client ID")
+	fmt.Println("5. Set the application type to 'other'")
+	fmt.Println("6. Specify some name and click create")
+	fmt.Printf("7. Enter your generated client ID: ")
 
-	if "" == clientID || "" == clientSecret {
-		fmt.Println("1. Please go to https://console.developers.google.com/")
-		fmt.Println("2. Create a new project")
-		fmt.Println("3. Go to library and activate the Google Drive API")
-		fmt.Println("4. Go to credentials and create an OAuth client ID")
-		fmt.Println("5. Set the application type to 'other'")
-		fmt.Println("6. Specify some name and click create")
-		fmt.Printf("7. Enter your generated client ID: ")
-
-		if _, err := fmt.Scan(&config.ClientID); err != nil {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Unable to read client id")
-		}
-		fmt.Printf("8. Enter your generated client secret: ")
-		if _, err := fmt.Scan(&config.ClientSecret); err != nil {
-			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Unable to read client secret")
-		}
-	} else {
-		config.ClientID = clientID
-		config.ClientSecret = clientSecret
+	if _, err := fmt.Scan(&config.ClientID); err != nil {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Unable to read client id")
+	}
+	fmt.Printf("8. Enter your generated client secret: ")
+	if _, err := fmt.Scan(&config.ClientSecret); err != nil {
+		Log.Debugf("%v", err)
+		return nil, fmt.Errorf("Unable to read client secret")
 	}
 
 	configJSON, err := json.Marshal(&config)
