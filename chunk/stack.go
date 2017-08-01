@@ -5,56 +5,65 @@ import (
 	"sync"
 )
 
+// Stack is a thread safe list/stack implementation
 type Stack struct {
-	items *list.List
-	lock  sync.Mutex
+	items   *list.List
+	index   map[string]*list.Element
+	len     int
+	lock    sync.RWMutex
+	maxSize int
 }
 
-func NewStack() *Stack {
+// NewStack creates a new stack
+func NewStack(maxChunks int) *Stack {
 	return &Stack{
-		items: list.New(),
+		items:   list.New(),
+		index:   make(map[string]*list.Element, maxChunks),
+		maxSize: maxChunks,
 	}
 }
 
-func (s *Stack) Len() int {
-	s.lock.Lock()
-	count := s.items.Len()
-	s.lock.Unlock()
-	return count
-}
-
+// Pop pops the first item from the stack
 func (s *Stack) Pop() string {
 	s.lock.Lock()
+	if s.len < s.maxSize {
+		s.lock.Unlock()
+		return ""
+	}
+
 	item := s.items.Front()
 	if nil == item {
 		s.lock.Unlock()
 		return ""
 	}
 	s.items.Remove(item)
+	s.len--
+	id := item.Value.(string)
+	delete(s.index, id)
 	s.lock.Unlock()
 
-	return item.Value.(string)
+	return id
 }
 
+// Touch moves the specified item to the last position of the stack
 func (s *Stack) Touch(id string) {
 	s.lock.Lock()
-	for item := s.items.Front(); item != nil; item = item.Next() {
-		if item.Value.(string) == id {
-			s.items.MoveToBack(item)
-			break
-		}
+	item, exists := s.index[id]
+	if exists {
+		s.items.MoveToBack(item)
 	}
 	s.lock.Unlock()
 }
 
+// Push adds a new item to the last position of the stack
 func (s *Stack) Push(id string) {
 	s.lock.Lock()
-	for item := s.items.Front(); item != nil; item = item.Next() {
-		if item.Value.(string) == id {
-			s.lock.Unlock()
-			return
-		}
+	if _, exists := s.index[id]; exists {
+		s.lock.Unlock()
+		return
 	}
 	s.items.PushBack(id)
+	s.index[id] = s.items.Back()
+	s.len++
 	s.lock.Unlock()
 }

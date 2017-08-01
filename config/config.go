@@ -26,8 +26,9 @@ func Read(configPath string) (*Config, error) {
 	return &config, nil
 }
 
-// CreateConfig creates the configuration by requesting from stdin
+// Create creates the configuration by requesting from stdin
 func Create(configPath string) (*Config, error) {
+	var config Config
 	fmt.Println("1. Please go to https://console.developers.google.com/")
 	fmt.Println("2. Create a new project")
 	fmt.Println("3. Go to library and activate the Google Drive API")
@@ -35,7 +36,7 @@ func Create(configPath string) (*Config, error) {
 	fmt.Println("5. Set the application type to 'other'")
 	fmt.Println("6. Specify some name and click create")
 	fmt.Printf("7. Enter your generated client ID: ")
-	var config Config
+
 	if _, err := fmt.Scan(&config.ClientID); err != nil {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Unable to read client id")

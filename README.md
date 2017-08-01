@@ -15,13 +15,12 @@ I tried using rclone for a long time, but got API Quota errors every day and/or 
 _If you like the project, feel free to make a small [donation via PayPal](https://www.paypal.me/dowei). Otherwise support the project by implementing new functions / bugfixes yourself and create pull requests :)_
 
 ## Installation
-1. First you need to install fuse and mongodb on your system 
+1. First you need to install fuse on your system 
 2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Sample command line for plexdrive
 ```
-./plexdrive -m localhost --clear-chunk-age=24h --chunk-load-ahead=4 --chunk-load-threads=8 -t /mnt/plexdrive-cache/ --config=/root/.plexdrive --refresh-interval=1m --fuse-options=allow_other /mnt/plexdrive
-
+./plexdrive mount -c /root/.plexdrive -o allow_other /mnt/plexdrive
 ```
 
 ### Crypted mount with rclone
@@ -29,47 +28,41 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 
 ## Usage
 ```
-Usage of ./plexdrive:
+Usage of ./plexdrive mount:
+  --cache-file string
+    	Path the the cache file (default "~/.plexdrive/cache.bolt")
+  --chunk-check-threads int
+    	The number of threads to use for checking chunk existence (default 2)
   --chunk-load-ahead int
-        The number of chunks that should be read ahead (default 4)
+    	The number of chunks that should be read ahead (default 3)
   --chunk-load-threads int
-        The number of threads to use for downloading chunks (default 8)
+    	The number of threads to use for downloading chunks (default 2)
   --chunk-size string
-        The size of each chunk that is downloaded (units: B, K, M, G) (default "5M")
-  --clear-chunk-age duration
-        The maximum age of a cached chunk file (default 30m0s)
-  --clear-chunk-interval duration
-        The time to wait till clearing the chunk directory (default 1m0s)
+    	The size of each chunk that is downloaded (units: B, K, M, G) (default "10M")
+  --client-id string
+    	The client-id of your Google Drive API
+  --client-secret string
+    	The client-secret of your Google Drive API
   -c, --config string
-        The path to the configuration directory (default "/root/.plexdrive")
+    	The path to the configuration directory (default "~/.plexdrive")
   -o, --fuse-options string
-        Fuse mount options (e.g. -fuse-options allow_other,...)
+    	Fuse mount options (e.g. -fuse-options allow_other,...)
   --gid int
-        Set the mounts GID (-1 = default permissions) (default -1)
-  --mongo-database string
-        MongoDB database (default "plexdrive")
-  -m, --mongo-host string
-        MongoDB host (default "localhost")
-  --mongo-password string
-        MongoDB password
-  --mongo-user string
-        MongoDB username
+    	Set the mounts GID (-1 = default permissions) (default -1)
+  --max-chunks int
+    	The maximum number of chunks to be stored on disk (default 10)
   --refresh-interval duration
-        The time to wait till checking for changes (default 5m0s)
+    	The time to wait till checking for changes (default 1m0s)
   --root-node-id string
-        The ID of the root node to mount (use this for only mount a sub directory) (default "root")
-  --speed-limit string
-        This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)
-  -t, --temp string
-        Path to a temporary directory to store temporary data (default "/tmp")
+    	The ID of the root node to mount (use this for only mount a sub directory) (default "root")
   --uid int
-        Set the mounts UID (-1 = default permissions) (default -1)
+    	Set the mounts UID (-1 = default permissions) (default -1)
   --umask value
-        Override the default file permissions
+    	Override the default file permissions
   -v, --verbosity int
-        Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
+    	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
   --version
-        Displays program's version information
+    	Displays program's version information
 ```
 
 ### Support 
@@ -90,29 +83,6 @@ Feel free to ask configuration and setup questions here.
 * writeback_cache
 * volume_name=myname
 * read_only
-
-### Cache by usage
-If you set the --clear-chunk-age to e.g. 24 hours your files will be stored
-for 24 hours on your harddisk. This prevents you from downloading the file
-everytime it is accessed so will have a faster playback start, avoid stuttering
-and spare API calls. 
-
-Everytime a file is accessed it will the caching time will be extended.
-E.g. You access a file at 20:00, then it will be deleted on the next day at
-20:00. If you access the file e.g. at 18:00 the next day, the file will be
-deleted the day after at 18:00 and so on.
-
-If you activate the option `clear-chunk-max-size` you will automatically disable
-the cache cleaning by time. So it will only delete the oldest chunk file when it 
-needs the space.
-
-**This function does not limit the storage to the given size**. It will only say
-"if you reach the given limit, check if you can clean up old stuff". So if you have
-of at most 60gb to be sure it will not override the 100gb limit. The implementation is 
-a limit of e.g. 100gb available for chunks, you should specify the clear-chunk-max-size 
-done that way, because a hard checking routine could make the playback unstable and 
-present buffering because the cleaning of the old chunks off the file system is a low 
-priority over streaming your files.
 
 
 ### Root-Node-ID

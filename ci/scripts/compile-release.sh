@@ -5,11 +5,10 @@ set -xe
 export ORIGIN=$PWD
 export GOPATH=$PWD/go
 export PATH=$GOPATH/bin:$PATH
-export TS=$(date +%s)
 cd $GOPATH/src/github.com/dweidenfeld/plexdrive
 
 # Version
-export VERSION="$(cat ci/meta/version)-$TS"
+export VERSION="$(cat ci/meta/version)"
 echo "Got version $VERSION"
 
 sed -i.bak s/%VERSION%/$VERSION/g main.go
