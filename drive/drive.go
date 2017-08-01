@@ -272,22 +272,26 @@ func (d *Client) Remove(object *APIObject, parent string) error {
 		return fmt.Errorf("Could not get Google Drive client")
 	}
 
-	if object.CanTrash {
-		if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Trashed: true}).Do(); nil != err {
-			Log.Debugf("%v", err)
-			return fmt.Errorf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
-		}
-	} else {
-		if _, err := client.Files.Update(object.ObjectID, nil).RemoveParents(parent).Do(); nil != err {
-			Log.Debugf("%v", err)
-			return fmt.Errorf("Could not unsubscribe object %v (%v) from API", object.ObjectID, object.Name)
-		}
-	}
-
 	if err := d.cache.DeleteObject(object.ObjectID); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not delete object %v (%v) from cache", object.ObjectID, object.Name)
 	}
+
+	go func() {
+		if object.CanTrash {
+			if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Trashed: true}).Do(); nil != err {
+				Log.Debugf("%v", err)
+				Log.Warningf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
+				d.cache.UpdateObject(object)
+			}
+		} else {
+			if _, err := client.Files.Update(object.ObjectID, nil).RemoveParents(parent).Do(); nil != err {
+				Log.Debugf("%v", err)
+				Log.Warningf("Could not unsubscribe object %v (%v) from API", object.ObjectID, object.Name)
+				d.cache.UpdateObject(object)
+			}
+		}
+	}()
 
 	return nil
 }
