@@ -28,7 +28,7 @@ resources:
     pre_release: true
 
 - name: github-release
-  type: github-relase
+  type: github-release
   source:
     owner: dweidenfeld
     repository: plexdrive
