@@ -20,7 +20,7 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Sample command line for plexdrive
 ```
-./plexdrive -t /mnt/plexdrive-cache/ -c /root/.plexdrive -o allow_other /mnt/plexdrive
+./plexdrive mount -c /root/.plexdrive -o allow_other /mnt/plexdrive
 ```
 
 ### Crypted mount with rclone
@@ -28,7 +28,7 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 
 ## Usage
 ```
-Usage of ./plexdrive:
+Usage of ./plexdrive mount:
   --cache-file string
     	Path the the cache file (default "~/.plexdrive/cache.bolt")
   --chunk-check-threads int
