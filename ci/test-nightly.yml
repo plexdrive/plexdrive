@@ -6,7 +6,7 @@ image_resource:
     repository: golang
 
 inputs:
-- name: plexdrive-develop
+- name: plexdrive
   path: go/src/github.com/dweidenfeld/plexdrive
 
 run:

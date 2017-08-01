@@ -44,7 +44,8 @@ resources:
 jobs:
 - name: build
   plan:
-  - get: plexdrive-develop
+  - get: plexdrive
+    resource: plexdrive-develop
     trigger: true
   - task: test
     file: plexdrive/ci/test-nightly.yml
@@ -63,7 +64,8 @@ jobs:
 
 - name: release
   plan:
-  - get: plexdrive-master
+  - get: plexdrive
+    resource: plexdrive-master
     trigger: true
   - task: test
     file: plexdrive/ci/test-release.yml

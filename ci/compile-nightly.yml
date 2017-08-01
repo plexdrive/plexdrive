@@ -6,11 +6,11 @@ image_resource:
     repository: golang
 
 inputs:
-- name: plexdrive-develop
+- name: plexdrive
   path: go/src/github.com/dweidenfeld/plexdrive
 
 run:
-  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/compile-release.sh
+  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/compile-nightly.sh
 
 outputs:
 - name: release
