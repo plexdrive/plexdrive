@@ -1,5 +1,6 @@
 use std::fmt;
 use google_drive3 as drive3;
+use chrono;
 
 mod sql;
 
@@ -36,14 +37,70 @@ pub trait MetadataCache {
 
 /// File is a Google Drive file representation that only contains the
 /// necessary fields for the cache.
+#[derive(Debug)]
 pub struct File {
-  pub name: Option<String>
+    pub id: String,
+    pub name: String,
+    pub is_dir: bool,
+    pub size: u32,
+    pub last_modified: chrono::DateTime<chrono::FixedOffset>,
+    pub download_url: String,
+    pub can_trash: bool,
+    pub parents: Vec<String>
 }
 
 impl From<drive3::File> for File {
     fn from(file: drive3::File) -> File {
+        let id = file.id.expect("Missing Google Drive file attribute: id");
+        let name = file.name.expect(&format!(
+            "Missing Google Drive file attribute: name for file {}",
+            id
+        ));
+
+        let modified_time =
+            match chrono::DateTime::parse_from_rfc3339(&file.modified_time.expect(&format!(
+                "Missing Google Drive file attribute: modified_time for file {} ({})",
+                id.clone(),
+                name.clone()
+            ))) {
+                Ok(time) => time,
+                Err(cause) => {
+                    debug!("{:?}", cause);
+                    warn!("Could not get modified time for {} ({})", id.clone(), name.clone());
+
+                    chrono::DateTime::parse_from_rfc3339("1970-01-01T13:37:00.000+00:00").unwrap()
+                }
+            };
+
+        let can_trash = match file.capabilities {
+            Some(capabilities) => capabilities.can_trash.expect(&format!(
+                "Missing Google Drive file attribute: capabilities/can_trash for file {} ({})",
+                id.clone(),
+                name.clone()
+            )),
+            None => false,
+        };
+
         File {
-          name: file.name
+            id: id.clone(),
+            name: name.clone(),
+            is_dir: file.mime_type.expect(&format!(
+                "Missing Google Drive file attribute: mime_type for file {} ({})",
+                id.clone(),
+                name.clone()
+            )) == "application/vnd.google-apps.folder",
+            size: file.size
+                .unwrap_or(String::from("0"))
+                .parse()
+                .expect(&format!(
+                    "Could not parse file size for file {} ({})",
+                    id.clone(),
+                    name.clone()
+                )),
+            last_modified: modified_time,
+            download_url: format!("https://www.googleapis.com/drive/v3/files/{}?alt=media", id),
+            can_trash: can_trash,
+            parents: file.parents.unwrap_or(vec![])
         }
     }
 }

@@ -9,6 +9,8 @@ use google_drive3 as drive3;
 use api;
 use cache;
 
+static CHANGE_FIELDS: &'static str = "nextPageToken, newStartPageToken, changes(removed, fileId, file(id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash))";
+
 /// The Client that holds the connection infos for the Google Drive API.
 /// It does not hold a Google Drive API instance because
 /// of lifetime complexity. It will create an instance on demand.
@@ -103,11 +105,14 @@ impl api::Client for DriveClient {
         let client = self.get_native_client();
 
         thread::spawn(move || {
+            let mut first_run = true;
+            let mut change_count = 0;
             loop {
                 let changelist = match client
                     .changes()
                     .list(&cache.get_change_token())
                     .add_scope(drive3::Scope::Full)
+                    .param("fields", CHANGE_FIELDS)
                     .page_size(999)
                     .doit()
                 {
@@ -123,8 +128,7 @@ impl api::Client for DriveClient {
                     None => continue,
                 };
 
-                match cache.store_files(
-                    changes
+                let changes: Vec<cache::File> = changes
                         .into_iter()
                         .map(|change| match change.file {
                             Some(file) => Some(cache::File::from(file)),
@@ -132,24 +136,41 @@ impl api::Client for DriveClient {
                         })
                         .filter(|file| file.is_some())
                         .map(|file| file.unwrap())
-                        .collect(),
-                ) {
+                        .collect();
+
+                // TODO: find a way to process the deleted items, currently only adds are processed correctly
+
+                change_count += changes.len();
+
+                match cache.store_files(changes) {
                     Ok(_) => (),
                     Err(cause) => warn!("{}", cause),
                 }
 
                 match cache.store_change_token(match changelist.next_page_token {
                     Some(token) => token,
-                    None => match changelist.new_start_page_token {
+                    None => match changelist.new_start_page_token.clone() {
                         Some(token) => token,
                         None => {
-                            thread::sleep(time::Duration::new(60, 0));
-                            continue
+                            warn!("Could not get next start token for watching changes");
+                            continue;
                         }
                     }
                 }) {
                     Ok(_) => (),
                     Err(cause) => warn!("{}", cause),
+                }
+
+                info!("Processed {} changes", change_count);
+
+                if changelist.new_start_page_token.is_some() {
+                    if first_run {
+                        info!("Cache building finished!");
+                        first_run = false;
+                    }
+                    
+                    // sleep 60 seconds and wait for new changes
+                    thread::sleep(time::Duration::new(60, 0));
                 }
             }
         });

@@ -11,6 +11,7 @@ extern crate hyper_rustls;
 extern crate yup_oauth2;
 extern crate google_drive3;
 extern crate rusqlite;
+extern crate chrono;
 
 mod commands;
 mod config;

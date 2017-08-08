@@ -24,7 +24,7 @@ pub fn load(config_file: &str) -> Result<Config, Error> {
     let file = match fs::File::open(&Path::new(config_file)) {
         Ok(file) => file,
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             return Err(Error::ReadError(format!("Could not open config file {}", config_file)));
         }
     };
@@ -32,7 +32,7 @@ pub fn load(config_file: &str) -> Result<Config, Error> {
     let config: config::Config = match serde_json::from_reader(file) {
         Ok(config) => config,
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             return Err(Error::ReadError(format!("Could not read config file {}", config_file)));
         }
     };
@@ -50,7 +50,7 @@ pub fn create(config_file: &str, client_id: &str, client_secret: &str) -> Result
     let config_json = match serde_json::to_string(&config) {
         Ok(json) => json,
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             return Err(Error::JsonParseError)
         }
     };
@@ -58,7 +58,7 @@ pub fn create(config_file: &str, client_id: &str, client_secret: &str) -> Result
     let mut file = match fs::File::create(&Path::new(config_file)) {
         Ok(file) => file,
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             return Err(Error::WriteError(format!("Could not create config file {}", config_file)));
         }
     };
@@ -66,7 +66,7 @@ pub fn create(config_file: &str, client_id: &str, client_secret: &str) -> Result
     match file.write_all(config_json.as_bytes()) {
         Ok(_) => (),
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             return Err(Error::WriteError(format!("Could not write to config file {}", config_file)));
         }
     }

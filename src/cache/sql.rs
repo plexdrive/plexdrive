@@ -13,7 +13,7 @@ impl SqlCache {
     let connection: Connection = match Connection::open(cache_file) {
       Ok(connection) => connection,
       Err(cause) => {
-        debug!("{}", cause);
+        debug!("{:?}", cause);
         return Err(cache::Error::OpenError(format!("Could not open cache {}", cache_file)))
       }
     };
@@ -30,18 +30,50 @@ impl cache::MetadataCache for SqlCache {
     match self.connection.execute_batch(include_str!("sql/init.sql")) {
       Ok(()) => Ok(()),
       Err(cause) => {
-        debug!("{}", cause);
+        debug!("{:?}", cause);
         Err(cache::Error::OpenError(format!("Could not initialize cache {}", self.cache_file)))
       }
     }
   }
 
   fn store_files(&self, files: Vec<cache::File>) -> cache::CacheResult<()> {
+    let mut file_inserts = Vec::new();
+    let mut parent_delete_ids = Vec::new();
+    let mut parent_inserts = Vec::new();
     for file in files {
-      info!("Storing file {}", file.name.unwrap());
+      file_inserts.push(format!(
+        "('{}', '{}', {}, {}, '{}', '{}', {})", 
+        file.id.replace("'", "''"), 
+        file.name.replace("'", "''"),
+        if file.is_dir { 1 } else { 0 },
+        file.size,
+        file.last_modified.to_rfc3339(),
+        file.download_url.replace("'", "''"),
+        if file.can_trash { 1 } else { 0 }
+      ));
+
+      for parent in file.parents {
+        parent_delete_ids.push(format!("'{}'", parent));
+
+        parent_inserts.push(format!("('{}', '{}')", file.id, parent));
+      }
     }
 
-    Ok(())
+    let file_insert_query = format!("REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES {};", file_inserts.join(", "));
+    let parent_delete_query = format!("DELETE FROM parent WHERE file_id IN ({});", parent_delete_ids.join(", "));
+    let parent_insert_query = format!("REPLACE INTO parent (file_id, parent_id) VALUES {};", parent_inserts.join(", "));
+
+    let mut query = file_insert_query;
+    query.push_str(&parent_delete_query);
+    query.push_str(&parent_insert_query);
+
+    match self.connection.execute_batch(&query) {
+      Ok(_) => Ok(()),
+      Err(cause) => {
+        debug!("{:?} / {}", cause, query);
+        Err(cache::Error::StoreError(String::from("Could not store batch in cache")))
+      }
+    }
   }
 
   fn get_change_token(&self) -> String {
@@ -59,7 +91,7 @@ impl cache::MetadataCache for SqlCache {
     match self.connection.execute("REPLACE INTO token (id, token) VALUES (1, ?)", &[&token]) {
       Ok(_) => Ok(()),
       Err(cause) => {
-        debug!("{}", cause);
+        debug!("{:?}", cause);
         Err(cache::Error::StoreError(format!("Could not store token {} in cache", token)))
       }
     }

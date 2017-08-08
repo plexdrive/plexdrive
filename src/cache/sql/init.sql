@@ -12,14 +12,15 @@ CREATE TABLE IF NOT EXISTS file (
   name          TEXT NOT NULL,
   is_dir        INTEGER,
   size          INTEGER,
-  last_modified INTEGER,
+  last_modified TEXT,
   download_url  TEXT,
   can_trash     INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS parent (
   file_id       TEXT REFERENCES file(id),
-  parent_id     TEXT REFERENCES file(id)
+  parent_id     TEXT REFERENCES file(id),
+  PRIMARY KEY (file_id, parent_id)
 );
 
 CREATE INDEX parent_file_id ON parent(file_id);

@@ -34,7 +34,7 @@ pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
     match drive_client.authorize() {
         Ok(username) => info!("Google Drive initialization successful, {}", username),
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             panic!("Google Drive initialization not successful");
         }
     };
@@ -47,7 +47,7 @@ pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
     match cache.initialize() {
         Ok(()) => info!("Cache initialization successful"),
         Err(cause) => {
-            debug!("{}", cause);
+            debug!("{:?}", cause);
             panic!("Cache initialization not successful");
         }
     }
