@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS file (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   is_dir        INTEGER,
-  size          INTEGER,
+  size          TEXT,
   last_modified TEXT,
   download_url  TEXT,
   can_trash     INTEGER

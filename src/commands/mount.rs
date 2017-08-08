@@ -33,5 +33,5 @@ pub fn execute(config_path: &str, mount_path: &str) {
     drive_client.watch_changes(cache);
 
     // TODO: delete this whenever it is not useful anymore
-    thread::sleep(time::Duration::new(30, 0));
+    thread::sleep(time::Duration::new(5 * 60, 0));
 }

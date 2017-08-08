@@ -85,7 +85,7 @@ impl cache::MetadataCache for SqlCache {
 
         let file_inserted = match transaction.execute(
           "REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES (?, ?, ?, ?, ?, ?, ?);",
-          &[ &file.id, &file.name, &file.is_dir, &file.size, &file.last_modified.to_rfc3339(), &file.download_url, &file.can_trash ])
+          &[ &file.id, &file.name, &file.is_dir, &format!("{}", file.size), &file.last_modified.to_rfc3339(), &file.download_url, &file.can_trash ])
           {
             Ok(_) => true,
             Err(cause) => {

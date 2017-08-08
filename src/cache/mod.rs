@@ -46,12 +46,14 @@ pub struct Change {
 impl From<drive3::Change> for Change {
     fn from(change: drive3::Change) -> Change {
         Change {
-            removed: change.removed.expect("Missing Google Drive change attribute: removed"),
+            removed: change
+                .removed
+                .expect("Missing Google Drive change attribute: removed"),
             file_id: change.file_id,
             file: match change.file {
                 Some(file) => Some(File::from(file)),
                 None => None,
-            }
+            },
         }
     }
 }
@@ -63,11 +65,11 @@ pub struct File {
     pub id: String,
     pub name: String,
     pub is_dir: bool,
-    pub size: u32,
+    pub size: u64,
     pub last_modified: chrono::DateTime<chrono::FixedOffset>,
     pub download_url: String,
     pub can_trash: bool,
-    pub parents: Vec<String>
+    pub parents: Vec<String>,
 }
 
 impl From<drive3::File> for File {
@@ -81,13 +83,13 @@ impl From<drive3::File> for File {
         let modified_time =
             match chrono::DateTime::parse_from_rfc3339(&file.modified_time.expect(&format!(
                 "Missing Google Drive file attribute: modified_time for file {} ({})",
-                id.clone(),
-                name.clone()
+                &id,
+                &name
             ))) {
                 Ok(time) => time,
                 Err(cause) => {
                     debug!("{:?}", cause);
-                    warn!("Could not get modified time for {} ({})", id.clone(), name.clone());
+                    warn!("Could not get modified time for {} ({})", &id, &name);
 
                     chrono::DateTime::parse_from_rfc3339("1970-01-01T13:37:00.000+00:00").unwrap()
                 }
@@ -96,32 +98,39 @@ impl From<drive3::File> for File {
         let can_trash = match file.capabilities {
             Some(capabilities) => capabilities.can_trash.expect(&format!(
                 "Missing Google Drive file attribute: capabilities/can_trash for file {} ({})",
-                id.clone(),
-                name.clone()
+                &id,
+                &name
             )),
             None => false,
         };
 
+        let size = match file.size.unwrap_or(String::from("0")).parse() {
+            Ok(size) => size,
+            Err(cause) => {
+                debug!("{:?}", cause);
+                warn!("Could not parse file size for file {} ({})", &id, &name);
+
+                0
+            }
+        };
+
+        let is_dir = file.mime_type.expect(&format!(
+            "Missing Google Drive file attribute: mime_type for file {} ({})",
+            &id,
+            &name
+        )) == "application/vnd.google-apps.folder";
+
+        let download_url = format!("https://www.googleapis.com/drive/v3/files/{}?alt=media", &id); 
+
         File {
-            id: id.clone(),
-            name: name.clone(),
-            is_dir: file.mime_type.expect(&format!(
-                "Missing Google Drive file attribute: mime_type for file {} ({})",
-                id.clone(),
-                name.clone()
-            )) == "application/vnd.google-apps.folder",
-            size: file.size
-                .unwrap_or(String::from("0"))
-                .parse()
-                .expect(&format!(
-                    "Could not parse file size for file {} ({})",
-                    id.clone(),
-                    name.clone()
-                )),
+            id: id,
+            name: name,
+            is_dir: is_dir,
+            size: size,
             last_modified: modified_time,
-            download_url: format!("https://www.googleapis.com/drive/v3/files/{}?alt=media", id),
+            download_url: download_url,
             can_trash: can_trash,
-            parents: file.parents.unwrap_or(vec![])
+            parents: file.parents.unwrap_or(vec![]),
         }
     }
 }
