@@ -1,2 +1,2 @@
-plexdrive
-.idea
+Cargo.lock
+target/
