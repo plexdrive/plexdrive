@@ -132,23 +132,16 @@ impl api::Client for DriveClient {
                     None => continue,
                 };
 
-                let changes: Vec<cache::File> = changes
+                let changes: Vec<cache::Change> = changes
                         .into_iter()
-                        .map(|change| match change.file {
-                            Some(file) => Some(cache::File::from(file)),
-                            None => None,
-                        })
-                        .filter(|file| file.is_some())
-                        .map(|file| file.unwrap())
+                        .map(|change| { cache::Change::from(change) })
                         .collect();
-
-                // TODO: find a way to process the deleted items, currently only adds are processed correctly
 
                 change_count += changes.len();
 
-                match mut_cache.store_files(changes) {
+                match mut_cache.process_changes(changes) {
                     Ok(_) => (),
-                    Err(cause) => panic!("Refreshing stopped!!! {}", cause)
+                    Err(cause) => panic!("{}", cause)
                 }
 
                 match mut_cache.store_change_token(match changelist.next_page_token {

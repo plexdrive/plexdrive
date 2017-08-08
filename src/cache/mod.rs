@@ -25,14 +25,35 @@ pub trait MetadataCache {
     /// Initialize the cache
     fn initialize(&self) -> CacheResult<()>;
 
-    /// Stores files in the cache
-    fn store_files(&mut self, files: Vec<File>) -> CacheResult<()>;
+    /// Processes the changes delivered by Google
+    fn process_changes(&mut self, files: Vec<Change>) -> CacheResult<()>;
 
     /// Get the cahnge token from cache or returns "1"
     fn get_change_token(&self) -> String;
 
     /// Stores the change token in cache
     fn store_change_token(&self, token: String) -> CacheResult<()>;
+}
+
+/// Change is a wrapper for files that can indicate if a file has been
+/// deleted or has been added.
+pub struct Change {
+    removed: bool,
+    file_id: Option<String>,
+    file: Option<File>,
+}
+
+impl From<drive3::Change> for Change {
+    fn from(change: drive3::Change) -> Change {
+        Change {
+            removed: change.removed.expect("Missing Google Drive change attribute: removed"),
+            file_id: change.file_id,
+            file: match change.file {
+                Some(file) => Some(File::from(file)),
+                None => None,
+            }
+        }
+    }
 }
 
 /// File is a Google Drive file representation that only contains the

@@ -36,7 +36,7 @@ impl cache::MetadataCache for SqlCache {
     }
   }
 
-  fn store_files(&mut self, files: Vec<cache::File>) -> cache::CacheResult<()> {
+  fn process_changes(&mut self, changes: Vec<cache::Change>) -> cache::CacheResult<()> {
     let transaction = match self.connection.transaction() {
       Ok(transaction) => transaction,
       Err(cause) => {
@@ -45,35 +45,73 @@ impl cache::MetadataCache for SqlCache {
       }
     };
 
-    for file in files {
-      let file_inserted = match transaction.execute(
-        "REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES (?, ?, ?, ?, ?, ?, ?);",
-        &[ &file.id, &file.name, &file.is_dir, &file.size, &file.last_modified.to_rfc3339(), &file.download_url, &file.can_trash ])
-        {
+    for change in changes {
+      if change.removed {
+        let id = match change.file_id {
+          Some(id) => id,
+          None => {
+            warn!("Could not get file id from change");
+            continue
+          }
+        };
+
+        let file_removed = match transaction.execute("DELETE FROM file WHERE id = ?", &[ &id ]) {
           Ok(_) => true,
           Err(cause) => {
             debug!("{:?}", cause);
-            warn!("Could not insert file {} ({})", &file.id, &file.name);
+            warn!("Could not delete file {}", &id);
 
             false
           }
         };
 
-      if file_inserted {
-        for parent in file.parents {
-          match transaction.execute("DELETE FROM parent WHERE file_id = ?", &[ &file.id ]) {
+        if file_removed {
+          match transaction.execute("DELETE FROM parent WHERE file_id = ?", &[ &id ]) {
             Ok(_) => (),
             Err(cause) => {
               debug!("{:?}", cause);
-              warn!("Could not delete old parents for file {} ({})", &file.id, &file.name);
+              warn!("Could not delete parents for file {}", &id);
             }
           }
+        }
+      } else {
+        let file = match change.file {
+          Some(file) => file,
+          None => {
+            warn!("Could not get file from change");
+            continue
+          }
+        };
 
-          match transaction.execute("REPLACE INTO parent (file_id, parent_id) VALUES (?, ?)", &[ &file.id, &parent ]) {
-            Ok(_) => (),
+        let file_inserted = match transaction.execute(
+          "REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES (?, ?, ?, ?, ?, ?, ?);",
+          &[ &file.id, &file.name, &file.is_dir, &file.size, &file.last_modified.to_rfc3339(), &file.download_url, &file.can_trash ])
+          {
+            Ok(_) => true,
             Err(cause) => {
               debug!("{:?}", cause);
-              warn!("Could not insert parents for file {} ({})", &file.id, &file.name);
+              warn!("Could not insert file {} ({})", &file.id, &file.name);
+
+              false
+            }
+          };
+
+        if file_inserted {
+          for parent in file.parents {
+            match transaction.execute("DELETE FROM parent WHERE file_id = ?", &[ &file.id ]) {
+              Ok(_) => (),
+              Err(cause) => {
+                debug!("{:?}", cause);
+                warn!("Could not delete old parents for file {} ({})", &file.id, &file.name);
+              }
+            }
+
+            match transaction.execute("REPLACE INTO parent (file_id, parent_id) VALUES (?, ?)", &[ &file.id, &parent ]) {
+              Ok(_) => (),
+              Err(cause) => {
+                debug!("{:?}", cause);
+                warn!("Could not insert parents for file {} ({})", &file.id, &file.name);
+              }
             }
           }
         }
