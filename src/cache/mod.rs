@@ -21,12 +21,16 @@ impl fmt::Display for Error {
 /// The MetadataCache caches all meta information about Google Files
 /// so that you won't hit the API limits that fast.
 pub trait MetadataCache {
+    /// Initialize the cache
+    fn initialize(&self) -> CacheResult<()>;
 
     /// Stores files in the cache
-    fn store_files(&self, files: Vec<File>);
+    fn store_files(&self, files: Vec<File>) -> CacheResult<()>;
 
+    /// Get the cahnge token from cache or returns "1"
     fn get_change_token(&self) -> String;
 
+    /// Stores the change token in cache
     fn store_change_token(&self, token: String) -> CacheResult<()>;
 }
 

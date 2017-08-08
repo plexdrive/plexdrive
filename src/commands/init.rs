@@ -3,6 +3,7 @@ use std::path::Path;
 
 use config;
 use api::{Client, DriveClient};
+use cache::{MetadataCache, SqlCache};
 
 /// Execute starts the initialization flow
 pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
@@ -10,9 +11,11 @@ pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
 
     let config_file_buf = Path::new(config_path).join("config.json");
     let token_file_buf = Path::new(config_path).join("token.json");
+    let cache_file_buf = Path::new(config_path).join("cache.db");
 
     let config_file = config_file_buf.as_path();
     let token_file = token_file_buf.as_path();
+    let cache_file = cache_file_buf.as_path();
 
     // create configuration directory
     if config_dir.exists() {
@@ -29,10 +32,23 @@ pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
     let drive_client = DriveClient::new(token_file.to_str().unwrap().to_owned(), client_id.to_owned(), client_secret.to_owned());
     
     match drive_client.authorize() {
-        Ok(username) => info!("Initialization successful, {}", username),
+        Ok(username) => info!("Google Drive initialization successful, {}", username),
         Err(cause) => {
             debug!("{}", cause);
-            panic!("Initialization not successful")
+            panic!("Google Drive initialization not successful");
+        }
+    };
+
+    let cache = match SqlCache::new(cache_file.to_str().unwrap()) {
+        Ok(cache) => cache,
+        Err(cause) => panic!("{}", cause),
+    };
+
+    match cache.initialize() {
+        Ok(()) => info!("Cache initialization successful"),
+        Err(cause) => {
+            debug!("{}", cause);
+            panic!("Cache initialization not successful");
         }
     }
 }

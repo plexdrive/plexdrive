@@ -123,7 +123,7 @@ impl api::Client for DriveClient {
                     None => continue,
                 };
 
-                cache.store_files(
+                match cache.store_files(
                     changes
                         .into_iter()
                         .map(|change| match change.file {
@@ -133,7 +133,10 @@ impl api::Client for DriveClient {
                         .filter(|file| file.is_some())
                         .map(|file| file.unwrap())
                         .collect(),
-                );
+                ) {
+                    Ok(_) => (),
+                    Err(cause) => warn!("{}", cause),
+                }
 
                 match cache.store_change_token(match changelist.next_page_token {
                     Some(token) => token,

@@ -1,9 +1,11 @@
-use rusqlite::{Connection, Error};
+use rusqlite::Connection;
 
 use cache;
 
+/// An SQLite based metadata cache
 pub struct SqlCache {
-  connection: Connection
+  cache_file: String,
+  connection: Connection,
 }
 
 impl SqlCache {
@@ -16,25 +18,30 @@ impl SqlCache {
       }
     };
 
-    match initialize_db(&connection) {
-      Ok(()) => (),
-      Err(cause) => {
-        debug!("{}", cause);
-        return Err(cache::Error::OpenError(format!("Could not initialize cache {}", cache_file)));
-      }
-    }
-
     Ok(SqlCache{
-      connection: connection
+      cache_file: cache_file.to_owned(),
+      connection: connection,
     })
   }
 }
 
 impl cache::MetadataCache for SqlCache {
-  fn store_files(&self, files: Vec<cache::File>) {
+  fn initialize(&self) -> cache::CacheResult<()> {
+    match self.connection.execute_batch(include_str!("sql/init.sql")) {
+      Ok(()) => Ok(()),
+      Err(cause) => {
+        debug!("{}", cause);
+        Err(cache::Error::OpenError(format!("Could not initialize cache {}", self.cache_file)))
+      }
+    }
+  }
+
+  fn store_files(&self, files: Vec<cache::File>) -> cache::CacheResult<()> {
     for file in files {
       info!("Storing file {}", file.name.unwrap());
     }
+
+    Ok(())
   }
 
   fn get_change_token(&self) -> String {
@@ -57,17 +64,4 @@ impl cache::MetadataCache for SqlCache {
       }
     }
   }
-}
-
-fn initialize_db(conn: &Connection) -> Result<(), Error> {
-  conn.execute_batch("
-    BEGIN;
-
-    CREATE TABLE IF NOT EXISTS token (
-      id    INTEGER PRIMARY KEY,
-      token TEXT
-    );
-
-    COMMIT;
-  ")
 }
