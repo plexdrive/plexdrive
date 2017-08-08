@@ -26,7 +26,7 @@ pub trait MetadataCache {
     fn initialize(&self) -> CacheResult<()>;
 
     /// Stores files in the cache
-    fn store_files(&self, files: Vec<File>) -> CacheResult<()>;
+    fn store_files(&mut self, files: Vec<File>) -> CacheResult<()>;
 
     /// Get the cahnge token from cache or returns "1"
     fn get_change_token(&self) -> String;

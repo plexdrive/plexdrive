@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::thread;
+use std::sync::{Arc, Mutex};
 use std::time;
 
 use config;
@@ -24,7 +25,7 @@ pub fn execute(config_path: &str, mount_path: &str) {
     let drive_client = DriveClient::new(token_file.to_str().unwrap().to_owned(), config.client_id, config.client_secret);
 
     let cache = match SqlCache::new(cache_file.to_str().unwrap()) {
-        Ok(cache) => cache,
+        Ok(cache) => Arc::new(Mutex::new(cache)),
         Err(cause) => panic!("{}", cause)
     };
 

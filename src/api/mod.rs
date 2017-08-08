@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::{Arc, Mutex};
 
 mod drive;
 
@@ -27,5 +28,5 @@ pub trait Client {
 
     /// Watch continuosly asynchronously for changes.
     /// If changes were found they'll get stored in the internal persistence unit
-    fn watch_changes<C>(&self, cache: C) where C: cache::MetadataCache + Send + 'static;
+    fn watch_changes<C>(&self, cache: Arc<Mutex<C>>) where C: cache::MetadataCache + Send + 'static;
 }

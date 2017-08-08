@@ -36,41 +36,54 @@ impl cache::MetadataCache for SqlCache {
     }
   }
 
-  fn store_files(&self, files: Vec<cache::File>) -> cache::CacheResult<()> {
-    let mut file_inserts = Vec::new();
-    let mut parent_delete_ids = Vec::new();
-    let mut parent_inserts = Vec::new();
+  fn store_files(&mut self, files: Vec<cache::File>) -> cache::CacheResult<()> {
+    let transaction = match self.connection.transaction() {
+      Ok(transaction) => transaction,
+      Err(cause) => {
+        debug!("{:?}", cause);
+        return Err(cache::Error::StoreError(String::from("Could not start transaction")));
+      }
+    };
+
     for file in files {
-      file_inserts.push(format!(
-        "('{}', '{}', {}, {}, '{}', '{}', {})", 
-        file.id.replace("'", "''"), 
-        file.name.replace("'", "''"),
-        if file.is_dir { 1 } else { 0 },
-        file.size,
-        file.last_modified.to_rfc3339(),
-        file.download_url.replace("'", "''"),
-        if file.can_trash { 1 } else { 0 }
-      ));
+      let file_inserted = match transaction.execute(
+        "REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES (?, ?, ?, ?, ?, ?, ?);",
+        &[ &file.id, &file.name, &file.is_dir, &file.size, &file.last_modified.to_rfc3339(), &file.download_url, &file.can_trash ])
+        {
+          Ok(_) => true,
+          Err(cause) => {
+            debug!("{:?}", cause);
+            warn!("Could not insert file {} ({})", &file.id, &file.name);
 
-      for parent in file.parents {
-        parent_delete_ids.push(format!("'{}'", parent));
+            false
+          }
+        };
 
-        parent_inserts.push(format!("('{}', '{}')", file.id, parent));
+      if file_inserted {
+        for parent in file.parents {
+          match transaction.execute("DELETE FROM parent WHERE file_id = ?", &[ &file.id ]) {
+            Ok(_) => (),
+            Err(cause) => {
+              debug!("{:?}", cause);
+              warn!("Could not delete old parents for file {} ({})", &file.id, &file.name);
+            }
+          }
+
+          match transaction.execute("REPLACE INTO parent (file_id, parent_id) VALUES (?, ?)", &[ &file.id, &parent ]) {
+            Ok(_) => (),
+            Err(cause) => {
+              debug!("{:?}", cause);
+              warn!("Could not insert parents for file {} ({})", &file.id, &file.name);
+            }
+          }
+        }
       }
     }
 
-    let file_insert_query = format!("REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES {};", file_inserts.join(", "));
-    let parent_delete_query = format!("DELETE FROM parent WHERE file_id IN ({});", parent_delete_ids.join(", "));
-    let parent_insert_query = format!("REPLACE INTO parent (file_id, parent_id) VALUES {};", parent_inserts.join(", "));
-
-    let mut query = file_insert_query;
-    query.push_str(&parent_delete_query);
-    query.push_str(&parent_insert_query);
-
-    match self.connection.execute_batch(&query) {
+    match transaction.commit() {
       Ok(_) => Ok(()),
       Err(cause) => {
-        debug!("{:?} / {}", cause, query);
+        debug!("{:?}", cause);
         Err(cache::Error::StoreError(String::from("Could not store batch in cache")))
       }
     }

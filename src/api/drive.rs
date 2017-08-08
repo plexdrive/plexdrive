@@ -1,5 +1,6 @@
 use std::thread;
 use std::time;
+use std::sync::{Arc, Mutex};
 use hyper;
 use hyper_rustls;
 use yup_oauth2::{ApplicationSecret, Authenticator, DefaultAuthenticatorDelegate, DiskTokenStorage,
@@ -98,19 +99,22 @@ impl api::Client for DriveClient {
         }
     }
 
-    fn watch_changes<C>(&self, cache: C)
+    fn watch_changes<C>(&self, cache: Arc<Mutex<C>>)
     where
         C: cache::MetadataCache + Send + 'static,
     {
         let client = self.get_native_client();
 
+        let cache = cache.clone();
         thread::spawn(move || {
             let mut first_run = true;
             let mut change_count = 0;
             loop {
+                let mut mut_cache = cache.lock().unwrap();
+
                 let changelist = match client
                     .changes()
-                    .list(&cache.get_change_token())
+                    .list(&mut_cache.get_change_token())
                     .add_scope(drive3::Scope::Full)
                     .param("fields", CHANGE_FIELDS)
                     .page_size(999)
@@ -142,12 +146,12 @@ impl api::Client for DriveClient {
 
                 change_count += changes.len();
 
-                match cache.store_files(changes) {
+                match mut_cache.store_files(changes) {
                     Ok(_) => (),
-                    Err(cause) => warn!("{}", cause),
+                    Err(cause) => panic!("Refreshing stopped!!! {}", cause)
                 }
 
-                match cache.store_change_token(match changelist.next_page_token {
+                match mut_cache.store_change_token(match changelist.next_page_token {
                     Some(token) => token,
                     None => match changelist.new_start_page_token.clone() {
                         Some(token) => token,
