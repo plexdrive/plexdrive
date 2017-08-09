@@ -1,5 +1,6 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
+use time;
 use fuse;
 use libc;
 
@@ -34,20 +35,33 @@ impl<C> fuse::Filesystem for Filesystem<C>
 where
   C: cache::MetadataCache + Send + 'static,
 {
-  fn getattr(&mut self, req: &fuse::Request, inode: u64, reply: fuse::ReplyAttr) {
-    debug!("Locking cache");
-    let cache = self.cache.lock().unwrap();
-    debug!("Cache locked");
-
-    let file = match cache.get_file(inode) {
+  fn getattr(&mut self, _req: &fuse::Request, inode: u64, reply: fuse::ReplyAttr) {
+    let file: cache::File = match self.cache.lock().unwrap().get_file(inode) {
       Ok(file) => file,
       Err(cause) => {
-        return warn!("{}", cause);
+        warn!("{}", cause);
+
+        return reply.error(libc::EIO);
       }
     };
 
-    debug!("getattr: {:?} / {:?} / {:?}", req, inode, file);
+    let time = time::Timespec::new(file.last_modified.timestamp(), 0);
 
-    reply.error(libc::ENOSYS);
+    reply.attr(&time::Timespec::new(1, 0), &fuse::FileAttr{
+      ino: file.inode.unwrap_or(0),
+      size: file.size,
+      blocks: file.size,
+      atime: time,
+      mtime: time,
+      ctime: time,
+      crtime: time,
+      kind: if file.is_dir { fuse::FileType::Directory } else { fuse::FileType::RegularFile },
+      perm: 0,
+      nlink: 0,
+      uid: 0,
+      gid: 0,
+      rdev: 0,
+      flags: 0,
+    });
   }
 }

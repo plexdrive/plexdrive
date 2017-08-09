@@ -150,7 +150,7 @@ impl cache::MetadataCache for SqlCache {
   }
 
   fn get_file(&self, inode: u64) -> cache::CacheResult<cache::File> {
-    let mut stmt = match self.connection.prepare("SELECT id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE inode = ? LIMIT 1") {
+    let mut stmt = match self.connection.prepare("SELECT inode, id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE inode = ? LIMIT 1") {
       Ok(stmt) => stmt,
       Err(cause) => {
         debug!("{:?}", cause);
@@ -175,19 +175,20 @@ impl cache::MetadataCache for SqlCache {
 }
 
 fn convert_to_file(row: &Row) -> cache::File {
-  let id = row.get(0);
-  let name = row.get(1);
+  let inode: u32 = row.get(0);
+  let id = row.get(1);
+  let name = row.get(2);
 
-  let sql_is_dir: u8 = row.get(2);
+  let sql_is_dir: u8 = row.get(3);
   let is_dir = if sql_is_dir == 1 { true } else { false };
 
-  let sql_size: String = row.get(3);
+  let sql_size: String = row.get(4);
   let size = match sql_size.parse() {
     Ok(size) => size,
     Err(_) => 0,
   };
 
-  let sql_date: String = row.get(4);
+  let sql_date: String = row.get(5);
   let last_modified = match chrono::DateTime::parse_from_rfc3339(&sql_date) {
     Ok(date) => date,
     Err(cause) => {
@@ -198,16 +199,17 @@ fn convert_to_file(row: &Row) -> cache::File {
     }
   };
 
-  let sql_can_trash: u8 = row.get(6);
+  let sql_can_trash: u8 = row.get(7);
   let can_trash = if sql_can_trash == 1 { true } else { false };
 
   cache::File {
+    inode: Some(inode as u64),
     id: id,
     name: name,
     is_dir: is_dir,
     size: size,
     last_modified: last_modified,
-    download_url: row.get(5),
+    download_url: row.get(6),
     can_trash: can_trash,
     parents: vec![],
   }

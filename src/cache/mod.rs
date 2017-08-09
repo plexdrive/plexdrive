@@ -66,6 +66,7 @@ impl From<drive3::Change> for Change {
 /// necessary fields for the cache.
 #[derive(Debug)]
 pub struct File {
+    pub inode: Option<u64>,
     pub id: String,
     pub name: String,
     pub is_dir: bool,
@@ -127,6 +128,7 @@ impl From<drive3::File> for File {
         let download_url = format!("https://www.googleapis.com/drive/v3/files/{}?alt=media", &id); 
 
         File {
+            inode: None,
             id: id,
             name: name,
             is_dir: is_dir,

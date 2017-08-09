@@ -14,6 +14,7 @@ extern crate rusqlite;
 extern crate chrono;
 extern crate fuse;
 extern crate libc;
+extern crate time;
 
 mod commands;
 mod config;

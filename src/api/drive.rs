@@ -106,73 +106,69 @@ impl api::Client for DriveClient {
     {
         let client = self.get_native_client();
 
+        let cache = cache.clone();
         thread::spawn(move || {
             let mut first_run = true;
             let mut change_count = 0;
             loop {
-                match cache.try_lock() {
-                    Ok(mut mut_cache) => {
-                        let changelist = match client
-                            .changes()
-                            .list(&mut_cache.get_change_token())
-                            .add_scope(drive3::Scope::Full)
-                            .param("fields", CHANGE_FIELDS)
-                            .page_size(999)
-                            .doit()
-                        {
-                            Ok((_, changes)) => changes,
-                            Err(cause) => {
-                                warn!("Could not get changes because of {}", cause);
-                                continue;
-                            }
-                        };
+                let changelist = match client
+                    .changes()
+                    .list(&cache.lock().unwrap().get_change_token())
+                    .add_scope(drive3::Scope::Full)
+                    .param("fields", CHANGE_FIELDS)
+                    .page_size(999)
+                    .doit()
+                {
+                    Ok((_, changes)) => changes,
+                    Err(cause) => {
+                        warn!("Could not get changes because of {}", cause);
+                        continue;
+                    }
+                };
 
-                        let changes = match changelist.changes {
-                            Some(changes) => changes,
-                            None => continue,
-                        };
+                let changes = match changelist.changes {
+                    Some(changes) => changes,
+                    None => continue,
+                };
 
-                        let changes: Vec<cache::Change> = changes
-                                .into_iter()
-                                .map(|change| { cache::Change::from(change) })
-                                .collect();
+                let changes: Vec<cache::Change> = changes
+                        .into_iter()
+                        .map(|change| { cache::Change::from(change) })
+                        .collect();
 
-                        change_count += changes.len();
+                change_count += changes.len();
 
-                        match mut_cache.process_changes(changes) {
-                            Ok(_) => (),
-                            Err(cause) => panic!("{}", cause)
+                match cache.lock().unwrap().process_changes(changes) {
+                    Ok(_) => (),
+                    Err(cause) => panic!("{}", cause)
+                }
+
+                match cache.lock().unwrap().store_change_token(match changelist.next_page_token {
+                    Some(token) => token,
+                    None => match changelist.new_start_page_token.clone() {
+                        Some(token) => token,
+                        None => {
+                            warn!("Could not get next start token for watching changes");
+                            continue;
                         }
+                    }
+                }) {
+                    Ok(_) => (),
+                    Err(cause) => warn!("{}", cause),
+                }
 
-                        match mut_cache.store_change_token(match changelist.next_page_token {
-                            Some(token) => token,
-                            None => match changelist.new_start_page_token.clone() {
-                                Some(token) => token,
-                                None => {
-                                    warn!("Could not get next start token for watching changes");
-                                    continue;
-                                }
-                            }
-                        }) {
-                            Ok(_) => (),
-                            Err(cause) => warn!("{}", cause),
-                        }
+                if change_count > 0 {
+                    info!("Processed {} changes", change_count);
+                }
 
-                        if change_count > 0 {
-                            info!("Processed {} changes", change_count);
-                        }
-
-                        if changelist.new_start_page_token.is_some() {
-                            if first_run {
-                                info!("Cache building finished!");
-                                first_run = false;
-                            }
-                            
-                            // sleep 60 seconds and wait for new changes
-                            thread::sleep(time::Duration::new(60, 0));
-                        }
-                    },
-                    Err(_) => info!("Could not gain lock for cache")
+                if changelist.new_start_page_token.is_some() {
+                    if first_run {
+                        info!("Cache building finished!");
+                        first_run = false;
+                    }
+                    
+                    // sleep 60 seconds and wait for new changes
+                    thread::sleep(time::Duration::new(60, 0));
                 }
             }
         });
