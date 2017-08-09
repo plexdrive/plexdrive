@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS token (
 );
 
 CREATE TABLE IF NOT EXISTS file (
-  id            TEXT PRIMARY KEY,
+  inode         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id            TEXT,
   name          TEXT NOT NULL,
   is_dir        INTEGER,
   size          TEXT,
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS file (
   download_url  TEXT,
   can_trash     INTEGER
 );
+CREATE INDEX file_id ON file(id);
 
 CREATE TABLE IF NOT EXISTS parent (
   file_id       TEXT REFERENCES file(id),
@@ -25,5 +27,7 @@ CREATE TABLE IF NOT EXISTS parent (
 
 CREATE INDEX parent_file_id ON parent(file_id);
 CREATE INDEX parent_parent_id ON parent(parent_id);
+
+UPDATE sqlite_sequence SET seq = 1 WHERE name = 'file';
 
 COMMIT;

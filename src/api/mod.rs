@@ -11,6 +11,7 @@ use cache;
 pub enum Error {
     Authentication(String),
     MissingDataObject(String),
+    FileNotFound(String),
 }
 type ClientResult<T> = Result<T, Error>;
 
@@ -29,4 +30,8 @@ pub trait Client {
     /// Watch continuosly asynchronously for changes.
     /// If changes were found they'll get stored in the internal persistence unit
     fn watch_changes<C>(&self, cache: Arc<Mutex<C>>) where C: cache::MetadataCache + Send + 'static;
+
+    /// Get a file with a specific ID and transform it
+    /// to the cached representation
+    fn get_file(&self, id: &str) -> ClientResult<cache::File>;
 }

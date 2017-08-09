@@ -10,6 +10,7 @@ pub use cache::sql::SqlCache;
 pub enum Error {
     OpenError(String),
     StoreError(String),
+    NotFound(String),
 }
 pub type CacheResult<T> = Result<T, Error>;
 
@@ -33,14 +34,17 @@ pub trait MetadataCache {
 
     /// Stores the change token in cache
     fn store_change_token(&self, token: String) -> CacheResult<()>;
+
+    /// Get a file by its inode id
+    fn get_file(&self, inode: u64) -> CacheResult<File>;
 }
 
 /// Change is a wrapper for files that can indicate if a file has been
 /// deleted or has been added.
 pub struct Change {
-    removed: bool,
-    file_id: Option<String>,
-    file: Option<File>,
+    pub removed: bool,
+    pub file_id: Option<String>,
+    pub file: Option<File>,
 }
 
 impl From<drive3::Change> for Change {

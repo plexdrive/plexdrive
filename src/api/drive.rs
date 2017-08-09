@@ -10,6 +10,7 @@ use google_drive3 as drive3;
 use api;
 use cache;
 
+static FILE_FIELDS: &'static str = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash";
 static CHANGE_FIELDS: &'static str = "nextPageToken, newStartPageToken, changes(removed, fileId, file(id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash))";
 
 /// The Client that holds the connection infos for the Google Drive API.
@@ -105,71 +106,87 @@ impl api::Client for DriveClient {
     {
         let client = self.get_native_client();
 
-        let cache = cache.clone();
         thread::spawn(move || {
             let mut first_run = true;
             let mut change_count = 0;
             loop {
-                let mut mut_cache = cache.lock().unwrap();
+                match cache.try_lock() {
+                    Ok(mut mut_cache) => {
+                        let changelist = match client
+                            .changes()
+                            .list(&mut_cache.get_change_token())
+                            .add_scope(drive3::Scope::Full)
+                            .param("fields", CHANGE_FIELDS)
+                            .page_size(999)
+                            .doit()
+                        {
+                            Ok((_, changes)) => changes,
+                            Err(cause) => {
+                                warn!("Could not get changes because of {}", cause);
+                                continue;
+                            }
+                        };
 
-                let changelist = match client
-                    .changes()
-                    .list(&mut_cache.get_change_token())
-                    .add_scope(drive3::Scope::Full)
-                    .param("fields", CHANGE_FIELDS)
-                    .page_size(999)
-                    .doit()
-                {
-                    Ok((_, changes)) => changes,
-                    Err(cause) => {
-                        warn!("Could not get changes because of {}", cause);
-                        continue;
-                    }
-                };
+                        let changes = match changelist.changes {
+                            Some(changes) => changes,
+                            None => continue,
+                        };
 
-                let changes = match changelist.changes {
-                    Some(changes) => changes,
-                    None => continue,
-                };
+                        let changes: Vec<cache::Change> = changes
+                                .into_iter()
+                                .map(|change| { cache::Change::from(change) })
+                                .collect();
 
-                let changes: Vec<cache::Change> = changes
-                        .into_iter()
-                        .map(|change| { cache::Change::from(change) })
-                        .collect();
+                        change_count += changes.len();
 
-                change_count += changes.len();
-
-                match mut_cache.process_changes(changes) {
-                    Ok(_) => (),
-                    Err(cause) => panic!("{}", cause)
-                }
-
-                match mut_cache.store_change_token(match changelist.next_page_token {
-                    Some(token) => token,
-                    None => match changelist.new_start_page_token.clone() {
-                        Some(token) => token,
-                        None => {
-                            warn!("Could not get next start token for watching changes");
-                            continue;
+                        match mut_cache.process_changes(changes) {
+                            Ok(_) => (),
+                            Err(cause) => panic!("{}", cause)
                         }
-                    }
-                }) {
-                    Ok(_) => (),
-                    Err(cause) => warn!("{}", cause),
-                }
 
-                info!("Processed {} changes", change_count);
+                        match mut_cache.store_change_token(match changelist.next_page_token {
+                            Some(token) => token,
+                            None => match changelist.new_start_page_token.clone() {
+                                Some(token) => token,
+                                None => {
+                                    warn!("Could not get next start token for watching changes");
+                                    continue;
+                                }
+                            }
+                        }) {
+                            Ok(_) => (),
+                            Err(cause) => warn!("{}", cause),
+                        }
 
-                if changelist.new_start_page_token.is_some() {
-                    if first_run {
-                        info!("Cache building finished!");
-                        first_run = false;
-                    }
-                    
-                    // sleep 60 seconds and wait for new changes
-                    thread::sleep(time::Duration::new(60, 0));
+                        if change_count > 0 {
+                            info!("Processed {} changes", change_count);
+                        }
+
+                        if changelist.new_start_page_token.is_some() {
+                            if first_run {
+                                info!("Cache building finished!");
+                                first_run = false;
+                            }
+                            
+                            // sleep 60 seconds and wait for new changes
+                            thread::sleep(time::Duration::new(60, 0));
+                        }
+                    },
+                    Err(_) => info!("Could not gain lock for cache")
                 }
             }
         });
+    }
+
+    fn get_file(&self, id: &str) -> api::ClientResult<cache::File> {
+        let client = self.get_native_client();
+
+        match client.files().get(id).add_scope(drive3::Scope::Full).param("fields", FILE_FIELDS).doit() {
+            Ok((_, file)) => Ok(cache::File::from(file)),
+            Err(cause) => {
+                debug!("{}", cause);
+                Err(api::Error::FileNotFound(format!("File {} could not be fetched from API", id)))
+            }
+        }
     }
 }

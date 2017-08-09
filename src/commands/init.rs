@@ -3,7 +3,7 @@ use std::path::Path;
 
 use config;
 use api::{Client, DriveClient};
-use cache::{MetadataCache, SqlCache};
+use cache::{MetadataCache, SqlCache, Change};
 
 /// Execute starts the initialization flow
 pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
@@ -39,16 +39,35 @@ pub fn execute(config_path: &str, client_id: &str, client_secret: &str) {
         }
     };
 
-    let cache = match SqlCache::new(cache_file.to_str().unwrap()) {
+    let mut cache = match SqlCache::new(cache_file.to_str().unwrap()) {
         Ok(cache) => cache,
         Err(cause) => panic!("{}", cause),
     };
 
     match cache.initialize() {
-        Ok(()) => info!("Cache initialization successful"),
+        Ok(_) => info!("Cache initialization successful"),
         Err(cause) => {
             debug!("{:?}", cause);
             panic!("Cache initialization not successful");
+        }
+    }
+
+    let file = match drive_client.get_file("root") {
+        Ok(file) => file,
+        Err(cause) => panic!("{}", cause)
+    };
+
+    match cache.process_changes(vec![
+        Change {
+            removed: false,
+            file_id: None,
+            file: Some(file),
+        }
+    ]) {
+        Ok(_) => info!("Root folder successfully added to cache"),
+        Err(cause) => {
+            debug!("{:?}", cause);
+            panic!("Could not store root folder in cache")
         }
     }
 }

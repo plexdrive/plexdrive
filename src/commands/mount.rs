@@ -1,11 +1,11 @@
 use std::path::Path;
-use std::thread;
 use std::sync::{Arc, Mutex};
-use std::time;
+use fuse;
 
 use config;
 use api::{Client, DriveClient};
 use cache::SqlCache;
+use fs;
 
 /// Execute starts the mount flow
 pub fn execute(config_path: &str, mount_path: &str) {
@@ -29,9 +29,16 @@ pub fn execute(config_path: &str, mount_path: &str) {
         Err(cause) => panic!("{}", cause)
     };
 
-    // TODO: create a database instance and pass it to watch_changes
-    drive_client.watch_changes(cache);
+    drive_client.watch_changes(cache.clone());
 
-    // TODO: delete this whenever it is not useful anymore
-    thread::sleep(time::Duration::new(30 * 60, 0));
+    let filesystem = match fs::Filesystem::new(cache.clone()) {
+        Ok(fs) => fs,
+        Err(cause) => panic!("{}", cause)
+    };
+
+    info!("Mounting {}", mount_path);
+    match fuse::mount(filesystem, &mount_path.to_owned(), &vec![]) {
+        Ok(_) => info!("Unmounting {}", mount_path),
+        Err(cause) => panic!("{}", cause)
+    }
 }

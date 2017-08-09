@@ -1,4 +1,5 @@
-use rusqlite::Connection;
+use chrono;
+use rusqlite::{Connection, Row};
 
 use cache;
 
@@ -28,7 +29,7 @@ impl SqlCache {
 impl cache::MetadataCache for SqlCache {
   fn initialize(&self) -> cache::CacheResult<()> {
     match self.connection.execute_batch(include_str!("sql/init.sql")) {
-      Ok(()) => Ok(()),
+      Ok(_) => Ok(()),
       Err(cause) => {
         debug!("{:?}", cause);
         Err(cache::Error::OpenError(format!("Could not initialize cache {}", self.cache_file)))
@@ -146,5 +147,68 @@ impl cache::MetadataCache for SqlCache {
         Err(cache::Error::StoreError(format!("Could not store token {} in cache", token)))
       }
     }
+  }
+
+  fn get_file(&self, inode: u64) -> cache::CacheResult<cache::File> {
+    let mut stmt = match self.connection.prepare("SELECT id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE inode = ? LIMIT 1") {
+      Ok(stmt) => stmt,
+      Err(cause) => {
+        debug!("{:?}", cause);
+        return Err(cache::Error::NotFound(format!("Could not prepare cache query for inode {}", &inode)))
+      }
+    };
+
+    let result = match stmt.query_map(&[ &format!("{}", inode) ], |row| { convert_to_file(row) }) {
+      Ok(mut rows) => match rows.next() {
+        Some(result) => result.unwrap(),
+        None => return Err(cache::Error::NotFound(format!("Could not find inode {}", &inode)))
+      },
+      Err(cause) => {
+        debug!("{:?}", cause);
+        
+        return Err(cache::Error::NotFound(format!("Could not execute cache query for inode {}", &inode)))
+      }
+    };
+
+    Ok(result)
+  }
+}
+
+fn convert_to_file(row: &Row) -> cache::File {
+  let id = row.get(0);
+  let name = row.get(1);
+
+  let sql_is_dir: u8 = row.get(2);
+  let is_dir = if sql_is_dir == 1 { true } else { false };
+
+  let sql_size: String = row.get(3);
+  let size = match sql_size.parse() {
+    Ok(size) => size,
+    Err(_) => 0,
+  };
+
+  let sql_date: String = row.get(4);
+  let last_modified = match chrono::DateTime::parse_from_rfc3339(&sql_date) {
+    Ok(date) => date,
+    Err(cause) => {
+      debug!("{:?}", cause);
+      warn!("Could not get modified time for {} ({})", &id, &name);
+
+      chrono::DateTime::parse_from_rfc3339("1970-01-01T13:37:00.000+00:00").unwrap()
+    }
+  };
+
+  let sql_can_trash: u8 = row.get(6);
+  let can_trash = if sql_can_trash == 1 { true } else { false };
+
+  cache::File {
+    id: id,
+    name: name,
+    is_dir: is_dir,
+    size: size,
+    last_modified: last_modified,
+    download_url: row.get(5),
+    can_trash: can_trash,
+    parents: vec![],
   }
 }

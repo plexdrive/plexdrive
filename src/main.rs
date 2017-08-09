@@ -12,11 +12,14 @@ extern crate yup_oauth2;
 extern crate google_drive3;
 extern crate rusqlite;
 extern crate chrono;
+extern crate fuse;
+extern crate libc;
 
 mod commands;
 mod config;
 mod api;
 mod cache;
+mod fs;
 
 use std::env;
 use clap::{App, Arg, SubCommand};
