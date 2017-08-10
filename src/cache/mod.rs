@@ -37,6 +37,12 @@ pub trait MetadataCache {
 
     /// Get a file by its inode id
     fn get_file(&self, inode: u64) -> CacheResult<File>;
+
+    /// Get children of a file/folder by its inode id
+    fn get_child_files_by_inode(&self, inode: u64) -> CacheResult<Vec<File>>;
+
+    /// Get child of a folder by its inode id and name
+    fn get_child_file_by_inode_and_name(&self, inode: u64, name: String) -> CacheResult<File>;
 }
 
 /// Change is a wrapper for files that can indicate if a file has been

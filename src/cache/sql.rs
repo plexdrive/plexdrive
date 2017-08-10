@@ -172,6 +172,67 @@ impl cache::MetadataCache for SqlCache {
 
     Ok(result)
   }
+
+  fn get_child_files_by_inode(&self, inode: u64) -> cache::CacheResult<Vec<cache::File>> {
+    let mut stmt = match self.connection.prepare("SELECT inode, id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE id IN (SELECT file_id FROM parent INNER JOIN file ON (file.id = parent.parent_id AND file.inode = ?))") {
+      Ok(stmt) => stmt,
+      Err(cause) => {
+        debug!("{:?}", cause);
+        return Err(cache::Error::NotFound(format!("Could not prepare cache query for parent inode {}", &inode)))
+      }
+    };
+
+    let rows = match stmt.query_map(&[ &format!("{}", inode) ], |row| { convert_to_file(row) }) {
+      Ok(rows) => rows,
+      Err(cause) => {
+        debug!("{:?}", cause);
+
+        return Err(cache::Error::NotFound(format!("Could not find parent inode {}", &inode)))
+      }
+    };
+
+    let mut results = Vec::new();
+    for row in rows {
+      let result = match row {
+        Ok(result) => Some(result),
+        Err(_) => {
+          debug!("Could not map row {:?}", row);
+          
+          None
+        }
+      };
+
+      if result.is_some() {
+        results.push(result.unwrap());
+      }
+    }
+
+    Ok(results)
+  }
+
+  fn get_child_file_by_inode_and_name(&self, inode: u64, name: String) -> cache::CacheResult<cache::File> {
+    let mut stmt = match self.connection.prepare("SELECT inode, id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE id IN (SELECT file_id FROM parent INNER JOIN file ON (file.id = parent.parent_id AND file.inode = ?)) AND name = ?") {
+      Ok(stmt) => stmt,
+      Err(cause) => {
+        debug!("{:?}", cause);
+        return Err(cache::Error::NotFound(format!("Could not prepare cache query for parent inode {} and name {}", &inode, &name)))
+      }
+    };
+
+    let result = match stmt.query_map(&[ &format!("{}", inode), &name ], |row| { convert_to_file(row) }) {
+      Ok(mut rows) => match rows.next() {
+        Some(result) => result.unwrap(),
+        None => return Err(cache::Error::NotFound(format!("Could not find inode {} and name {}", &inode, &name)))
+      },
+      Err(cause) => {
+        debug!("{:?}", cause);
+        
+        return Err(cache::Error::NotFound(format!("Could not execute cache query for inode {} and name {}", &inode, &name)))
+      }
+    };
+
+    Ok(result)
+  }
 }
 
 fn convert_to_file(row: &Row) -> cache::File {

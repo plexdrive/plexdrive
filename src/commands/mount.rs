@@ -8,7 +8,7 @@ use cache::SqlCache;
 use fs;
 
 /// Execute starts the mount flow
-pub fn execute(config_path: &str, mount_path: &str) {
+pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32) {
     let config_file_buf = Path::new(config_path).join("config.json");
     let token_file_buf = Path::new(config_path).join("token.json");
     let cache_file_buf = Path::new(config_path).join("cache.db");
@@ -31,7 +31,7 @@ pub fn execute(config_path: &str, mount_path: &str) {
 
     drive_client.watch_changes(cache.clone());
 
-    let filesystem = match fs::Filesystem::new(cache.clone()) {
+    let filesystem = match fs::Filesystem::new(cache.clone(), uid, gid) {
         Ok(fs) => fs,
         Err(cause) => panic!("{}", cause)
     };
