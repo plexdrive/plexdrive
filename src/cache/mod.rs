@@ -55,12 +55,24 @@ pub struct Change {
 
 impl From<drive3::Change> for Change {
     fn from(change: drive3::Change) -> Change {
+        let mut removed = change.removed.unwrap_or(false);
+
+        let file = match change.file {
+            Some(file) => {
+                let explicitly_trashed = file.explicitly_trashed.unwrap_or(false);
+                if !removed && explicitly_trashed {
+                    removed = true;
+                }
+
+                Some(file)
+            },
+            None => None,
+        };
+
         Change {
-            removed: change
-                .removed
-                .expect("Missing Google Drive change attribute: removed"),
+            removed: removed,
             file_id: change.file_id,
-            file: match change.file {
+            file: match file {
                 Some(file) => Some(File::from(file)),
                 None => None,
             },

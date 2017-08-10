@@ -129,7 +129,10 @@ impl api::Client for DriveClient {
 
                 let changes = match changelist.changes {
                     Some(changes) => changes,
-                    None => continue,
+                    None => {
+                        warn!("No changes found");
+                        continue;
+                    }
                 };
 
                 let changes: Vec<cache::Change> = changes
