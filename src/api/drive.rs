@@ -116,6 +116,7 @@ impl api::Client for DriveClient {
                     .list(&cache.lock().unwrap().get_change_token())
                     .add_scope(drive3::Scope::Full)
                     .param("fields", CHANGE_FIELDS)
+                    .include_removed(true)
                     .page_size(999)
                     .doit()
                 {

@@ -7,128 +7,118 @@ use libc;
 
 use cache;
 
+mod utils;
+
+const TTL: time::Timespec = time::Timespec { sec: 1, nsec: 0 };
+
 #[derive(Debug)]
 pub enum Error {
 }
 type FilesystemResult<T> = Result<T, Error>;
 
 impl fmt::Display for Error {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{:?}", self)
-  }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug)]
 pub struct Filesystem<C> {
-  cache: Arc<Mutex<C>>,
-  uid: u32,
-  gid: u32,
+    cache: Arc<Mutex<C>>,
+    uid: u32,
+    gid: u32,
 }
 
 impl<C> Filesystem<C>
-where
-  C: cache::MetadataCache + Send + 'static,
+    where C: cache::MetadataCache + Send + 'static
 {
-  pub fn new(cache: Arc<Mutex<C>>, uid: u32, gid: u32) -> FilesystemResult<Filesystem<C>> {
-    Ok(Filesystem { 
-      cache: cache,
-      uid: uid,
-      gid: gid,
-    })
-  }
+    pub fn new(cache: Arc<Mutex<C>>, uid: u32, gid: u32) -> FilesystemResult<Filesystem<C>> {
+        Ok(Filesystem {
+               cache: cache,
+               uid: uid,
+               gid: gid,
+           })
+    }
 }
 
 impl<C> fuse::Filesystem for Filesystem<C>
-where
-  C: cache::MetadataCache + Send + 'static,
+    where C: cache::MetadataCache + Send + 'static
 {
-  fn getattr(&mut self, _req: &fuse::Request, inode: u64, reply: fuse::ReplyAttr) {
-    let file: cache::File = match self.cache.lock().unwrap().get_file(inode) {
-      Ok(file) => file,
-      Err(cause) => {
-        warn!("{}", cause);
+    fn getattr(&mut self, _req: &fuse::Request, inode: u64, reply: fuse::ReplyAttr) {
+        let file: cache::File = match self.cache
+                  .lock()
+                  .unwrap()
+                  .get_file(inode) {
+            Ok(file) => file,
+            Err(cause) => {
+                warn!("{}", cause);
 
-        return reply.error(libc::EIO);
-      }
-    };
+                return reply.error(libc::ENOENT);
+            }
+        };
 
-    let time = time::Timespec::new(file.last_modified.timestamp(), 0);
-
-    reply.attr(&time::Timespec::new(60, 0), &fuse::FileAttr{
-      ino: file.inode.unwrap(),
-      size: file.size,
-      blocks: (file.size + 511) / 512,
-      atime: time,
-      mtime: time,
-      ctime: time,
-      crtime: time,
-      kind: if file.is_dir { fuse::FileType::Directory } else { fuse::FileType::RegularFile },
-      perm: 0,
-      nlink: 0,
-      uid: self.uid,
-      gid: self.gid,
-      rdev: 0,
-      flags: 0,
-    })
-  }
-
-  fn readdir (&mut self, _req: &fuse::Request, inode: u64, _fh: u64, _offset: u64, mut reply: fuse::ReplyDirectory) {
-    let files: Vec<cache::File> = match self.cache.lock().unwrap().get_child_files_by_inode(inode) {
-      Ok(files) => files,
-      Err(cause) => {
-        warn!("{}", cause);
-
-        return reply.error(libc::EIO);
-      }
-    };
-
-    reply.add(1, 0, fuse::FileType::Directory, ".");
-    reply.add(1, 1, fuse::FileType::Directory, "..");
-
-    let mut i = 2;
-    for file in files {
-      let filetype = if file.is_dir {
-        fuse::FileType::Directory
-      } else {
-        fuse::FileType::RegularFile
-      };
-
-      reply.add(file.inode.unwrap(), i, filetype, &file.name);
-      i += 1;
+        reply.attr(&TTL,
+                   &utils::create_attrs_for_file(&file, self.uid, self.gid))
     }
 
-    reply.ok()
-  }
+    fn readdir(&mut self,
+               _req: &fuse::Request,
+               inode: u64,
+               _fh: u64,
+               offset: u64,
+               mut reply: fuse::ReplyDirectory) {
+        if offset != 0 {
+            return reply.error(libc::ENOENT);
+        }
 
-  fn lookup (&mut self, _req: &fuse::Request, parent_inode: u64, name: &ffi::OsStr, reply: fuse::ReplyEntry) {
-    debug!("lookup file {:?}", name);
+        let files: Vec<cache::File> = match self.cache
+                  .lock()
+                  .unwrap()
+                  .get_child_files_by_inode(inode) {
+            Ok(files) => files,
+            Err(cause) => {
+                warn!("{}", cause);
 
-    let file: cache::File = match self.cache.lock().unwrap().get_child_file_by_inode_and_name(parent_inode, name.to_str().unwrap().to_owned()) {
-      Ok(file) => file,
-      Err(cause) => {
-        debug!("{:?}", cause);
+                return reply.error(libc::ENOENT);
+            }
+        };
 
-        return reply.error(libc::EIO);
-      }
-    };
+        reply.add(1, 0, fuse::FileType::Directory, ".");
+        reply.add(1, 1, fuse::FileType::Directory, "..");
 
-    let time = time::Timespec::new(file.last_modified.timestamp(), 0);
+        let mut i = 2;
+        for file in files {
+            reply.add(file.inode.unwrap(),
+                      i,
+                      utils::get_filetype_for_file(&file),
+                      &file.name);
+            i += 1;
+        }
 
-    reply.entry(&time::Timespec::new(60, 0), &fuse::FileAttr{
-      ino: file.inode.unwrap(),
-      size: file.size,
-      blocks: (file.size + 511) / 512,
-      atime: time,
-      mtime: time,
-      ctime: time,
-      crtime: time,
-      kind: if file.is_dir { fuse::FileType::Directory } else { fuse::FileType::RegularFile },
-      perm: 0,
-      nlink: 0,
-      uid: self.uid,
-      gid: self.gid,
-      rdev: 0,
-      flags: 0,
-    }, 0)
-  }
+        reply.ok()
+    }
+
+    fn lookup(&mut self,
+              _req: &fuse::Request,
+              parent_inode: u64,
+              name: &ffi::OsStr,
+              reply: fuse::ReplyEntry) {
+        let file: cache::File =
+            match self.cache
+                      .lock()
+                      .unwrap()
+                      .get_child_file_by_inode_and_name(parent_inode,
+                                                        name.to_str().unwrap().to_owned()) {
+                Ok(file) => file,
+                Err(cause) => {
+                    trace!("{:?}", cause);
+
+                    return reply.error(libc::ENOENT);
+                }
+            };
+
+        reply.entry(&TTL,
+                    &utils::create_attrs_for_file(&file, self.uid, self.gid),
+                    0)
+    }
 }
