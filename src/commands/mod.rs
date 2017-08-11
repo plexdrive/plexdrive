@@ -25,15 +25,21 @@ pub fn mount<'a>(params: clap::ArgMatches<'a>) {
     let uid = command_params.value_of("uid").expect("Could not read uid");
     let gid = command_params.value_of("gid").expect("Could not read gid");
     let threads = command_params.value_of("threads").expect("Could not read threads");
+    let chunk_size = command_params.value_of("chunk_size").expect("Could not read chunk-size");
 
     debug!("Config       : {}", config_dir);
     debug!("MountPath    : {}", mount_path);
+    debug!("UID          : {}", uid);
+    debug!("GID          : {}", gid);
+    debug!("Threads      : {}", threads);
+    debug!("ChunkSize    : {}", chunk_size);
 
     mount::execute(
         config_dir, 
         mount_path, 
         uid.parse().expect("Could not parse uid"), 
         gid.parse().expect("Could not parse gid"),
-        threads.parse().expect("Could not parse thread count")
+        threads.parse().expect("Could not parse thread count"),
+        chunk_size.parse().expect("Could not parse chunk-size"),
     );
 }

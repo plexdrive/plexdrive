@@ -11,7 +11,7 @@ pub struct ThreadManager<M> {
 impl<M> ThreadManager<M>
     where M: chunk::Manager + Sync + Send + 'static
 {
-    pub fn new(threads: usize, manager: M) -> chunk::ChunkResult<ThreadManager<M>> {
+    pub fn new(manager: M, threads: usize) -> chunk::ChunkResult<ThreadManager<M>> {
         Ok(ThreadManager {
                manager: Arc::new(manager),
                pool: threadpool::ThreadPool::new(threads),

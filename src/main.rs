@@ -90,6 +90,12 @@ fn main() {
                     .help("The number of threads to be used for playback")
                     .default_value("2")
                 )
+                .arg(Arg::with_name("chunk_size")
+                    .long("chunk-size")
+                    .takes_value(true)
+                    .help("Size of the chunk that should be fetched from Google (in byte)")
+                    .default_value("10240")
+                )
         );
     let matches = usage.clone().get_matches();
 

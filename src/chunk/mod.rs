@@ -2,9 +2,13 @@ use std::fmt;
 
 mod ram;
 mod thread;
+mod request;
+mod chunk;
 
 pub use chunk::thread::ThreadManager;
 pub use chunk::ram::RAMManager;
+pub use chunk::request::RequestManager;
+pub use chunk::chunk::ChunkManager;
 
 #[derive(Debug)]
 pub enum Error {
