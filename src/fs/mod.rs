@@ -121,4 +121,8 @@ impl<C> fuse::Filesystem for Filesystem<C>
                     &utils::create_attrs_for_file(&file, self.uid, self.gid),
                     0)
     }
+
+    fn read (&mut self, _req: &fuse::Request, _ino: u64, _fh: u64, _offset: u64, _size: u32, reply: fuse::ReplyData) {
+        reply.error(libc::ENOSYS);
+    }
 }

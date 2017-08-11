@@ -1,5 +1,6 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
+use hyper;
 
 mod drive;
 
@@ -12,6 +13,9 @@ pub enum Error {
     Authentication(String),
     MissingDataObject(String),
     FileNotFound(String),
+    HttpRequestError(String),
+    HttpInvalidStatus(hyper::status::StatusCode, String),
+    HttpReadError(String),
 }
 type ClientResult<T> = Result<T, Error>;
 
@@ -26,6 +30,10 @@ pub trait Client {
     /// Authorize the first request with full Google Drive scope and return the username
     /// if the request succeeds
     fn authorize(&self) -> ClientResult<String>;
+
+    /// Get the http client with embedded token credentials for custom requests
+    /// against the API
+    fn do_http_request(&self, url: &str, start_offset: u64, end_offset: u64) -> ClientResult<Vec<u8>>;
 
     /// Watch continuosly asynchronously for changes.
     /// If changes were found they'll get stored in the internal persistence unit
