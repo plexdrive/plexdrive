@@ -15,6 +15,7 @@ extern crate chrono;
 extern crate fuse;
 extern crate libc;
 extern crate time;
+extern crate threadpool;
 
 mod commands;
 mod config;
@@ -33,7 +34,7 @@ fn main() {
     let default_config_dir = format!("{}/.config/plexdrive", home_dir);
 
     let mut usage = App::new("plexdrive")
-        .version("1.0.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Dominik Weidenfeld <dominik@sh0k.de>")
         .about(
             "A mounting tool for Google Drive, optimized for media streaming",
@@ -82,6 +83,12 @@ fn main() {
                     .takes_value(true)
                     .help("The GID of all files/folders")
                     .default_value("0")
+                )
+                .arg(Arg::with_name("threads")
+                    .long("threads")
+                    .takes_value(true)
+                    .help("The number of threads to be used for playback")
+                    .default_value("2")
                 )
         );
     let matches = usage.clone().get_matches();

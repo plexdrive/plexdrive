@@ -9,7 +9,7 @@ use fs;
 use chunk;
 
 /// Execute starts the mount flow
-pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32) {
+pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads: usize) {
     let config_file_buf = Path::new(config_path).join("config.json");
     let token_file_buf = Path::new(config_path).join("token.json");
     let cache_file_buf = Path::new(config_path).join("cache.db");
@@ -32,7 +32,12 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32) {
 
     drive_client.watch_changes(cache.clone());
 
-    let chunk_manager = match chunk::RAMManager::new() {
+    let ram_manager = match chunk::RAMManager::new() {
+        Ok(manager) => manager,
+        Err(cause) => panic!("{}", cause)
+    };
+
+    let chunk_manager = match chunk::ThreadManager::new(threads, ram_manager) {
         Ok(manager) => manager,
         Err(cause) => panic!("{}", cause)
     };

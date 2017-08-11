@@ -24,6 +24,7 @@ pub fn mount<'a>(params: clap::ArgMatches<'a>) {
     let mount_path = command_params.value_of("mount_path").expect("Could not read mount path");
     let uid = command_params.value_of("uid").expect("Could not read uid");
     let gid = command_params.value_of("gid").expect("Could not read gid");
+    let threads = command_params.value_of("threads").expect("Could not read threads");
 
     debug!("Config       : {}", config_dir);
     debug!("MountPath    : {}", mount_path);
@@ -32,6 +33,7 @@ pub fn mount<'a>(params: clap::ArgMatches<'a>) {
         config_dir, 
         mount_path, 
         uid.parse().expect("Could not parse uid"), 
-        gid.parse().expect("Could not parse gid")
+        gid.parse().expect("Could not parse gid"),
+        threads.parse().expect("Could not parse thread count")
     );
 }

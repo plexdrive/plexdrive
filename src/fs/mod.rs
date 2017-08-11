@@ -32,12 +32,12 @@ pub struct Filesystem<C, M> {
     uid: u32,
     gid: u32,
     handles: HashMap<u64, cache::File>,
-    handle_id: u64
+    handle_id: u64,
 }
 
 impl<C, M> Filesystem<C, M>
     where C: cache::MetadataCache + Send + 'static,
-          M: chunk::Manager
+          M: chunk::Manager,
 {
     pub fn new(cache: Arc<Mutex<C>>, chunk_manger: M, uid: u32, gid: u32) -> FilesystemResult<Filesystem<C, M>> {
         Ok(Filesystem {
