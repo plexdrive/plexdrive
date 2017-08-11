@@ -1,6 +1,8 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::ffi;
+use std::collections::HashMap;
+use std::u64;
 use time;
 use fuse;
 use libc;
@@ -29,6 +31,8 @@ pub struct Filesystem<C, M> {
     chunk_manager: M,
     uid: u32,
     gid: u32,
+    handles: HashMap<u64, cache::File>,
+    handle_id: u64
 }
 
 impl<C, M> Filesystem<C, M>
@@ -41,6 +45,8 @@ impl<C, M> Filesystem<C, M>
                chunk_manager: chunk_manger,
                uid: uid,
                gid: gid,
+               handles: HashMap::new(),
+               handle_id: 0,
            })
     }
 }
@@ -127,16 +133,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
                     0)
     }
 
-    fn read(&mut self,
-            _req: &fuse::Request,
-            inode: u64,
-            _fh: u64,
-            offset: u64,
-            size: u32,
-            reply: fuse::ReplyData) {
-
-        // TODO: maybe open a file handle in open and just use that for the request instead of
-        // getting the file everytime new from the cache
+    fn open(&mut self, _req: &fuse::Request, inode: u64, _flags: u32, reply: fuse::ReplyOpen) {
         let file: cache::File = match self.cache
                   .lock()
                   .unwrap()
@@ -147,6 +144,46 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
 
                 return reply.error(libc::EIO);
             }
+        };
+
+        let fh = self.handle_id.clone();
+
+        if self.handle_id + 1 > u64::MAX {
+            self.handle_id = 0
+        } else {
+            self.handle_id += 1;
+        }
+
+        self.handles.insert(fh, file);
+
+        debug!("opened file handle {}", fh);
+        reply.opened(fh, 0)
+    }
+
+    fn release(&mut self, _req: &fuse::Request, _ino: u64, fh: u64, _flags: u32, _lock_owner: u64, _flush: bool, reply: fuse::ReplyEmpty) {
+        self.handles.remove(&fh);
+
+        debug!("released file handle {}", fh);
+        reply.ok()
+    }
+
+    fn read(&mut self,
+            _req: &fuse::Request,
+            inode: u64,
+            fh: u64,
+            offset: u64,
+            size: u32,
+            reply: fuse::ReplyData) {
+
+        debug!("read file handle {}", fh);
+
+        let file = match self.handles.get(&fh) {
+            Some(file) => file,
+            None => {
+                warn!("Could not open file handle with inode {} / fh {}", inode, fh);
+
+                return reply.error(libc::EIO);
+            },
         };
 
         self.chunk_manager.get_chunk(&file.download_url, offset, size as u64, |result| {
