@@ -32,7 +32,7 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads:
 
     drive_client.watch_changes(cache.clone());
 
-    let ram_manager = match chunk::RAMManager::new() {
+    let ram_manager = match chunk::RAMManager::new(drive_client) {
         Ok(manager) => manager,
         Err(cause) => panic!("{}", cause)
     };

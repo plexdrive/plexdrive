@@ -8,7 +8,7 @@ pub use chunk::ram::RAMManager;
 
 #[derive(Debug)]
 pub enum Error {
-    NotImplemented,
+    RetrievalError(String),
 }
 pub type ChunkResult<T> = Result<T, Error>;
 
