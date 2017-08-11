@@ -6,6 +6,7 @@ use fuse;
 use libc;
 
 use cache;
+use chunk;
 
 mod utils;
 
@@ -23,26 +24,30 @@ impl fmt::Display for Error {
 }
 
 #[derive(Debug)]
-pub struct Filesystem<C> {
+pub struct Filesystem<C, M> {
     cache: Arc<Mutex<C>>,
+    chunk_manager: M,
     uid: u32,
     gid: u32,
 }
 
-impl<C> Filesystem<C>
-    where C: cache::MetadataCache + Send + 'static
+impl<C, M> Filesystem<C, M>
+    where C: cache::MetadataCache + Send + 'static,
+          M: chunk::Manager
 {
-    pub fn new(cache: Arc<Mutex<C>>, uid: u32, gid: u32) -> FilesystemResult<Filesystem<C>> {
+    pub fn new(cache: Arc<Mutex<C>>, chunk_manger: M, uid: u32, gid: u32) -> FilesystemResult<Filesystem<C, M>> {
         Ok(Filesystem {
                cache: cache,
+               chunk_manager: chunk_manger,
                uid: uid,
                gid: gid,
            })
     }
 }
 
-impl<C> fuse::Filesystem for Filesystem<C>
-    where C: cache::MetadataCache + Send + 'static
+impl<C, M> fuse::Filesystem for Filesystem<C, M>
+    where C: cache::MetadataCache + Send + 'static,
+          M: chunk::Manager
 {
     fn getattr(&mut self, _req: &fuse::Request, inode: u64, reply: fuse::ReplyAttr) {
         let file: cache::File = match self.cache
@@ -122,7 +127,37 @@ impl<C> fuse::Filesystem for Filesystem<C>
                     0)
     }
 
-    fn read (&mut self, _req: &fuse::Request, _ino: u64, _fh: u64, _offset: u64, _size: u32, reply: fuse::ReplyData) {
-        reply.error(libc::ENOSYS);
+    fn read(&mut self,
+            _req: &fuse::Request,
+            inode: u64,
+            _fh: u64,
+            offset: u64,
+            size: u32,
+            reply: fuse::ReplyData) {
+
+        // TODO: maybe open a file handle in open and just use that for the request instead of
+        // getting the file everytime new from the cache
+        let file: cache::File = match self.cache
+                  .lock()
+                  .unwrap()
+                  .get_file(inode) {
+            Ok(file) => file,
+            Err(cause) => {
+                warn!("{:?}", cause);
+
+                return reply.error(libc::EIO);
+            }
+        };
+
+        self.chunk_manager.get_chunk(&file.download_url, offset, size as u64, |result| {
+            match result {
+                Ok(chunk) => reply.data(&chunk),
+                Err(cause) => {
+                    warn!("{:?}", cause);
+
+                    reply.error(libc::EIO);
+                }
+            }
+        });    
     }
 }

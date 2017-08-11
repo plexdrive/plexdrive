@@ -6,6 +6,7 @@ use config;
 use api::{Client, DriveClient};
 use cache::SqlCache;
 use fs;
+use chunk;
 
 /// Execute starts the mount flow
 pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32) {
@@ -31,7 +32,12 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32) {
 
     drive_client.watch_changes(cache.clone());
 
-    let filesystem = match fs::Filesystem::new(cache.clone(), uid, gid) {
+    let chunk_manager = match chunk::RAMManager::new() {
+        Ok(manager) => manager,
+        Err(cause) => panic!("{}", cause)
+    };
+
+    let filesystem = match fs::Filesystem::new(cache.clone(), chunk_manager, uid, gid) {
         Ok(fs) => fs,
         Err(cause) => panic!("{}", cause)
     };

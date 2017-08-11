@@ -21,6 +21,7 @@ mod config;
 mod api;
 mod cache;
 mod fs;
+mod chunk;
 
 use std::env;
 use clap::{App, Arg, SubCommand};
