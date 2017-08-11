@@ -155,15 +155,11 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
         }
 
         self.handles.insert(fh, file);
-
-        debug!("opened file handle {}", fh);
         reply.opened(fh, 0)
     }
 
     fn release(&mut self, _req: &fuse::Request, _ino: u64, fh: u64, _flags: u32, _lock_owner: u64, _flush: bool, reply: fuse::ReplyEmpty) {
         self.handles.remove(&fh);
-
-        debug!("released file handle {}", fh);
         reply.ok()
     }
 
@@ -174,8 +170,6 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             offset: u64,
             size: u32,
             reply: fuse::ReplyData) {
-
-        debug!("read file handle {}", fh);
 
         let file = match self.handles.get(&fh) {
             Some(file) => file,
