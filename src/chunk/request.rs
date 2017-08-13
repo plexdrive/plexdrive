@@ -14,18 +14,18 @@ impl<C> RequestManager<C> where C: api::Client {
 }
 
 impl<C> chunk::Manager for RequestManager<C> where C: api::Client {
-    fn get_chunk<F>(&self, url: &str, start: u64, offset: u64, callback: F)
+    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
         // TODO: implement retry handling
         // TODO: implement 4xx HTTP error handling
 
-        match self.client.do_http_request(url, start, start + offset) {
+        match self.client.do_http_request(&config.url, config.start, config.start + config.size) {
             Ok(chunk) => callback(Ok(chunk)),
             Err(cause) => {
                 debug!("{:?}", cause);
 
-                callback(Err(chunk::Error::RetrievalError(format!("Could not load chunk {} ({} - {})", url, start, offset))))
+                callback(Err(chunk::Error::RetrievalError(format!("Could not load chunk {} ({} - {})", config.url, config.start, config.size))))
             }
         }
     }

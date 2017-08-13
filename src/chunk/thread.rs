@@ -22,16 +22,14 @@ impl<M> ThreadManager<M>
 impl<M> chunk::Manager for ThreadManager<M>
     where M: chunk::Manager + Sync + Send + 'static
 {
-    fn get_chunk<F>(&self, url: &str, start: u64, offset: u64, callback: F)
+    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
         let manager = self.manager.clone();
-        let url = url.to_owned();
-        let start = start.clone();
-        let offset = offset.clone();
+        let config = config.clone();
 
         self.pool.execute(move || {
-            manager.get_chunk(&url, start, offset, callback);
+            manager.get_chunk(config, callback);
         });
     }
 }

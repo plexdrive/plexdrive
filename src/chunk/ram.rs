@@ -18,13 +18,13 @@ impl<M> RAMManager<M> where M: chunk::Manager + Sync + Send + 'static {
 }
 
 impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send + 'static {
-    fn get_chunk<F>(&self, url: &str, start: u64, offset: u64, callback: F)
+    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
-        let id = format!("{}|{}", url, start);
+        // let id = format!("{}|{}", config., start);
         let mut chunks = self.chunks.lock().unwrap();
 
-        self.manager.get_chunk(url, start, offset, |result| {
+        self.manager.get_chunk(config, |result| {
             callback(result);
 
             // TODO: store chunk in 

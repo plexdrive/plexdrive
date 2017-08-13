@@ -180,7 +180,9 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             },
         };
 
-        self.chunk_manager.get_chunk(&file.download_url, offset, size as u64, |result| {
+        let config = chunk::Config::from_request(&file, offset, size as u64);
+
+        self.chunk_manager.get_chunk(config, |result| {
             match result {
                 Ok(chunk) => reply.data(&chunk),
                 Err(cause) => {

@@ -1,14 +1,14 @@
 use std::fmt;
 
+use cache;
+
 mod ram;
 mod thread;
 mod request;
-mod chunk;
 
 pub use chunk::thread::ThreadManager;
 pub use chunk::ram::RAMManager;
 pub use chunk::request::RequestManager;
-pub use chunk::chunk::ChunkManager;
 
 #[derive(Debug)]
 pub enum Error {
@@ -22,10 +22,28 @@ impl fmt::Display for Error {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Config { // TODO: Rename to ChunkConfig / create ManagerConfig
+    pub url: String,
+    pub start: u64,
+    pub size: u64,
+    // TODO: file offset
+}
+
+impl Config {
+    pub fn from_request(file: &cache::File, start: u64, size: u64) -> Config {
+        Config {
+            url: file.download_url.clone(),
+            start: start,
+            size: size,
+        }
+    }
+}
+
 /// The Chunk Manager can handle saving and loading chunks
 /// it will also buffer chunks in memory or disk or another
 /// datasource depending on what manager you're using.
 pub trait Manager {
-    fn get_chunk<F>(&self, url: &str, start: u64, offset: u64, callback: F)
+    fn get_chunk<F>(&self, config: Config, callback: F)
         where F: FnOnce(ChunkResult<Vec<u8>>) + Send + 'static;
 }
