@@ -98,6 +98,9 @@ impl api::Client for DriveClient {
                        start_offset: u64,
                        end_offset: u64)
                        -> api::ClientResult<Vec<u8>> {
+
+        debug!("Requesting {} ({} - {})", url, start_offset, end_offset);
+
         let mut authenticator = Authenticator::new(
             &self.secret,
             DefaultAuthenticatorDelegate,

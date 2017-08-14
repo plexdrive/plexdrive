@@ -23,7 +23,7 @@ impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send +
     fn get_chunk<F>(&self, config: chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
-        debug!("Checking {} in RAM", &config.id);
+        trace!("Checking {} in RAM", &config.id);
 
         let chunks = self.chunks.clone();
         let chunk = match chunks.read().unwrap().get(&config.id) {
@@ -34,13 +34,9 @@ impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send +
         let chunks = self.chunks.clone();
         match chunk {
             Some(chunk) => {
-                debug!("Found {} in RAM", &config.id);
-
                 callback(Ok(chunk::utils::cut_chunk(&chunk, config.chunk_offset as usize, config.size as usize)));      
             },
             None => {
-                debug!("Not Found {} in RAM", &config.id);
-
                 self.manager.get_chunk(config.clone(), move |result| {
                     match result {
                         Ok(chunk) => {
