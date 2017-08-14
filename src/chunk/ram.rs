@@ -26,17 +26,21 @@ impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send +
         debug!("Checking {} in RAM", &config.id);
 
         let chunks = self.chunks.clone();
+        let chunk = match chunks.read().unwrap().get(&config.id) {
+            Some(chunk) => Some(chunk.clone()),
+            None => None
+        };
 
-        match chunks.read().unwrap().get(&config.id) {
+        let chunks = self.chunks.clone();
+        match chunk {
             Some(chunk) => {
                 debug!("Found {} in RAM", &config.id);
 
-                callback(Ok(chunk::utils::cut_chunk(chunk, config.chunk_offset as usize, config.size as usize)));
+                callback(Ok(chunk::utils::cut_chunk(&chunk, config.chunk_offset as usize, config.size as usize)));      
             },
             None => {
                 debug!("Not Found {} in RAM", &config.id);
 
-                let chunks = self.chunks.clone();
                 self.manager.get_chunk(config.clone(), move |result| {
                     match result {
                         Ok(chunk) => {
