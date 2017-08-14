@@ -93,75 +93,79 @@ impl api::Client for DriveClient {
         }
     }
 
-    fn do_http_request(&self,
-                       url: &str,
-                       start_offset: u64,
-                       end_offset: u64)
-                       -> api::ClientResult<Vec<u8>> {
+    fn do_http_request<F>(&self, url: &str, start_offset: u64, end_offset: u64, callback: F) where F: FnOnce(api::ClientResult<Vec<u8>>) + Send + 'static {
 
-        debug!("Requesting {} ({} - {})", url, start_offset, end_offset);
+        let url = url.to_owned();
+        let start_offset = start_offset.clone();
+        let end_offset = end_offset.clone();
+        let secret = self.secret.clone();
+        let token_file = self.token_file.clone();
 
-        let mut authenticator = Authenticator::new(
-            &self.secret,
-            DefaultAuthenticatorDelegate,
-            hyper::Client::with_connector(hyper::net::HttpsConnector::new(
-                hyper_rustls::TlsClient::new(),
-            )),
-            DiskTokenStorage::new(&self.token_file).unwrap(),
-            Some(FlowType::InstalledInteractive),
-        );
+        thread::spawn(move || {
+            debug!("Requesting {} ({} - {})", url, start_offset, end_offset);
 
-        let scopes = vec!["https://www.googleapis.com/auth/drive"];
-        let token = match authenticator.token(&scopes) {
-            Ok(token) => token,
-            Err(cause) => {
-                debug!("{:?}", cause);
+            let mut authenticator = Authenticator::new(
+                &secret,
+                DefaultAuthenticatorDelegate,
+                hyper::Client::with_connector(hyper::net::HttpsConnector::new(
+                    hyper_rustls::TlsClient::new(),
+                )),
+                DiskTokenStorage::new(&token_file).unwrap(),
+                Some(FlowType::InstalledInteractive),
+            );
 
-                return Err(api::Error::Authentication(String::from("Could not get token for Google Drive access")));
-            }
-        };
-
-        let http_client = hyper::Client::with_connector(hyper::net::HttpsConnector::new(
-            hyper_rustls::TlsClient::new()
-        ));
-
-        let mut response: hyper::client::Response = match http_client.request(hyper::method::Method::Get, url)
-                .header(hyper::header::Authorization(hyper::header::Bearer{ token: token.access_token }))
-                .header(hyper::header::Range::Bytes(vec![hyper::header::ByteRangeSpec::FromTo(start_offset, end_offset)]))
-                .send() {
-                    Ok(response) => response,
-                    Err(cause) => {
-                        debug!("{:?}", cause);
-
-                        return Err(api::Error::HttpRequestError(format!("Could not request URL {}", url)))
-                    }
-                };
-
-        let length: usize = (end_offset - start_offset) as usize;
-        let mut buffer = vec![0u8; length];
-
-        let n = match response.read(buffer.as_mut_slice()) {
-            Ok(n) => n,
-            Err(cause) => {
-                debug!("{:?}", cause);
-
-                return Err(api::Error::HttpReadError(format!("Could not read content of http response for URL {}", url)));
-            }
-        };
-
-        let body = &buffer[0 .. n];
-
-        if response.status != hyper::status::StatusCode::PartialContent {
-            return Err(api::Error::HttpInvalidStatus(response.status, match str::from_utf8(body) {
-                Ok(content) => content.to_owned(),
+            let scopes = vec!["https://www.googleapis.com/auth/drive"];
+            let token = match authenticator.token(&scopes) {
+                Ok(token) => token,
                 Err(cause) => {
                     debug!("{:?}", cause);
-                    String::from("")
-                }
-            }));
-        }
 
-        Ok(body.to_vec())
+                    return callback(Err(api::Error::Authentication(String::from("Could not get token for Google Drive access"))));
+                }
+            };
+
+            let http_client = hyper::Client::with_connector(hyper::net::HttpsConnector::new(
+                hyper_rustls::TlsClient::new()
+            ));
+
+            let mut response: hyper::client::Response = match http_client.request(hyper::method::Method::Get, &url)
+                    .header(hyper::header::Authorization(hyper::header::Bearer{ token: token.access_token }))
+                    .header(hyper::header::Range::Bytes(vec![hyper::header::ByteRangeSpec::FromTo(start_offset, end_offset)]))
+                    .send() {
+                        Ok(response) => response,
+                        Err(cause) => {
+                            debug!("{:?}", cause);
+
+                            return callback(Err(api::Error::HttpRequestError(format!("Could not request URL {}", url))));
+                        }
+                    };
+
+            let length: usize = (end_offset - start_offset) as usize;
+            let mut buffer = vec![0u8; length];
+
+            let n = match response.read(buffer.as_mut_slice()) {
+                Ok(n) => n,
+                Err(cause) => {
+                    debug!("{:?}", cause);
+
+                    return callback(Err(api::Error::HttpReadError(format!("Could not read content of http response for URL {}", url))));
+                }
+            };
+
+            let body = &buffer[0 .. n];
+
+            if response.status != hyper::status::StatusCode::PartialContent {
+                return callback(Err(api::Error::HttpInvalidStatus(response.status, match str::from_utf8(body) {
+                    Ok(content) => content.to_owned(),
+                    Err(cause) => {
+                        debug!("{:?}", cause);
+                        String::from("")
+                    }
+                })));
+            }
+
+            callback(Ok(body.to_vec()))
+        });
     }
 
     fn watch_changes<C>(&self, cache: Arc<Mutex<C>>)

@@ -1,4 +1,3 @@
-use std::thread;
 use std::sync::{Arc, Mutex, mpsc};
 use std::collections::HashMap;
 
@@ -9,14 +8,14 @@ use chunk;
 /// doing requests and handle API errors, so that
 /// it can retry the request
 pub struct RequestManager<C> {
-    client: Arc<Mutex<C>>,
+    client: C,
     requests: Mutex<HashMap<String, Arc<Mutex<mpsc::Receiver<chunk::ChunkResult<Vec<u8>>>>>>>
 }
 
 impl<C> RequestManager<C> where C: api::Client {
     pub fn new(client: C) -> chunk::ChunkResult<RequestManager<C>> {
         Ok(RequestManager {
-            client: Arc::new(Mutex::new(client)),
+            client: client,
             requests: Mutex::new(HashMap::new()),
         })
     }
@@ -42,16 +41,16 @@ impl<C> chunk::Manager for RequestManager<C> where C: api::Client + Send + 'stat
         };
 
         if !exist {
-            let client = self.client.clone();
-            thread::spawn(move || {
-                match client.lock().unwrap().do_http_request(&config.url, config.start, config.start + config.size) {
+            let cfg = config.clone();
+            self.client.do_http_request(&config.url, config.start.clone(), config.start + config.size, move |result| {
+                match result {
                     Ok(chunk) => {
                         tx.send(Ok(chunk)).unwrap();
                     },
                     Err(cause) => {
                         debug!("{:?}", cause);
 
-                        tx.send(Err(chunk::Error::RetrievalError(format!("Could not load chunk {} ({} - {})", config.url, config.start, config.size)))).unwrap();
+                        tx.send(Err(chunk::Error::RetrievalError(format!("Could not load chunk {} ({} - {})", cfg.url, cfg.start, cfg.size)))).unwrap();
                     }
                 };
             });

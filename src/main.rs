@@ -94,7 +94,7 @@ fn main() {
                     .long("chunk-size")
                     .takes_value(true)
                     .help("Size of the chunk that should be fetched from Google (in byte)")
-                    .default_value("10240")
+                    .default_value("10485760")
                 )
         );
     let matches = usage.clone().get_matches();

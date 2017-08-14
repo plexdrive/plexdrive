@@ -33,7 +33,7 @@ pub trait Client {
 
     /// Get the http client with embedded token credentials for custom requests
     /// against the API
-    fn do_http_request(&self, url: &str, start_offset: u64, end_offset: u64) -> ClientResult<Vec<u8>>;
+    fn do_http_request<F>(&self, url: &str, start_offset: u64, end_offset: u64, callback: F) where F: FnOnce(ClientResult<Vec<u8>>) + Send + 'static;
 
     /// Watch continuosly asynchronously for changes.
     /// If changes were found they'll get stored in the internal persistence unit
