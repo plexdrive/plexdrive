@@ -47,7 +47,7 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads:
         Err(cause) => panic!("{}", cause)
     };
 
-    let filesystem = match fs::Filesystem::new(cache.clone(), thread_manager, uid, gid) {
+    let filesystem = match fs::Filesystem::new(cache.clone(), thread_manager, uid, gid, chunk_size) {
         Ok(fs) => fs,
         Err(cause) => panic!("{}", cause)
     };

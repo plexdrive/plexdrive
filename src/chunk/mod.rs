@@ -5,12 +5,13 @@ use cache;
 mod ram;
 mod thread;
 mod request;
+mod utils;
 
 pub use chunk::thread::ThreadManager;
 pub use chunk::ram::RAMManager;
 pub use chunk::request::RequestManager;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     RetrievalError(String),
 }
@@ -22,20 +23,33 @@ impl fmt::Display for Error {
     }
 }
 
+/// The configuration of a chunk request.
+/// It holds all prepared and precalculated offsets
 #[derive(Debug, Clone)]
-pub struct Config { // TODO: Rename to ChunkConfig / create ManagerConfig
+pub struct Config {
+    pub id: String,
     pub url: String,
     pub start: u64,
     pub size: u64,
-    // TODO: file offset
+    pub chunk_offset: u64,
+    pub offset_start: u64,
+    pub offset_end: u64,
 }
 
 impl Config {
-    pub fn from_request(file: &cache::File, start: u64, size: u64) -> Config {
+    pub fn from_request(file: &cache::File, start: u64, size: u64, chunk_size: u64) -> Config {
+        let chunk_offset = start % chunk_size;
+        let offset_start = start - chunk_offset;
+        let offset_end = offset_start + chunk_size;
+
         Config {
+            id: format!("{}:{}", &file.id, &offset_start),
             url: file.download_url.clone(),
             start: start,
             size: size,
+            chunk_offset: chunk_offset,
+            offset_start: offset_start,
+            offset_end: offset_end,
         }
     }
 }

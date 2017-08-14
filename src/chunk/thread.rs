@@ -3,6 +3,9 @@ use threadpool;
 
 use chunk;
 
+/// The thread manager is a component for multi threaded
+/// chunk loading from a datastore that is able to 
+/// handle thread safe operations
 pub struct ThreadManager<M> {
     manager: Arc<M>,
     pool: threadpool::ThreadPool,

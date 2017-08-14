@@ -1,6 +1,9 @@
 use api;
 use chunk;
 
+/// The request manager is just a wrapper for
+/// doing requests and handle API errors, so that
+/// it can retry the request
 pub struct RequestManager<C> {
     client: C,
 }

@@ -33,13 +33,14 @@ pub struct Filesystem<C, M> {
     gid: u32,
     handles: HashMap<u64, cache::File>,
     handle_id: u64,
+    chunk_size: u64,
 }
 
 impl<C, M> Filesystem<C, M>
     where C: cache::MetadataCache + Send + 'static,
           M: chunk::Manager,
 {
-    pub fn new(cache: Arc<Mutex<C>>, chunk_manger: M, uid: u32, gid: u32) -> FilesystemResult<Filesystem<C, M>> {
+    pub fn new(cache: Arc<Mutex<C>>, chunk_manger: M, uid: u32, gid: u32, chunk_size: u64) -> FilesystemResult<Filesystem<C, M>> {
         Ok(Filesystem {
                cache: cache,
                chunk_manager: chunk_manger,
@@ -47,6 +48,7 @@ impl<C, M> Filesystem<C, M>
                gid: gid,
                handles: HashMap::new(),
                handle_id: 0,
+               chunk_size: chunk_size,
            })
     }
 }
@@ -180,7 +182,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             },
         };
 
-        let config = chunk::Config::from_request(&file, offset, size as u64);
+        let config = chunk::Config::from_request(&file, offset, size as u64, self.chunk_size);
 
         self.chunk_manager.get_chunk(config, |result| {
             match result {
