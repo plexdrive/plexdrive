@@ -95,7 +95,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
         let files: Vec<cache::File> = match self.cache
                   .lock()
                   .unwrap()
-                  .get_child_files_by_inode(inode, offset - 2, 50) {
+                  .get_child_files_by_inode(inode, offset - 2, 10) {
             Ok(files) => files,
             Err(cause) => {
                 warn!("{}", cause);
