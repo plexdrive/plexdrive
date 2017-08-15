@@ -177,8 +177,8 @@ impl cache::MetadataCache for SqlCache {
     Ok(result)
   }
 
-  fn get_child_files_by_inode(&self, inode: u64) -> cache::CacheResult<Vec<cache::File>> {
-    let mut stmt = match self.connection.prepare("SELECT inode, id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE id IN (SELECT file_id FROM parent INNER JOIN file ON (file.id = parent.parent_id AND file.inode = ?))") {
+  fn get_child_files_by_inode(&self, inode: u64, offset: u64, limit: u64) -> cache::CacheResult<Vec<cache::File>> {
+    let mut stmt = match self.connection.prepare("SELECT inode, id, name, is_dir, size, last_modified, download_url, can_trash FROM file WHERE id IN (SELECT file_id FROM parent INNER JOIN file ON (file.id = parent.parent_id AND file.inode = ?)) LIMIT ? OFFSET ?") {
       Ok(stmt) => stmt,
       Err(cause) => {
         debug!("{:?}", cause);
@@ -186,7 +186,7 @@ impl cache::MetadataCache for SqlCache {
       }
     };
 
-    let rows = match stmt.query_map(&[ &format!("{}", inode) ], |row| { convert_to_file(row) }) {
+    let rows = match stmt.query_map(&[ &format!("{}", inode), &format!("{}", limit), &format!("{}", offset) ], |row| { convert_to_file(row) }) {
       Ok(rows) => rows,
       Err(cause) => {
         debug!("{:?}", cause);

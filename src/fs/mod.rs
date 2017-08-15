@@ -80,14 +80,22 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
                _fh: u64,
                offset: u64,
                mut reply: fuse::ReplyDirectory) {
-        if offset != 0 {
-            return reply.error(libc::ENOENT);
+        trace!("readdir: {} / {}", inode, offset);
+
+        let mut i = offset;
+        let mut offset = offset;
+        if offset == 0 {
+            reply.add(1, 0, fuse::FileType::Directory, ".");
+            reply.add(1, 1, fuse::FileType::Directory, "..");
+            i += 2;
+        } else {
+            offset -= 1;
         }
 
         let files: Vec<cache::File> = match self.cache
                   .lock()
                   .unwrap()
-                  .get_child_files_by_inode(inode) {
+                  .get_child_files_by_inode(inode, offset, 50) {
             Ok(files) => files,
             Err(cause) => {
                 warn!("{}", cause);
@@ -96,12 +104,15 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             }
         };
 
-        reply.add(1, 0, fuse::FileType::Directory, ".");
-        reply.add(1, 1, fuse::FileType::Directory, "..");
+        if files.len() <= 1 {
+            trace!("No files found");
+            return reply.error(libc::ENOENT);
+        }
 
-        let mut i = 2;
-        for file in files {
-            reply.add(file.inode.unwrap(),
+        for file in files.iter() {
+            let inode = file.inode.unwrap();
+            trace!("Listing file {} ({}) with inode {} and offset {}", file.id, file.name, inode, i);
+            reply.add(inode,
                       i,
                       utils::get_filetype_for_file(&file),
                       &file.name);

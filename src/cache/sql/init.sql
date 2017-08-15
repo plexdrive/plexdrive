@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS token (
 
 CREATE TABLE IF NOT EXISTS file (
   inode         INTEGER PRIMARY KEY AUTOINCREMENT,
-  id            TEXT,
+  id            TEXT UNIQUE,
   name          TEXT NOT NULL,
   is_dir        INTEGER,
   size          TEXT,
