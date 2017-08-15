@@ -56,6 +56,8 @@ impl cache::MetadataCache for SqlCache {
           }
         };
 
+        trace!("Deleting file {} from cache", id);
+
         let file_removed = match transaction.execute("DELETE FROM file WHERE id = ?", &[ &id ]) {
           Ok(_) => true,
           Err(cause) => {
@@ -83,6 +85,8 @@ impl cache::MetadataCache for SqlCache {
             continue
           }
         };
+
+        trace!("Adding file {} ({}) to cache", file.id, file.name);
 
         let file_inserted = match transaction.execute(
           "REPLACE INTO file (id, name, is_dir, size, last_modified, download_url, can_trash) VALUES (?, ?, ?, ?, ?, ?, ?);",
