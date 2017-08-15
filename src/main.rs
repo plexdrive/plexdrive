@@ -16,6 +16,7 @@ extern crate fuse;
 extern crate libc;
 extern crate time;
 extern crate threadpool;
+extern crate bus;
 
 mod commands;
 mod config;
