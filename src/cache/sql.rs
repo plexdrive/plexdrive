@@ -186,6 +186,8 @@ impl cache::MetadataCache for SqlCache {
       }
     };
 
+    trace!("SQL: {:?}, {:?}", stmt, &[ &format!("{}", inode), &format!("{}", limit), &format!("{}", offset) ]);
+
     let rows = match stmt.query_map(&[ &format!("{}", inode), &format!("{}", limit), &format!("{}", offset) ], |row| { convert_to_file(row) }) {
       Ok(rows) => rows,
       Err(cause) => {
