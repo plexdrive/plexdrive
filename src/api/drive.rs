@@ -140,10 +140,8 @@ impl api::Client for DriveClient {
                         }
                     };
 
-            let length: usize = (end_offset - start_offset) as usize;
-            let mut buffer = vec![0u8; length];
-
-            let n = match response.read(buffer.as_mut_slice()) {
+            let mut buffer = Vec::new();
+            let n = match response.read_to_end(&mut buffer) {
                 Ok(n) => n,
                 Err(cause) => {
                     debug!("{:?}", cause);
@@ -152,11 +150,7 @@ impl api::Client for DriveClient {
                 }
             };
 
-            trace!("HTTP Request returned {} bytes", n);
-            trace!("Buffer size before: {}", buffer.len());
             let body = &buffer[0 .. n];
-            trace!("Buffer size after:  {}", body.len());
-
             if response.status != hyper::status::StatusCode::PartialContent {
                 return callback(Err(api::Error::HttpInvalidStatus(response.status, match str::from_utf8(body) {
                     Ok(content) => content.to_owned(),
