@@ -152,7 +152,10 @@ impl api::Client for DriveClient {
                 }
             };
 
+            trace!("HTTP Request returned {} bytes", n);
+            trace!("Buffer size before: {}", buffer.len());
             let body = &buffer[0 .. n];
+            trace!("Buffer size after:  {}", body.len());
 
             if response.status != hyper::status::StatusCode::PartialContent {
                 return callback(Err(api::Error::HttpInvalidStatus(response.status, match str::from_utf8(body) {

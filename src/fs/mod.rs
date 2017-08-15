@@ -184,6 +184,8 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             size: u32,
             reply: fuse::ReplyData) {
 
+        trace!("read: {} / {} / {} / {}", inode, fh, offset, size);
+
         let file = match self.handles.get(&fh) {
             Some(file) => file,
             None => {
@@ -196,7 +198,11 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
         let config = chunk::Config::from_request(&file, offset, size as u64, self.chunk_size);
         self.chunk_manager.get_chunk(config, |result| {
             match result {
-                Ok(chunk) => reply.data(&chunk),
+                Ok(chunk) => {
+                    trace!("Got chunk (len: {}):\n {:?}", chunk.len(), chunk);
+
+                    reply.data(&chunk)
+                },
                 Err(cause) => {
                     warn!("{:?}", cause);
 
