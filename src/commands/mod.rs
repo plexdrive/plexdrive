@@ -26,6 +26,7 @@ pub fn mount<'a>(params: clap::ArgMatches<'a>) {
     let gid = command_params.value_of("gid").expect("Could not read gid");
     let threads = command_params.value_of("threads").expect("Could not read threads");
     let chunk_size = command_params.value_of("chunk_size").expect("Could not read chunk-size");
+    let preload = command_params.value_of("preload").expect("Could not read preload");
 
     debug!("Config       : {}", config_dir);
     debug!("MountPath    : {}", mount_path);
@@ -33,6 +34,7 @@ pub fn mount<'a>(params: clap::ArgMatches<'a>) {
     debug!("GID          : {}", gid);
     debug!("Threads      : {}", threads);
     debug!("ChunkSize    : {}", chunk_size);
+    debug!("Preload      : {}", preload);
 
     mount::execute(
         config_dir, 
@@ -41,5 +43,6 @@ pub fn mount<'a>(params: clap::ArgMatches<'a>) {
         gid.parse().expect("Could not parse gid"),
         threads.parse().expect("Could not parse thread count"),
         chunk_size.parse().expect("Could not parse chunk-size"),
+        preload.parse().expect("Could not parse preload")
     );
 }

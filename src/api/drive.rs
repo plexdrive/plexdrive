@@ -141,8 +141,8 @@ impl api::Client for DriveClient {
                     };
 
             let mut buffer = Vec::new();
-            let n = match response.read_to_end(&mut buffer) {
-                Ok(n) => n,
+            match response.read_to_end(&mut buffer) {
+                Ok(_) => (),
                 Err(cause) => {
                     debug!("{:?}", cause);
 
@@ -150,9 +150,8 @@ impl api::Client for DriveClient {
                 }
             };
 
-            let body = &buffer[0 .. n];
             if response.status != hyper::status::StatusCode::PartialContent {
-                return callback(Err(api::Error::HttpInvalidStatus(response.status, match str::from_utf8(body) {
+                return callback(Err(api::Error::HttpInvalidStatus(response.status, match str::from_utf8(&buffer) {
                     Ok(content) => content.to_owned(),
                     Err(cause) => {
                         debug!("{:?}", cause);
@@ -161,7 +160,7 @@ impl api::Client for DriveClient {
                 })));
             }
 
-            callback(Ok(body.to_vec()))
+            callback(Ok(buffer))
         });
     }
 

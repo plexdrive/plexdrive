@@ -97,6 +97,12 @@ fn main() {
                     .help("Size of the chunk that should be fetched from Google (in byte)")
                     .default_value("10485760")
                 )
+                .arg(Arg::with_name("preload")
+                    .long("preload")
+                    .takes_value(true)
+                    .help("The number of chunks that should be preloaded in the background")
+                    .default_value("5")
+                )
         );
     let matches = usage.clone().get_matches();
 

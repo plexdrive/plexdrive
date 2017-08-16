@@ -9,7 +9,7 @@ use fs;
 use chunk;
 
 /// Execute starts the mount flow
-pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads: usize, chunk_size: u64) {
+pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads: usize, chunk_size: u64, preload: u64) {
     let config_file_buf = Path::new(config_path).join("config.json");
     let token_file_buf = Path::new(config_path).join("token.json");
     let cache_file_buf = Path::new(config_path).join("cache.db");
@@ -42,7 +42,12 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads:
         Err(cause) => panic!("{}", cause)
     };
 
-    let thread_manager = match chunk::ThreadManager::new(ram_manager, threads) {
+    let preload_manager = match chunk::PreloadManager::new(ram_manager, preload, chunk_size) {
+        Ok(manager) => manager,
+        Err(cause) => panic!("{}", cause)
+    };
+
+    let thread_manager = match chunk::ThreadManager::new(preload_manager, threads) {
         Ok(manager) => manager,
         Err(cause) => panic!("{}", cause)
     };

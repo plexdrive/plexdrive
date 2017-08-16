@@ -6,10 +6,12 @@ mod ram;
 mod thread;
 mod request;
 mod utils;
+mod preload;
 
 pub use chunk::thread::ThreadManager;
 pub use chunk::ram::RAMManager;
 pub use chunk::request::RequestManager;
+pub use chunk::preload::PreloadManager;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -27,6 +29,7 @@ impl fmt::Display for Error {
 /// It holds all prepared and precalculated offsets
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub file_id: String,
     pub id: String,
     pub url: String,
     pub start: u64,
@@ -43,6 +46,7 @@ impl Config {
         let offset_end = offset_start + chunk_size;
 
         Config {
+            file_id: file.id.clone(),
             id: format!("{}:{}", &file.id, &offset_start),
             url: file.download_url.clone(),
             start: start,
