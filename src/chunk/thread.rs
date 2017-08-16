@@ -26,7 +26,7 @@ impl<M> chunk::Manager for ThreadManager<M>
     where M: chunk::Manager + Sync + Send + 'static
 {
     fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
-        where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
+        where F: FnOnce(chunk::ChunkResult<Arc<Vec<u8>>>) + Send + 'static
     {
         let manager = self.manager.clone();
         let config = config.clone();

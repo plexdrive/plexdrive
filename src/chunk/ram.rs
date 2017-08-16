@@ -21,29 +21,29 @@ impl<M> RAMManager<M> where M: chunk::Manager + Sync + Send + 'static {
 
 impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send + 'static {
     fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
-        where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
+        where F: FnOnce(chunk::ChunkResult<Arc<Vec<u8>>>) + Send + 'static
     {
         trace!("Checking {} ({} - {}) in RAM", config.id, config.chunk_offset, config.chunk_offset + config.size);
 
         let chunks = self.chunks.clone();
         let chunk = match chunks.read().unwrap().get(&config.id) {
-            Some(chunk) => Some(chunk::utils::cut_chunk(&chunk.clone(), config.chunk_offset, config.size)),
+            Some(chunk) => Some(chunk::utils::cut_chunk(&chunk, config.chunk_offset, config.size)),
             None => None
         };
 
         let chunks = self.chunks.clone();
         match chunk {
             Some(chunk) => {
-                callback(Ok(chunk));
+                callback(Ok(Arc::new(chunk)));
             },
             None => {
                 let cfg = config.clone();
                 self.manager.get_chunk(config, move |result| {
                     match result {
                         Ok(chunk) => {
-                            callback(Ok(chunk::utils::cut_chunk(&chunk.clone(), cfg.chunk_offset, cfg.size)));
+                            callback(Ok(Arc::new(chunk::utils::cut_chunk(&chunk, cfg.chunk_offset, cfg.size))));
 
-                            chunks.write().unwrap().insert(cfg.id.clone(), Arc::new(chunk));
+                            chunks.write().unwrap().insert(cfg.id.clone(), chunk);
                         },
                         Err(cause) => {
                             callback(Err(cause));

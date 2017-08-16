@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::fmt;
 
 use cache;
@@ -65,5 +66,5 @@ impl Config {
 /// datasource depending on what manager you're using.
 pub trait Manager {
     fn get_chunk<F>(&self, config: &Config, callback: F)
-        where F: FnOnce(ChunkResult<Vec<u8>>) + Send + 'static;
+        where F: FnOnce(ChunkResult<Arc<Vec<u8>>>) + Send + 'static;
 }

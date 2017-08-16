@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chunk;
 
 /// The preload manager will start N preloads when a request
@@ -20,7 +22,7 @@ impl<M> PreloadManager<M> where M: chunk::Manager + Sync + Send + 'static {
 
 impl<M> chunk::Manager for PreloadManager<M> where M: chunk::Manager + Sync + Send + 'static {
     fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
-        where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
+        where F: FnOnce(chunk::ChunkResult<Arc<Vec<u8>>>) + Send + 'static
     {
         self.manager.get_chunk(config, callback);
 

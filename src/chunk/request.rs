@@ -11,7 +11,7 @@ use chunk;
 /// it can retry the request
 pub struct RequestManager<C> {
     client: C,
-    requests: Mutex<HashMap<String, Arc<Mutex<bus::Bus<chunk::ChunkResult<Vec<u8>>>>>>>
+    requests: Mutex<HashMap<String, Arc<Mutex<bus::Bus<chunk::ChunkResult<Arc<Vec<u8>>>>>>>>
 }
 
 impl<C> RequestManager<C> where C: api::Client {
@@ -22,7 +22,7 @@ impl<C> RequestManager<C> where C: api::Client {
         })
     }
 
-    fn get_bus_for_id(&self, id: &str) -> (Arc<Mutex<bus::Bus<chunk::ChunkResult<Vec<u8>>>>>, bool) {
+    fn get_bus_for_id(&self, id: &str) -> (Arc<Mutex<bus::Bus<chunk::ChunkResult<Arc<Vec<u8>>>>>>, bool) {
         let mut requests = self.requests.lock().unwrap();
         let (bus, exist) = match requests.get(id) {
             Some(bus) => (bus.clone(), true),
@@ -36,12 +36,12 @@ impl<C> RequestManager<C> where C: api::Client {
         (bus, exist)
     }
 
-    fn do_request(&self, bus: Arc<Mutex<bus::Bus<chunk::ChunkResult<Vec<u8>>>>>, config: &chunk::Config, retry: u8, delay: time::Duration) {
+    fn do_request(&self, bus: Arc<Mutex<bus::Bus<chunk::ChunkResult<Arc<Vec<u8>>>>>>, config: &chunk::Config, retry: u8, delay: time::Duration) {
         let cfg = config.clone();
         self.client.do_http_request(&config.url, config.offset_start, config.offset_end, move |result| {
             match result {
                 Ok(chunk) => {
-                    bus.lock().unwrap().broadcast(Ok(chunk));
+                    bus.lock().unwrap().broadcast(Ok(Arc::new(chunk)));
                 },
                 Err(cause) => {
                     // TODO: implement retry handling
@@ -57,13 +57,13 @@ impl<C> RequestManager<C> where C: api::Client {
 
 impl<C> chunk::Manager for RequestManager<C> where C: api::Client + Send + 'static {
     fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
-        where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
+        where F: FnOnce(chunk::ChunkResult<Arc<Vec<u8>>>) + Send + 'static
     {
         let (bus, exist) = self.get_bus_for_id(&config.id);
         let mut rx = bus.lock().unwrap().add_rx();
 
         if !exist {
-            self.do_request(bus.clone(), config, 0, time::Duration::milliseconds(500));
+            self.do_request(bus, config, 0, time::Duration::milliseconds(500));
         }
 
         callback(match rx.recv() {
