@@ -34,13 +34,13 @@ impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send +
         let chunks = self.chunks.clone();
         match chunk {
             Some(chunk) => {
-                callback(Ok(chunk::utils::cut_chunk(&chunk, config.chunk_offset, config.size)));
+                callback(Ok(chunk));
             },
             None => {
                 self.manager.get_chunk(config.clone(), move |result| {
                     match result {
                         Ok(chunk) => {
-                            callback(Ok(chunk.clone()));
+                            callback(Ok(chunk::utils::cut_chunk(&chunk.clone(), config.chunk_offset, config.size)));
 
                             chunks.write().unwrap().insert(config.id.clone(), Arc::new(chunk));
                         },
