@@ -194,7 +194,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
         };
 
         let config = chunk::Config::from_request(&file, offset, size as u64, self.chunk_size);
-        self.chunk_manager.get_chunk(config, |result| {
+        self.chunk_manager.get_chunk(&config, |result| {
             match result {
                 Ok(chunk) => reply.data(&chunk),
                 Err(cause) => {

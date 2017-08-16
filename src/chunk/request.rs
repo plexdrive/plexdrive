@@ -56,14 +56,14 @@ impl<C> RequestManager<C> where C: api::Client {
 }
 
 impl<C> chunk::Manager for RequestManager<C> where C: api::Client + Send + 'static {
-    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
+    fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
         let (bus, exist) = self.get_bus_for_id(&config.id);
         let mut rx = bus.lock().unwrap().add_rx();
 
         if !exist {
-            self.do_request(bus.clone(), &config, 0, time::Duration::milliseconds(500));
+            self.do_request(bus.clone(), config, 0, time::Duration::milliseconds(500));
         }
 
         callback(match rx.recv() {

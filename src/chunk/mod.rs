@@ -30,6 +30,7 @@ impl fmt::Display for Error {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub file_id: String,
+    pub file_size: u64,
     pub id: String,
     pub url: String,
     pub start: u64,
@@ -47,6 +48,7 @@ impl Config {
 
         Config {
             file_id: file.id.clone(),
+            file_size: file.size,
             id: format!("{}:{}", &file.id, &offset_start),
             url: file.download_url.clone(),
             start: start,
@@ -62,6 +64,6 @@ impl Config {
 /// it will also buffer chunks in memory or disk or another
 /// datasource depending on what manager you're using.
 pub trait Manager {
-    fn get_chunk<F>(&self, config: Config, callback: F)
+    fn get_chunk<F>(&self, config: &Config, callback: F)
         where F: FnOnce(ChunkResult<Vec<u8>>) + Send + 'static;
 }

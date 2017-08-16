@@ -19,19 +19,24 @@ impl<M> PreloadManager<M> where M: chunk::Manager + Sync + Send + 'static {
 }
 
 impl<M> chunk::Manager for PreloadManager<M> where M: chunk::Manager + Sync + Send + 'static {
-    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
+    fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
-        self.manager.get_chunk(config.clone(), callback);
+        self.manager.get_chunk(config, callback);
 
         for i in 1..(self.preload + 1) {
-          let mut config = config.clone();
-          config.offset_start += i * self.chunk_size;
-          config.offset_end += config.offset_start + self.chunk_size;
-          config.id = format!("{}:{}", config.file_id, config.offset_start);
+            let mut config = config.clone();
+            config.offset_start += i * self.chunk_size;
 
-          trace!("Starting preload: {}", config.id);
-          self.manager.get_chunk(config, move |_result| {});
+            if config.offset_start >= config.file_size {
+                break;
+            }
+
+            config.offset_end += config.offset_start + self.chunk_size;
+            config.id = format!("{}:{}", config.file_id, config.offset_start);
+
+            trace!("Starting preload: {}", config.id);
+            self.manager.get_chunk(&config, move |_result| {});
         }
     }
 }

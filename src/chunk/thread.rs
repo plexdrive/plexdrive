@@ -25,7 +25,7 @@ impl<M> ThreadManager<M>
 impl<M> chunk::Manager for ThreadManager<M>
     where M: chunk::Manager + Sync + Send + 'static
 {
-    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
+    fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
         let manager = self.manager.clone();
@@ -33,7 +33,7 @@ impl<M> chunk::Manager for ThreadManager<M>
 
         let pool = self.pool.clone();
         pool.lock().unwrap().execute(move || {
-            manager.get_chunk(config, callback);
+            manager.get_chunk(&config, callback);
         });
     }
 }

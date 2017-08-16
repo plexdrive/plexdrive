@@ -89,7 +89,7 @@ fn main() {
                     .long("threads")
                     .takes_value(true)
                     .help("The number of threads to be used for playback")
-                    .default_value("2")
+                    .default_value("4")
                 )
                 .arg(Arg::with_name("chunk_size")
                     .long("chunk-size")
@@ -101,7 +101,7 @@ fn main() {
                     .long("preload")
                     .takes_value(true)
                     .help("The number of chunks that should be preloaded in the background")
-                    .default_value("5")
+                    .default_value("2")
                 )
         );
     let matches = usage.clone().get_matches();

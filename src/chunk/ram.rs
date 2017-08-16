@@ -20,7 +20,7 @@ impl<M> RAMManager<M> where M: chunk::Manager + Sync + Send + 'static {
 }
 
 impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send + 'static {
-    fn get_chunk<F>(&self, config: chunk::Config, callback: F)
+    fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Vec<u8>>) + Send + 'static
     {
         trace!("Checking {} ({} - {}) in RAM", config.id, config.chunk_offset, config.chunk_offset + config.size);
@@ -37,16 +37,17 @@ impl<M> chunk::Manager for RAMManager<M> where M: chunk::Manager + Sync + Send +
                 callback(Ok(chunk));
             },
             None => {
-                self.manager.get_chunk(config.clone(), move |result| {
+                let cfg = config.clone();
+                self.manager.get_chunk(config, move |result| {
                     match result {
                         Ok(chunk) => {
-                            callback(Ok(chunk::utils::cut_chunk(&chunk.clone(), config.chunk_offset, config.size)));
+                            callback(Ok(chunk::utils::cut_chunk(&chunk.clone(), cfg.chunk_offset, cfg.size)));
 
-                            chunks.write().unwrap().insert(config.id.clone(), Arc::new(chunk));
+                            chunks.write().unwrap().insert(cfg.id.clone(), Arc::new(chunk));
                         },
                         Err(cause) => {
                             callback(Err(cause));
-                            warn!("Could not store chunk {}", config.id);
+                            warn!("Could not store chunk {}", cfg.id);
                         }
                     };
                 })
