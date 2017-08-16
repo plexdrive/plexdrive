@@ -42,17 +42,17 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads:
         Err(cause) => panic!("{}", cause)
     };
 
-    let preload_manager = match chunk::PreloadManager::new(ram_manager, preload, chunk_size) {
+    let thread_manager = match chunk::ThreadManager::new(ram_manager, threads) {
         Ok(manager) => manager,
         Err(cause) => panic!("{}", cause)
     };
 
-    let thread_manager = match chunk::ThreadManager::new(preload_manager, threads) {
+    let preload_manager = match chunk::PreloadManager::new(thread_manager, preload, chunk_size) {
         Ok(manager) => manager,
         Err(cause) => panic!("{}", cause)
     };
 
-    let filesystem = match fs::Filesystem::new(cache.clone(), thread_manager, uid, gid, chunk_size) {
+    let filesystem = match fs::Filesystem::new(cache.clone(), preload_manager, uid, gid, chunk_size) {
         Ok(fs) => fs,
         Err(cause) => panic!("{}", cause)
     };

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use threadpool;
 
 use chunk;
@@ -8,7 +8,7 @@ use chunk;
 /// handle thread safe operations
 pub struct ThreadManager<M> {
     manager: Arc<M>,
-    pool: threadpool::ThreadPool,
+    pool: Arc<Mutex<threadpool::ThreadPool>>,
 }
 
 impl<M> ThreadManager<M>
@@ -17,7 +17,7 @@ impl<M> ThreadManager<M>
     pub fn new(manager: M, threads: usize) -> chunk::ChunkResult<ThreadManager<M>> {
         Ok(ThreadManager {
                manager: Arc::new(manager),
-               pool: threadpool::ThreadPool::new(threads),
+               pool: Arc::new(Mutex::new(threadpool::ThreadPool::new(threads))),
            })
     }
 }
@@ -31,7 +31,8 @@ impl<M> chunk::Manager for ThreadManager<M>
         let manager = self.manager.clone();
         let config = config.clone();
 
-        self.pool.execute(move || {
+        let pool = self.pool.clone();
+        pool.lock().unwrap().execute(move || {
             manager.get_chunk(config, callback);
         });
     }
