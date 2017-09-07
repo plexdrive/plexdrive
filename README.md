@@ -62,7 +62,7 @@ Usage of ./plexdrive mount:
 ```
 
 ### Support 
-Slack support is available on [our Slack channel](https://plexdrive.slack.com/shared_invite/MTg1NTg5NzY2Njc4LTE0OTUwNDU3NzAtMjJjNWRiMTAxMg). 
+Slack support is available on [our Slack channel](https://join.slack.com/t/plexdrive/shared_invite/MjM2MTMzMjY2MTc5LTE1MDQ2MDE4NDQtOTc0N2RiY2UxNw). 
 Feel free to ask configuration and setup questions here.
 
 ### Supported FUSE mount options
