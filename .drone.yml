@@ -2,6 +2,6 @@ pipeline:
   test:
     image: golang
     commands:
-      - go get
-      - go build
-      - go test
+      - go get -v
+      - go build -v
+      - go test ./... -v
