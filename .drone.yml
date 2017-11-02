@@ -2,5 +2,4 @@ pipeline:
   test:
     image: rust
     commands:
-      - cargo install
       - cargo test
