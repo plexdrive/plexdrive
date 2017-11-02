@@ -1,7 +1,10 @@
+workspace:
+  base: /go
+  path: src/github.com/dweidenfeld/plexdrive
+
 pipeline:
   test:
     image: golang
     commands:
       - go get -v
-      - go build -v
       - go test ./... -v
