@@ -6,5 +6,5 @@ pipeline:
   test:
     image: golang
     commands:
-      - go get -v
-      - go test ./... -v
+      - go get
+      - go test ./...
