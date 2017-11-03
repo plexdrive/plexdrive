@@ -15,8 +15,6 @@ import (
 
 	"os/signal"
 
-	"runtime"
-
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
 	"github.com/dweidenfeld/plexdrive/chunk"
@@ -40,10 +38,10 @@ func main() {
 	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
 	argCacheFile := flag.String("cache-file", filepath.Join(user.HomeDir, ".plexdrive", "cache.bolt"), "Path the the cache file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
-	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()/2, "The number of threads to use for downloading chunks")
-	argChunkCheckThreads := flag.Int("chunk-check-threads", runtime.NumCPU()/2, "The number of threads to use for checking chunk existence")
-	argChunkLoadAhead := flag.Int("chunk-load-ahead", runtime.NumCPU()-1, "The number of chunks that should be read ahead")
-	argMaxChunks := flag.Int("max-chunks", runtime.NumCPU()*2, "The maximum number of chunks to be stored on disk")
+	argChunkLoadThreads := flag.Int("chunk-load-threads", 4, "The number of threads to use for downloading chunks")
+	argChunkCheckThreads := flag.Int("chunk-check-threads", 4, "The number of threads to use for checking chunk existence")
+	argChunkLoadAhead := flag.Int("chunk-load-ahead", 6, "The number of chunks that should be read ahead")
+	argMaxChunks := flag.Int("max-chunks", 200, "The maximum number of chunks to be stored on disk")
 	argRefreshInterval := flag.Duration("refresh-interval", 1*time.Minute, "The time to wait till checking for changes")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
@@ -55,7 +53,7 @@ func main() {
 
 	// display version information
 	if *argVersion {
-		fmt.Println("%VERSION%")
+		fmt.Println("5.0.1")
 		return
 	}
 
