@@ -8,3 +8,12 @@ pipeline:
     commands:
       - go get
       - go test ./...
+
+  build:
+    image: golang
+    commands:
+      - go get
+      - go build
+      - ./go-build-all.sh
+    when:
+      branch: [ master, develop ]
