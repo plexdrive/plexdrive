@@ -96,8 +96,6 @@ impl api::Client for DriveClient {
     fn do_http_request<F>(&self, url: &str, start_offset: u64, end_offset: u64, callback: F) where F: FnOnce(api::ClientResult<Vec<u8>>) + Send + 'static {
 
         let url = url.to_owned();
-        let start_offset = start_offset.clone();
-        let end_offset = end_offset.clone();
         let secret = self.secret.clone();
         let token_file = self.token_file.clone();
 
@@ -169,7 +167,7 @@ impl api::Client for DriveClient {
     {
         let client = self.get_native_client();
 
-        let cache = cache.clone();
+        let cache = Arc::clone(&cache);
         thread::spawn(move || {
             let mut first_run = true;
             let mut change_count = 0;
@@ -197,7 +195,7 @@ impl api::Client for DriveClient {
                 };
 
                 let changes: Vec<cache::Change> =
-                    changes.into_iter().map(|change| cache::Change::from(change)).collect();
+                    changes.into_iter().map(cache::Change::from).collect();
 
                 change_count += changes.len();
 

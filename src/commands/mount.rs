@@ -30,7 +30,7 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads:
         Err(cause) => panic!("{}", cause)
     };
 
-    drive_client.watch_changes(cache.clone());
+    drive_client.watch_changes(Arc::clone(&cache));
 
     let request_manager = match chunk::RequestManager::new(drive_client) {
         Ok(manager) => manager,
@@ -52,13 +52,13 @@ pub fn execute(config_path: &str, mount_path: &str, uid: u32, gid: u32, threads:
         Err(cause) => panic!("{}", cause)
     };
 
-    let filesystem = match fs::Filesystem::new(cache.clone(), preload_manager, uid, gid, chunk_size) {
+    let filesystem = match fs::Filesystem::new(Arc::clone(&cache), preload_manager, uid, gid, chunk_size) {
         Ok(fs) => fs,
         Err(cause) => panic!("{}", cause)
     };
 
     info!("Mounting {}", mount_path);
-    match fuse::mount(filesystem, &mount_path.to_owned(), &vec![]) {
+    match fuse::mount(filesystem, &mount_path.to_owned(), &[]) {
         Ok(_) => info!("Unmounting {}", mount_path),
         Err(cause) => panic!("{}", cause)
     }

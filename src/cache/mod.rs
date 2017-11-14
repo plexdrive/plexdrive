@@ -20,7 +20,7 @@ impl fmt::Display for Error {
     }
 }
 
-/// The MetadataCache caches all meta information about Google Files
+/// The `MetadataCache` caches all meta information about Google Files
 /// so that you won't hit the API limits that fast.
 pub trait MetadataCache {
     /// Initialize the cache
@@ -127,7 +127,7 @@ impl From<drive3::File> for File {
             None => false,
         };
 
-        let size = match file.size.unwrap_or(String::from("0")).parse() {
+        let size = match file.size.unwrap_or_else(|| String::from("0")).parse() {
             Ok(size) => size,
             Err(cause) => {
                 debug!("{:?}", cause);
@@ -154,7 +154,7 @@ impl From<drive3::File> for File {
             last_modified: modified_time,
             download_url: download_url,
             can_trash: can_trash,
-            parents: file.parents.unwrap_or(vec![]),
+            parents: file.parents.unwrap_or_else(|| vec![]),
         }
     }
 }

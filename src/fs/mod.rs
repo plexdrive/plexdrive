@@ -104,17 +104,17 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             }
         };
 
-        if files.len() == 0 {
+        if files.is_empty() {
             trace!("No files found");
             return reply.error(libc::ENOENT);
         }
 
-        for file in files.iter() {
+        for file in &files {
             let inode = file.inode.unwrap();
             trace!("Listing file {} ({}) with inode {} and offset {}", file.id, file.name, inode, offset);
             reply.add(inode,
                       offset,
-                      utils::get_filetype_for_file(&file),
+                      utils::get_filetype_for_file(file),
                       &file.name);
             offset += 1;
         }
@@ -159,12 +159,12 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             }
         };
 
-        let fh = self.handle_id.clone();
+        let fh = self.handle_id;
 
-        if self.handle_id + 1 > u64::MAX {
-            self.handle_id = 0
+        if self.handle_id + 1 < u64::MAX {
+            self.handle_id += 1
         } else {
-            self.handle_id += 1;
+            self.handle_id = 0;
         }
 
         self.handles.insert(fh, file);
@@ -193,7 +193,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             },
         };
 
-        let config = chunk::Config::from_request(&file, offset, size as u64, self.chunk_size);
+        let config = chunk::Config::from_request(file, offset, u64::from(size), self.chunk_size);
         self.chunk_manager.get_chunk(&config, |result| {
             match result {
                 Ok(chunk) => reply.data(&chunk),

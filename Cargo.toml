@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Dominik Weidenfeld <dominik.weidenfeld@twt.de>"]
 
 [dependencies]
+clippy = "*"
 clap = "^ 2.26"
 log = "^ 0.3" 
 env_logger = "^ 0.4"

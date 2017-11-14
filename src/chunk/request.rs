@@ -25,12 +25,12 @@ impl<C> RequestManager<C> where C: api::Client {
     fn get_bus_for_id(&self, id: &str) -> (Arc<Mutex<bus::Bus<chunk::ChunkResult<Arc<Vec<u8>>>>>>, bool) {
         let mut requests = self.requests.lock().unwrap();
         let (bus, exist) = match requests.get(id) {
-            Some(bus) => (bus.clone(), true),
+            Some(bus) => (Arc::clone(bus), true),
             None => (Arc::new(Mutex::new(bus::Bus::new(16))), false),
         };
 
         if !exist {
-            requests.insert(id.to_owned(), bus.clone());
+            requests.insert(id.to_owned(), Arc::clone(&bus));
         }
 
         (bus, exist)

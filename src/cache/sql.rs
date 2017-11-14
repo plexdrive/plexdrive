@@ -3,7 +3,7 @@ use rusqlite::{Connection, Row};
 
 use cache;
 
-/// An SQLite based metadata cache
+/// An `SQLite` based metadata cache
 pub struct SqlCache {
   cache_file: String,
   connection: Connection,
@@ -247,7 +247,7 @@ fn convert_to_file(row: &Row) -> cache::File {
   let name = row.get(2);
 
   let sql_is_dir: u8 = row.get(3);
-  let is_dir = if sql_is_dir == 1 { true } else { false };
+  let is_dir = sql_is_dir == 1;
 
   let sql_size: String = row.get(4);
   let size = match sql_size.parse() {
@@ -267,10 +267,10 @@ fn convert_to_file(row: &Row) -> cache::File {
   };
 
   let sql_can_trash: u8 = row.get(7);
-  let can_trash = if sql_can_trash == 1 { true } else { false };
+  let can_trash = sql_can_trash == 1;
 
   cache::File {
-    inode: Some(inode as u64),
+    inode: Some(u64::from(inode)),
     id: id,
     name: name,
     is_dir: is_dir,

@@ -28,10 +28,10 @@ impl<M> chunk::Manager for ThreadManager<M>
     fn get_chunk<F>(&self, config: &chunk::Config, callback: F)
         where F: FnOnce(chunk::ChunkResult<Arc<Vec<u8>>>) + Send + 'static
     {
-        let manager = self.manager.clone();
+        let manager = Arc::clone(&self.manager);
         let config = config.clone();
 
-        let pool = self.pool.clone();
+        let pool = Arc::clone(&self.pool);
         pool.lock().unwrap().execute(move || {
             manager.get_chunk(&config, callback);
         });

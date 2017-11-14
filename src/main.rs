@@ -1,3 +1,6 @@
+#![feature(plugin)]
+#![plugin(clippy)]
+
 #[macro_use]
 extern crate log;
 extern crate env_logger;
@@ -109,19 +112,18 @@ fn main() {
     // initialize logger
     match matches.occurrences_of("verbosity") {
         1 => env::set_var("RUST_LOG", "plexdrive=error"),
-        2 => env::set_var("RUST_LOG", "plexdrive=warn"),
         3 => env::set_var("RUST_LOG", "plexdrive=info"),
         4 => env::set_var("RUST_LOG", "plexdrive=debug"),
         5 => env::set_var("RUST_LOG", "plexdrive=trace"),
-        0|_ => env::set_var("RUST_LOG", "plexdrive=warn")
+        0|2|_ => env::set_var("RUST_LOG", "plexdrive=warn"),
     }
     env_logger::init().expect("Could not initialize logging system");
 
     // match subcommands
     if matches.subcommand_matches("init").is_some() {
-        commands::init(matches);
+        commands::init(&matches);
     } else if matches.subcommand_matches("mount").is_some() {
-        commands::mount(matches);
+        commands::mount(&matches);
     } else {
         usage.print_help().expect("Could not print usage");
     }
