@@ -78,7 +78,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
                _req: &fuse::Request,
                inode: u64,
                _fh: u64,
-               offset: u64,
+               offset: i64,
                mut reply: fuse::ReplyDirectory) {
         trace!("readdir: {} / {}", inode, offset);
 
@@ -95,7 +95,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
         let files: Vec<cache::File> = match self.cache
                   .lock()
                   .unwrap()
-                  .get_child_files_by_inode(inode, offset - 2, 10) {
+                  .get_child_files_by_inode(inode, (offset - 2) as u64, 10) {
             Ok(files) => files,
             Err(cause) => {
                 warn!("{}", cause);
@@ -180,7 +180,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             _req: &fuse::Request,
             inode: u64,
             fh: u64,
-            offset: u64,
+            offset: i64,
             size: u32,
             reply: fuse::ReplyData) {
 
@@ -193,7 +193,7 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
             },
         };
 
-        let config = chunk::Config::from_request(file, offset, u64::from(size), self.chunk_size);
+        let config = chunk::Config::from_request(file, offset as u64, u64::from(size), self.chunk_size);
         self.chunk_manager.get_chunk(&config, |result| {
             match result {
                 Ok(chunk) => reply.data(&chunk),
@@ -203,6 +203,6 @@ impl<C, M> fuse::Filesystem for Filesystem<C, M>
                     reply.error(libc::EIO);
                 }
             }
-        });    
+        });
     }
 }
