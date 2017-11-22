@@ -31,14 +31,29 @@ func main() {
 	// get the users home dir
 	user, err := user.Current()
 	if nil != err {
-		panic(fmt.Sprintf("Could not read users homedir %v\n", err))
+		
+	}
+	
+	// Find users home directory
+	usr, err := user.Current()
+	home := ""
+	if err != nil {
+	    // Fall back to reading $HOME - work around user.Current() not
+	    // working for cross compiled binaries on OSX or freebsd.
+	    // https://github.com/golang/go/issues/6376
+	    home := os.Getenv("HOME")
+	    if home != "" {
+	    	panic(fmt.Sprintf("Could not read users homedir %v\n", err))
+	    }
+	} else {
+	    home = user.HomeDir	
 	}
 
 	// parse the command line arguments
 	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
-	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
-	argCacheFile := flag.String("cache-file", filepath.Join(user.HomeDir, ".plexdrive", "cache.bolt"), "Path the the cache file")
+	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
+	argCacheFile := flag.String("cache-file", filepath.Join(home, ".plexdrive", "cache.bolt"), "Path the the cache file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()/2, "The number of threads to use for downloading chunks")
 	argChunkCheckThreads := flag.Int("chunk-check-threads", runtime.NumCPU()/2, "The number of threads to use for checking chunk existence")
