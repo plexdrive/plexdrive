@@ -28,12 +28,6 @@ import (
 )
 
 func main() {
-	// get the users home dir
-	user, err := user.Current()
-	if nil != err {
-		
-	}
-	
 	// Find users home directory
 	usr, err := user.Current()
 	home := ""
