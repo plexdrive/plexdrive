@@ -228,6 +228,7 @@ func (d *Client) GetRoot() (*APIObject, error) {
 	file, err := client.Files.
 		Get(d.rootNodeID).
 		Fields(googleapi.Field(Fields)).
+		SupportsTeamDrives(true).
 		Do()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -236,7 +237,7 @@ func (d *Client) GetRoot() (*APIObject, error) {
 
 	// getting file size
 	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.Size {
-		res, err := client.Files.Get(d.rootNodeID).Download()
+		res, err := client.Files.Get(d.rootNodeID).SupportsTeamDrives(true).Download()
 		if nil != err {
 			Log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not get file size for object %v", d.rootNodeID)
