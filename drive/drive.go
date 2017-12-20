@@ -105,7 +105,9 @@ func (d *Client) checkChanges(firstCheck bool) {
 		query := client.Changes.
 			List(pageToken).
 			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
-			PageSize(1000)
+			PageSize(1000).
+			SupportsTeamDrives(true).
+			IncludeTeamDriveItems(true)
 
 		results, err := query.Do()
 		if nil != err {
@@ -275,13 +277,13 @@ func (d *Client) Remove(object *APIObject, parent string) error {
 
 	go func() {
 		if object.CanTrash {
-			if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Trashed: true}).Do(); nil != err {
+			if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Trashed: true}).SupportsTeamDrives(true).Do(); nil != err {
 				Log.Debugf("%v", err)
 				Log.Warningf("Could not delete object %v (%v) from API", object.ObjectID, object.Name)
 				d.cache.UpdateObject(object)
 			}
 		} else {
-			if _, err := client.Files.Update(object.ObjectID, nil).RemoveParents(parent).Do(); nil != err {
+			if _, err := client.Files.Update(object.ObjectID, nil).RemoveParents(parent).SupportsTeamDrives(true).Do(); nil != err {
 				Log.Debugf("%v", err)
 				Log.Warningf("Could not unsubscribe object %v (%v) from API", object.ObjectID, object.Name)
 				d.cache.UpdateObject(object)
@@ -300,13 +302,13 @@ func (d *Client) Mkdir(parent string, Name string) (*APIObject, error) {
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
-	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: "application/vnd.google-apps.folder"}).Do()
+	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: "application/vnd.google-apps.folder"}).SupportsTeamDrives(true).Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not create object(%v) from API", Name)
 	}
 
-	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(Fields)).Do()
+	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(Fields)).SupportsTeamDrives(true).Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object fields %v from API", created.Id)
@@ -334,7 +336,7 @@ func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, N
 		return fmt.Errorf("Could not get Google Drive client")
 	}
 
-	if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(OldParent).AddParents(NewParent).Do(); nil != err {
+	if _, err := client.Files.Update(object.ObjectID, &gdrive.File{Name: NewName}).RemoveParents(OldParent).AddParents(NewParent).SupportsTeamDrives(true).Do(); nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not rename object %v (%v) from API", object.ObjectID, object.Name)
 	}
