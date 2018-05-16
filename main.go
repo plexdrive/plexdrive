@@ -35,12 +35,12 @@ func main() {
 	    // Fall back to reading $HOME - work around user.Current() not
 	    // working for cross compiled binaries on OSX or freebsd.
 	    // https://github.com/golang/go/issues/6376
-	    home := os.Getenv("HOME")
+	    home = os.Getenv("HOME")
 	    if home == "" {
-	    	panic(fmt.Sprintf("Could not read users homedir %v\n", err))
+	    	panic(fmt.Sprintf("Could not read users homedir and HOME is not set: %v\n", err))
 	    }
 	} else {
-	    home = user.HomeDir	
+	    home = usr
 	}
 
 	// parse the command line arguments
