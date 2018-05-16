@@ -40,7 +40,7 @@ func main() {
 	    	panic(fmt.Sprintf("Could not read users homedir and HOME is not set: %v\n", err))
 	    }
 	} else {
-	    home = usr
+	    home = usr.HomeDir
 	}
 
 	// parse the command line arguments
