@@ -36,7 +36,7 @@ func main() {
 	    // working for cross compiled binaries on OSX or freebsd.
 	    // https://github.com/golang/go/issues/6376
 	    home := os.Getenv("HOME")
-	    if home != "" {
+	    if home == "" {
 	    	panic(fmt.Sprintf("Could not read users homedir %v\n", err))
 	    }
 	} else {
