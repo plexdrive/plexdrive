@@ -21,7 +21,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/plexdrive -v 2 /mnt/plexdrive
+ExecStart=/usr/bin/plexdrive mount -v 2 /mnt/plexdrive
 ExecStop=/bin/fusermount -u /mnt/plexdrive
 Restart=on-abort
 

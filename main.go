@@ -28,21 +28,30 @@ import (
 )
 
 func main() {
-	// get the users home dir
-	user, err := user.Current()
-	if nil != err {
-		panic(fmt.Sprintf("Could not read users homedir %v\n", err))
+	// Find users home directory
+	usr, err := user.Current()
+	home := ""
+	if err != nil {
+	    // Fall back to reading $HOME - work around user.Current() not
+	    // working for cross compiled binaries on OSX or freebsd.
+	    // https://github.com/golang/go/issues/6376
+	    home = os.Getenv("HOME")
+	    if home == "" {
+	    	panic(fmt.Sprintf("Could not read users homedir and HOME is not set: %v\n", err))
+	    }
+	} else {
+	    home = usr.HomeDir
 	}
 
 	// parse the command line arguments
 	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
-	argConfigPath := flag.StringP("config", "c", filepath.Join(user.HomeDir, ".plexdrive"), "The path to the configuration directory")
-	argCacheFile := flag.String("cache-file", filepath.Join(user.HomeDir, ".plexdrive", "cache.bolt"), "Path the the cache file")
+	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
+	argCacheFile := flag.String("cache-file", filepath.Join(home, ".plexdrive", "cache.bolt"), "Path the the cache file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
-	argChunkLoadThreads := flag.Int("chunk-load-threads", runtime.NumCPU()/2, "The number of threads to use for downloading chunks")
-	argChunkCheckThreads := flag.Int("chunk-check-threads", runtime.NumCPU()/2, "The number of threads to use for checking chunk existence")
-	argChunkLoadAhead := flag.Int("chunk-load-ahead", runtime.NumCPU()-1, "The number of chunks that should be read ahead")
+	argChunkLoadThreads := flag.Int("chunk-load-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for downloading chunks")
+	argChunkCheckThreads := flag.Int("chunk-check-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for checking chunk existence")
+	argChunkLoadAhead := flag.Int("chunk-load-ahead", max(runtime.NumCPU()-1, 1), "The number of chunks that should be read ahead")
 	argMaxChunks := flag.Int("max-chunks", runtime.NumCPU()*2, "The maximum number of chunks to be stored on disk")
 	argRefreshInterval := flag.Duration("refresh-interval", 1*time.Minute, "The time to wait till checking for changes")
 	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
@@ -205,6 +214,13 @@ func checkOsSignals(mountpoint string) {
 			}
 		}
 	}()
+}
+
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
 }
 
 func parseSizeArg(input string) (int64, error) {
