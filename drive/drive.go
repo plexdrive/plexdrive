@@ -106,11 +106,10 @@ func (d *Client) checkChanges(firstCheck bool) {
 			List(pageToken).
 			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
 			PageSize(1000).
-			//TeamDriveId(d.rootNodeID).
 			SupportsTeamDrives(true).
 			IncludeTeamDriveItems(true)
 
-		if d.rootNodeID != "root"{
+		if d.rootNodeID != "root" {
 			query = query.TeamDriveId(d.rootNodeID)
 		}
 
