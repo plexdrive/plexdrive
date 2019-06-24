@@ -89,6 +89,13 @@ real root folder.
 Don't expect any performance improvement or something else. This option is only for your
 personal folder structuring.
 
+#### Team Drive
+You can pass the ID of a Team Drive as `root-node-id` to get access to a Team drive, here's how:
+* Open the Team Drive in your browser
+* Note the format of the URL: https://drive.google.com/drive/u/0/folders/ABC123qwerty987
+* The `root-node-id` of this Team Drive is `ABC123qwerty987`
+* Pass it with `--root-node-id=ABC123qwerty987` argument to your `plexdrive mount` command
+
 # Contribute
 If you want to support the project by implementing functions / fixing bugs
 yourself feel free to do so!
