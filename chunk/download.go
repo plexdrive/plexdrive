@@ -16,7 +16,7 @@ import (
 type Downloader struct {
 	Client    *drive.Client
 	queue     chan *Request
-	callbacks map[string][]DownloadCallback
+	callbacks map[string]DownloadCallback
 	lock      sync.Mutex
 }
 
@@ -27,7 +27,7 @@ func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 	manager := Downloader{
 		Client:    client,
 		queue:     make(chan *Request, 100),
-		callbacks: make(map[string][]DownloadCallback, 100),
+		callbacks: make(map[string]DownloadCallback, 100),
 	}
 
 	for i := 0; i < threads; i++ {
@@ -41,7 +41,7 @@ func NewDownloader(threads int, client *drive.Client) (*Downloader, error) {
 func (d *Downloader) Download(req *Request, callback DownloadCallback) {
 	d.lock.Lock()
 	_, exists := d.callbacks[req.id]
-	d.callbacks[req.id] = append(d.callbacks[req.id], callback)
+	d.callbacks[req.id] = callback
 	if !exists {
 		d.queue <- req
 	}
@@ -60,8 +60,9 @@ func (d *Downloader) download(client *http.Client, req *Request) {
 	bytes, err := downloadFromAPI(client, req, 0)
 
 	d.lock.Lock()
-	callbacks := d.callbacks[req.id]
-	for _, callback := range callbacks {
+	callback, exists := d.callbacks[req.id]
+	if exists {
+		Log.Debugf("Running callback for %v", req.id)
 		callback(err, bytes)
 	}
 	delete(d.callbacks, req.id)
