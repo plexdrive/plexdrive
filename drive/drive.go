@@ -109,10 +109,11 @@ func (d *Client) checkChanges(firstCheck bool) {
 	for {
 		query := client.Changes.
 			List(pageToken).
-			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(removed, fileId, file(%v))", Fields))).
+			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(changeType, removed, fileId, file(%v))", Fields))).
 			PageSize(1000).
 			SupportsTeamDrives(true).
-			IncludeTeamDriveItems(true)
+			IncludeTeamDriveItems(true).
+			IncludeCorpusRemovals(true)
 
 		if d.driveID != "" {
 			query = query.TeamDriveId(d.driveID)
@@ -128,8 +129,9 @@ func (d *Client) checkChanges(firstCheck bool) {
 		objects := make([]*APIObject, 0)
 		for _, change := range results.Changes {
 			Log.Tracef("Change %v", change)
-			if nil == change.File {
-				Log.Warningf("Skipping nil file")
+			// ignore changes for changeType drive
+			if change.ChangeType != "file" {
+				Log.Warningf("Ignoring change type %v", change.ChangeType)
 				continue
 			}
 
