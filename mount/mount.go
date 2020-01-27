@@ -49,7 +49,7 @@ func Mount(
 		if "allow_other" == option {
 			options = append(options, fuse.AllowOther())
 		} else if "allow_root" == option {
-			options = append(options, fuse.AllowRoot())
+			return fmt.Errorf("The allow_root mount option is no longer supported")
 		} else if "allow_dev" == option {
 			options = append(options, fuse.AllowDev())
 		} else if "allow_non_empty_mount" == option {
