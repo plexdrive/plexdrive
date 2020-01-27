@@ -28,11 +28,12 @@ type Client struct {
 	token           *oauth2.Token
 	config          *oauth2.Config
 	rootNodeID      string
+	driveID         string
 	changesChecking bool
 }
 
 // NewClient creates a new Google Drive client
-func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duration, rootNodeID string) (*Client, error) {
+func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duration, rootNodeID string, driveID string) (*Client, error) {
 	client := Client{
 		cache:   cache,
 		context: context.Background(),
@@ -47,11 +48,15 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 			Scopes:      []string{gdrive.DriveScope},
 		},
 		rootNodeID:      rootNodeID,
+		driveID:         driveID,
 		changesChecking: false,
 	}
 
 	if "" == client.rootNodeID {
 		client.rootNodeID = "root"
+	}
+	if "" != client.driveID && client.rootNodeID == "root" {
+		client.rootNodeID = client.driveID
 	}
 
 	if err := client.authorize(); nil != err {
@@ -109,8 +114,8 @@ func (d *Client) checkChanges(firstCheck bool) {
 			SupportsTeamDrives(true).
 			IncludeTeamDriveItems(true)
 
-		if d.rootNodeID != "root" {
-			query = query.TeamDriveId(d.rootNodeID)
+		if d.driveID != "" {
+			query = query.TeamDriveId(d.driveID)
 		}
 
 		results, err := query.Do()
