@@ -69,7 +69,6 @@ Feel free to ask configuration and setup questions here.
 
 ### Supported FUSE mount options
 * allow_other
-* allow_root
 * allow_dev
 * allow_non_empty_mount
 * allow_suid
