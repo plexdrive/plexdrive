@@ -32,20 +32,21 @@ func main() {
 	usr, err := user.Current()
 	home := ""
 	if err != nil {
-	    // Fall back to reading $HOME - work around user.Current() not
-	    // working for cross compiled binaries on OSX or freebsd.
-	    // https://github.com/golang/go/issues/6376
-	    home = os.Getenv("HOME")
-	    if home == "" {
-	    	panic(fmt.Sprintf("Could not read users homedir and HOME is not set: %v\n", err))
-	    }
+		// Fall back to reading $HOME - work around user.Current() not
+		// working for cross compiled binaries on OSX or freebsd.
+		// https://github.com/golang/go/issues/6376
+		home = os.Getenv("HOME")
+		if home == "" {
+			panic(fmt.Sprintf("Could not read users homedir and HOME is not set: %v\n", err))
+		}
 	} else {
-	    home = usr.HomeDir
+		home = usr.HomeDir
 	}
 
 	// parse the command line arguments
 	argLogLevel := flag.IntP("verbosity", "v", 0, "Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)")
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
+	argDriveID := flag.String("drive-id", "", "The ID of the shared drive to mount (including team drives)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
 	argCacheFile := flag.String("cache-file", filepath.Join(home, ".plexdrive", "cache.bolt"), "Path the the cache file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
@@ -119,6 +120,7 @@ func main() {
 		// debug all given parameters
 		Log.Debugf("verbosity            : %v", logLevel)
 		Log.Debugf("root-node-id         : %v", *argRootNodeID)
+		Log.Debugf("drive-id             : %v", *argDriveID)
 		Log.Debugf("config               : %v", *argConfigPath)
 		Log.Debugf("cache-file           : %v", *argCacheFile)
 		Log.Debugf("chunk-size           : %v", *argChunkSize)
@@ -172,7 +174,7 @@ func main() {
 		}
 		defer cache.Close()
 
-		client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID)
+		client, err := drive.NewClient(cfg, cache, *argRefreshInterval, *argRootNodeID, *argDriveID)
 		if nil != err {
 			Log.Errorf("%v", err)
 			os.Exit(4)

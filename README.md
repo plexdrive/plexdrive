@@ -41,6 +41,8 @@ Usage of ./plexdrive mount:
     	The size of each chunk that is downloaded (units: B, K, M, G) (default "10M")
   -c, --config string
     	The path to the configuration directory (default "~/.plexdrive")
+  --drive-id string
+    	The ID of the shared drive to mount (including team drives)
   -o, --fuse-options string
     	Fuse mount options (e.g. -fuse-options allow_other,...)
   --gid int
@@ -90,11 +92,11 @@ Don't expect any performance improvement or something else. This option is only 
 personal folder structuring.
 
 #### Team Drive
-You can pass the ID of a Team Drive as `root-node-id` to get access to a Team drive, here's how:
+You can pass the ID of a Team Drive as `drive-id` to get access to a Team drive, here's how:
 * Open the Team Drive in your browser
 * Note the format of the URL: https://drive.google.com/drive/u/0/folders/ABC123qwerty987
-* The `root-node-id` of this Team Drive is `ABC123qwerty987`
-* Pass it with `--root-node-id=ABC123qwerty987` argument to your `plexdrive mount` command
+* The `drive-id` of this Team Drive is `ABC123qwerty987`
+* Pass it with `--drive-id=ABC123qwerty987` argument to your `plexdrive mount` command
 
 # Contribute
 If you want to support the project by implementing functions / fixing bugs
