@@ -46,8 +46,8 @@ func (s *Storage) Clear() error {
 func (s *Storage) Load(id string) []byte {
 	s.lock.Lock()
 	if chunk, exists := s.chunks[id]; exists {
-		s.lock.Unlock()
 		s.stack.Touch(id)
+		s.lock.Unlock()
 		return chunk
 	}
 	s.lock.Unlock()
@@ -57,6 +57,12 @@ func (s *Storage) Load(id string) []byte {
 // Store stores a chunk in the RAM and adds it to the disk storage queue
 func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.Lock()
+
+	if _, exists := s.chunks[id]; exists {
+		s.stack.Touch(id)
+		s.lock.Unlock()
+		return nil
+	}
 
 	deleteID := s.stack.Pop()
 	if "" != deleteID {
