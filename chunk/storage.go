@@ -16,7 +16,7 @@ type Storage struct {
 	MaxChunks int
 	chunks    map[string][]byte
 	stack     *Stack
-	lock      sync.Mutex
+	lock      sync.RWMutex
 }
 
 // Item represents a chunk in RAM
@@ -44,25 +44,28 @@ func (s *Storage) Clear() error {
 
 // Load a chunk from ram or creates it
 func (s *Storage) Load(id string) []byte {
-	s.lock.Lock()
+	s.lock.RLock()
 	if chunk, exists := s.chunks[id]; exists {
 		s.stack.Touch(id)
-		s.lock.Unlock()
+		s.lock.RUnlock()
 		return chunk
 	}
-	s.lock.Unlock()
+	s.lock.RUnlock()
 	return nil
 }
 
 // Store stores a chunk in the RAM and adds it to the disk storage queue
 func (s *Storage) Store(id string, bytes []byte) error {
-	s.lock.Lock()
+	s.lock.RLock()
 
 	if _, exists := s.chunks[id]; exists {
 		s.stack.Touch(id)
-		s.lock.Unlock()
+		s.lock.RUnlock()
 		return nil
 	}
+
+	s.lock.RUnlock()
+	s.lock.Lock()
 
 	deleteID := s.stack.Pop()
 	if "" != deleteID {
