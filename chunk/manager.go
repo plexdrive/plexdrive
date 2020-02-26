@@ -30,13 +30,15 @@ type Request struct {
 	offsetEnd      int64
 	chunkOffset    int64
 	chunkOffsetEnd int64
+	sequence       int
 	preload        bool
 }
 
 // Response represetns a chunk response
 type Response struct {
-	Error error
-	Bytes []byte
+	Sequence int
+	Error    error
+	Bytes    []byte
 }
 
 // NewManager creates a new chunk manager
@@ -90,34 +92,34 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	}
 	if offset+size > maxOffset {
 		size = int64(object.Size) - offset
-		Log.Debugf("Adjusting read past EOF of %v at offset %v to %v bytes", object.ObjectID, offset, size)
+	}
+
+	ranges := splitChunkRanges(offset, size, m.ChunkSize)
+	responses := make(chan Response, len(ranges))
+
+	for i, r := range ranges {
+		m.requestChunk(object, r.offset, r.size, i, responses)
 	}
 
 	data := make([]byte, size, size)
-
-	// Handle unaligned requests across chunk boundaries (Direct-IO)
-	for read := int64(0); read < size; {
-		response := make(chan Response)
-
-		m.requestChunk(object, offset+read, size-read, response)
-
-		res := <-response
+	for i := 0; i < cap(responses); i++ {
+		res := <-responses
 		if nil != res.Error {
 			return nil, res.Error
 		}
 
-		n := copy(data[read:], res.Bytes)
+		dataOffset := ranges[res.Sequence].offset - offset
 
-		if n == 0 {
-			return nil, fmt.Errorf("Short read of %v at offset %v only %v / %v bytes", object.ObjectID, offset, read, size)
+		if n := copy(data[dataOffset:], res.Bytes); n == 0 {
+			return nil, fmt.Errorf("Request %v slice %v has empty response", object.ObjectID, res.Sequence)
 		}
-
-		read += int64(n)
 	}
+	close(responses)
+
 	return data, nil
 }
 
-func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, response chan Response) {
+func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequence int, response chan Response) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
 	offsetEnd := offsetStart + m.ChunkSize
@@ -130,6 +132,7 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, resp
 		offsetEnd:      offsetEnd,
 		chunkOffset:    chunkOffset,
 		chunkOffsetEnd: chunkOffset + size,
+		sequence:       sequence,
 		preload:        false,
 	}
 
@@ -157,6 +160,24 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, resp
 	}
 }
 
+type byteRange struct {
+	offset, size int64
+}
+
+// Calculate request ranges that span multiple chunks
+//
+// This can happen with Direct-IO and unaligned reads or
+// if the size is bigger than the chunk size.
+func splitChunkRanges(offset, size, chunkSize int64) []byteRange {
+	ranges := make([]byteRange, 0, size/chunkSize+2)
+	for remaining := size; remaining > 0; remaining -= size {
+		size = min(remaining, chunkSize-offset%chunkSize)
+		ranges = append(ranges, byteRange{offset, size})
+		offset += size
+	}
+	return ranges
+}
+
 func (m *Manager) thread() {
 	for {
 		queueEntry := <-m.queue
@@ -168,9 +189,9 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 	if bytes := m.storage.Load(req.id); nil != bytes {
 		if nil != response {
 			response <- Response{
-				Bytes: adjustResponseChunk(req, bytes),
+				Sequence: req.sequence,
+				Bytes:    adjustResponseChunk(req, bytes),
 			}
-			close(response)
 		}
 		return
 	}
@@ -179,19 +200,18 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 		if nil != err {
 			if nil != response {
 				response <- Response{
-					Error: err,
+					Sequence: req.sequence,
+					Error:    err,
 				}
-				close(response)
 			}
 			return
 		}
 
 		if nil != response {
-
 			response <- Response{
-				Bytes: adjustResponseChunk(req, bytes),
+				Sequence: req.sequence,
+				Bytes:    adjustResponseChunk(req, bytes),
 			}
-			close(response)
 		}
 
 		if err := m.storage.Store(req.id, bytes); nil != err {
