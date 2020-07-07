@@ -48,7 +48,7 @@ Usage of ./plexdrive mount:
   --gid int
     	Set the mounts GID (-1 = default permissions) (default -1)
   --max-chunks int
-    	The maximum number of chunks to be stored on disk (default 10)
+    	The maximum number of chunks to be stored in memory (default 10)
   --refresh-interval duration
     	The time to wait till checking for changes (default 1m0s)
   --root-node-id string
