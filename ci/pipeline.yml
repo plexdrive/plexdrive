@@ -9,19 +9,19 @@ resources:
 - name: plexdrive-develop
   type: git
   source:
-    uri: https://github.com/dweidenfeld/plexdrive
+    uri: https://github.com/plexdrive/plexdrive
     branch: develop
 
 - name: plexdrive-master
   type: git
   source:
-    uri: https://github.com/dweidenfeld/plexdrive
+    uri: https://github.com/plexdrive/plexdrive
     branch: master
 
 - name: github-nightly-release
   type: github-release
   source:
-    owner: dweidenfeld
+    owner: plexdrive
     repository: plexdrive
     access_token: {{gh-access-token}}
     release: false
@@ -30,7 +30,7 @@ resources:
 - name: github-release
   type: github-release
   source:
-    owner: dweidenfeld
+    owner: plexdrive
     repository: plexdrive
     access_token: {{gh-access-token}}
     release: true

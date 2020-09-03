@@ -1,4 +1,4 @@
-<a href="https://github.com/dweidenfeld/plexdrive"><img src="logo/banner.png" alt="Plexdrive" /></a>
+<a href="https://github.com/plexdrive/plexdrive"><img src="logo/banner.png" alt="Plexdrive" /></a>
 [![Build Status](https://travis-ci.org/dweidenfeld/plexdrive.svg?branch=master)](https://travis-ci.org/dweidenfeld/plexdrive)
 
 __Plexdrive__ allows you to mount your Google Drive account as read-only fuse filesystem, with direct delete option on the filesystem.
@@ -16,7 +16,7 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 
 ## Installation
 1. First you need to install fuse on your system 
-2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
+2. Then you should download the newest release from the [GitHub release page](https://github.com/plexdrive/plexdrive/releases).
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Sample command line for plexdrive
 ```

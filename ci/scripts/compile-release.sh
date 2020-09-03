@@ -5,7 +5,7 @@ set -xe
 export ORIGIN=$PWD
 export GOPATH=$PWD/go
 export PATH=$GOPATH/bin:$PATH
-cd $GOPATH/src/github.com/dweidenfeld/plexdrive
+cd $GOPATH/src/github.com/plexdrive/plexdrive
 
 # Version
 export VERSION="$(cat ci/meta/version)"
