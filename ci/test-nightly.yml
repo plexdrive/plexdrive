@@ -7,7 +7,7 @@ image_resource:
 
 inputs:
 - name: plexdrive
-  path: go/src/github.com/dweidenfeld/plexdrive
+  path: go/src/github.com/plexdrive/plexdrive
 
 run:
-  path: go/src/github.com/dweidenfeld/plexdrive/ci/scripts/test.sh
+  path: go/src/github.com/plexdrive/plexdrive/ci/scripts/test.sh

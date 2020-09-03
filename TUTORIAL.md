@@ -8,7 +8,7 @@ apt-get install fuse
 ```
 
 ## Mounting the unencrypted volume with plexdrive
-1. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
+1. Then you should download the newest release from the [GitHub release page](https://github.com/plexdrive/plexdrive/releases).
 2. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 3. Create a systemd startup script for automatic startup on boot
 ```
