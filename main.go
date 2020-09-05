@@ -55,7 +55,7 @@ func main() {
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", max(runtime.NumCPU()-1, 1), "The number of chunks that should be read ahead")
 	argMaxChunks := flag.Int("max-chunks", runtime.NumCPU()*2, "The maximum number of chunks to be stored on disk")
 	argRefreshInterval := flag.Duration("refresh-interval", 1*time.Minute, "The time to wait till checking for changes")
-	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
+	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. --fuse-options allow_other,direct_io,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")

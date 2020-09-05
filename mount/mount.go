@@ -45,6 +45,8 @@ func Mount(
 		fuse.NoAppleDouble(),
 		fuse.NoAppleXattr(),
 	}
+	directIO := false
+	maxReadahead := uint32(128 << 10) // 128 KB is the FUSE default
 	for _, option := range mountOptions {
 		if "allow_other" == option {
 			options = append(options, fuse.AllowOther())
@@ -56,26 +58,28 @@ func Mount(
 			options = append(options, fuse.AllowNonEmptyMount())
 		} else if "allow_suid" == option {
 			options = append(options, fuse.AllowSUID())
-		} else if strings.Contains(option, "max_readahead=") {
+		} else if strings.HasPrefix(option, "max_readahead=") {
 			data := strings.Split(option, "=")
 			value, err := strconv.ParseUint(data[1], 10, 32)
 			if nil != err {
 				Log.Debugf("%v", err)
 				return fmt.Errorf("Could not parse max_readahead value")
 			}
-			options = append(options, fuse.MaxReadahead(uint32(value)))
+			maxReadahead = uint32(value)
 		} else if "default_permissions" == option {
 			options = append(options, fuse.DefaultPermissions())
+		} else if "direct_io" == option {
+			directIO = true
 		} else if "excl_create" == option {
 			options = append(options, fuse.ExclCreate())
-		} else if strings.Contains(option, "fs_name") {
+		} else if strings.HasPrefix(option, "fs_name") {
 			data := strings.Split(option, "=")
 			options = append(options, fuse.FSName(data[1]))
 		} else if "local_volume" == option {
 			options = append(options, fuse.LocalVolume())
 		} else if "writeback_cache" == option {
 			options = append(options, fuse.WritebackCache())
-		} else if strings.Contains(option, "volume_name") {
+		} else if strings.HasPrefix(option, "volume_name") {
 			data := strings.Split(option, "=")
 			options = append(options, fuse.VolumeName(data[1]))
 		} else if "read_only" == option {
@@ -84,6 +88,7 @@ func Mount(
 			Log.Warningf("Fuse option %v is not supported, yet", option)
 		}
 	}
+	options = append(options, fuse.MaxReadahead(maxReadahead))
 
 	c, err := fuse.Mount(mountpoint, options...)
 	if err != nil {
@@ -97,6 +102,7 @@ func Mount(
 		uid:          uid,
 		gid:          gid,
 		umask:        umask,
+		directIO:     directIO,
 	}
 	if err := fs.Serve(c, filesys); err != nil {
 		return err
@@ -128,6 +134,7 @@ type FS struct {
 	uid          uint32
 	gid          uint32
 	umask        os.FileMode
+	directIO     bool
 }
 
 // Root returns the root path
@@ -144,6 +151,7 @@ func (f *FS) Root() (fs.Node, error) {
 		uid:          f.uid,
 		gid:          f.gid,
 		umask:        f.umask,
+		directIO:     f.directIO,
 	}, nil
 }
 
@@ -155,6 +163,7 @@ type Object struct {
 	uid          uint32
 	gid          uint32
 	umask        os.FileMode
+	directIO     bool
 }
 
 // Attr returns the attributes for a directory
@@ -227,6 +236,7 @@ func (o *Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		uid:          o.uid,
 		gid:          o.gid,
 		umask:        o.umask,
+		directIO:     o.directIO,
 	}, nil
 }
 
@@ -240,6 +250,15 @@ func (o *Object) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Rea
 
 	resp.Data = data
 	return nil
+}
+
+// Open a file
+func (o *Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+	if o.directIO {
+		// Force use of Direct I/O, even if the app did not request it (direct_io mount option)
+		resp.Flags |= fuse.OpenDirectIO
+	}
+	return o, nil
 }
 
 // Remove deletes an element
