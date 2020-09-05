@@ -30,6 +30,8 @@ jobs:
 
       - name: Get dependencies
         run: |
+          mkdir -pv "$(go env GOPATH)/src/github.com/plexdrive"
+          ln -nfsv "$PWD" "$(go env GOPATH)/src/github.com/plexdrive/plexdrive"
           go get -v -t -d ./...
 
       - name: Build
