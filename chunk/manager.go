@@ -95,10 +95,12 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	}
 
 	ranges := splitChunkRanges(offset, size, m.ChunkSize)
-	responses := make(chan Response, len(ranges))
+	numRanges := len(ranges)
+	responses := make(chan Response, numRanges)
 
+	last := numRanges - 1
 	for i, r := range ranges {
-		m.requestChunk(object, r.offset, r.size, i, responses)
+		m.requestChunk(object, r.offset, r.size, i, i == last, responses)
 	}
 
 	data := make([]byte, size, size)
@@ -119,7 +121,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	return data, nil
 }
 
-func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequence int, response chan Response) {
+func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequence int, preload bool, response chan Response) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
 	offsetEnd := offsetStart + m.ChunkSize
@@ -139,6 +141,10 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 	m.queue <- &QueueEntry{
 		request:  request,
 		response: response,
+	}
+
+	if !preload {
+		return
 	}
 
 	for i := m.ChunkSize; i < (m.ChunkSize * int64(m.LoadAhead+1)); i += m.ChunkSize {
