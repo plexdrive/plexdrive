@@ -1,4 +1,4 @@
-<a href="https://github.com/dweidenfeld/plexdrive"><img src="logo/banner.png" alt="Plexdrive" /></a>
+<a href="https://github.com/plexdrive/plexdrive"><img src="logo/banner.png" alt="Plexdrive" /></a>
 [![Build Status](https://travis-ci.org/dweidenfeld/plexdrive.svg?branch=master)](https://travis-ci.org/dweidenfeld/plexdrive)
 
 __Plexdrive__ allows you to mount your Google Drive account as read-only fuse filesystem, with direct delete option on the filesystem.
@@ -16,7 +16,7 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 
 ## Installation
 1. First you need to install fuse on your system 
-2. Then you should download the newest release from the [GitHub release page](https://github.com/dweidenfeld/plexdrive/releases).
+2. Then you should download the newest release from the [GitHub release page](https://github.com/plexdrive/plexdrive/releases).
 3. Create your own client id and client secret (see [https://rclone.org/drive/#making-your-own-client-id](https://rclone.org/drive/#making-your-own-client-id)).
 4. Sample command line for plexdrive
 ```
@@ -30,7 +30,7 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 ```
 Usage of ./plexdrive mount:
   --cache-file string
-    	Path the the cache file (default "~/.plexdrive/cache.bolt")
+    	Path of the cache file (default "~/.plexdrive/cache.bolt")
   --chunk-check-threads int
     	The number of threads to use for checking chunk existence (default 2)
   --chunk-load-ahead int
@@ -80,7 +80,7 @@ Feel free to ask configuration and setup questions here.
 * writeback_cache
 * volume_name=myname
 * read_only
-
+* direct_io
 
 ### Root-Node-ID
 You can use the option `root-node-id` to specify a folder id that should be mounted as

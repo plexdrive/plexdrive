@@ -19,10 +19,10 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
-	"github.com/dweidenfeld/plexdrive/chunk"
-	"github.com/dweidenfeld/plexdrive/config"
-	"github.com/dweidenfeld/plexdrive/drive"
-	"github.com/dweidenfeld/plexdrive/mount"
+	"github.com/plexdrive/plexdrive/chunk"
+	"github.com/plexdrive/plexdrive/config"
+	"github.com/plexdrive/plexdrive/drive"
+	"github.com/plexdrive/plexdrive/mount"
 	flag "github.com/ogier/pflag"
 	"golang.org/x/sys/unix"
 )
@@ -48,14 +48,14 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argDriveID := flag.String("drive-id", "", "The ID of the shared drive to mount (including team drives)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
-	argCacheFile := flag.String("cache-file", filepath.Join(home, ".plexdrive", "cache.bolt"), "Path the the cache file")
+	argCacheFile := flag.String("cache-file", filepath.Join(*argConfigPath, "cache.bolt"), "Path of the cache file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for downloading chunks")
 	argChunkCheckThreads := flag.Int("chunk-check-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for checking chunk existence")
 	argChunkLoadAhead := flag.Int("chunk-load-ahead", max(runtime.NumCPU()-1, 1), "The number of chunks that should be read ahead")
 	argMaxChunks := flag.Int("max-chunks", runtime.NumCPU()*2, "The maximum number of chunks to be stored in memory")
 	argRefreshInterval := flag.Duration("refresh-interval", 1*time.Minute, "The time to wait till checking for changes")
-	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. -fuse-options allow_other,...)")
+	argMountOptions := flag.StringP("fuse-options", "o", "", "Fuse mount options (e.g. --fuse-options allow_other,direct_io,...)")
 	argVersion := flag.Bool("version", false, "Displays program's version information")
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")

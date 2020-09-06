@@ -5,9 +5,7 @@ import (
 
 	. "github.com/claudetech/loggo/default"
 
-	"math"
-
-	"github.com/dweidenfeld/plexdrive/drive"
+	"github.com/plexdrive/plexdrive/drive"
 )
 
 // Manager manages chunks on disk
@@ -32,13 +30,15 @@ type Request struct {
 	offsetEnd      int64
 	chunkOffset    int64
 	chunkOffsetEnd int64
+	sequence       int
 	preload        bool
 }
 
 // Response represetns a chunk response
 type Response struct {
-	Error error
-	Bytes []byte
+	Sequence int
+	Error    error
+	Bytes    []byte
 }
 
 // NewManager creates a new chunk manager
@@ -85,7 +85,41 @@ func NewManager(
 }
 
 // GetChunk loads one chunk and starts the preload for the next chunks
-func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64, response chan Response) {
+func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte, error) {
+	maxOffset := int64(object.Size)
+	if offset > maxOffset {
+		return nil, fmt.Errorf("Tried to read past EOF of %v at offset %v", object.ObjectID, offset)
+	}
+	if offset+size > maxOffset {
+		size = int64(object.Size) - offset
+	}
+
+	ranges := splitChunkRanges(offset, size, m.ChunkSize)
+	responses := make(chan Response, len(ranges))
+
+	for i, r := range ranges {
+		m.requestChunk(object, r.offset, r.size, i, responses)
+	}
+
+	data := make([]byte, size, size)
+	for i := 0; i < cap(responses); i++ {
+		res := <-responses
+		if nil != res.Error {
+			return nil, res.Error
+		}
+
+		dataOffset := ranges[res.Sequence].offset - offset
+
+		if n := copy(data[dataOffset:], res.Bytes); n == 0 {
+			return nil, fmt.Errorf("Request %v slice %v has empty response", object.ObjectID, res.Sequence)
+		}
+	}
+	close(responses)
+
+	return data, nil
+}
+
+func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequence int, response chan Response) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
 	offsetEnd := offsetStart + m.ChunkSize
@@ -98,6 +132,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64, response
 		offsetEnd:      offsetEnd,
 		chunkOffset:    chunkOffset,
 		chunkOffsetEnd: chunkOffset + size,
+		sequence:       sequence,
 		preload:        false,
 	}
 
@@ -125,6 +160,24 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64, response
 	}
 }
 
+type byteRange struct {
+	offset, size int64
+}
+
+// Calculate request ranges that span multiple chunks
+//
+// This can happen with Direct-IO and unaligned reads or
+// if the size is bigger than the chunk size.
+func splitChunkRanges(offset, size, chunkSize int64) []byteRange {
+	ranges := make([]byteRange, 0, size/chunkSize+2)
+	for remaining := size; remaining > 0; remaining -= size {
+		size = min(remaining, chunkSize-offset%chunkSize)
+		ranges = append(ranges, byteRange{offset, size})
+		offset += size
+	}
+	return ranges
+}
+
 func (m *Manager) thread() {
 	for {
 		queueEntry := <-m.queue
@@ -136,9 +189,9 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 	if bytes := m.storage.Load(req.id); nil != bytes {
 		if nil != response {
 			response <- Response{
-				Bytes: adjustResponseChunk(req, bytes),
+				Sequence: req.sequence,
+				Bytes:    adjustResponseChunk(req, bytes),
 			}
-			close(response)
 		}
 		return
 	}
@@ -147,19 +200,18 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 		if nil != err {
 			if nil != response {
 				response <- Response{
-					Error: err,
+					Sequence: req.sequence,
+					Error:    err,
 				}
-				close(response)
 			}
 			return
 		}
 
 		if nil != response {
-
 			response <- Response{
-				Bytes: adjustResponseChunk(req, bytes),
+				Sequence: req.sequence,
+				Bytes:    adjustResponseChunk(req, bytes),
 			}
-			close(response)
 		}
 
 		if err := m.storage.Store(req.id, bytes); nil != err {
@@ -169,8 +221,15 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 }
 
 func adjustResponseChunk(req *Request, bytes []byte) []byte {
-	sOffset := int64(math.Min(float64(req.chunkOffset), float64(len(bytes))))
-	eOffset := int64(math.Min(float64(req.chunkOffsetEnd), float64(len(bytes))))
-
+	bytesLen := int64(len(bytes))
+	sOffset := min(req.chunkOffset, bytesLen)
+	eOffset := min(req.chunkOffsetEnd, bytesLen)
 	return bytes[sOffset:eOffset]
+}
+
+func min(x, y int64) int64 {
+	if x < y {
+		return x
+	}
+	return y
 }

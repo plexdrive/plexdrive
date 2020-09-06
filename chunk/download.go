@@ -9,7 +9,7 @@ import (
 	"time"
 
 	. "github.com/claudetech/loggo/default"
-	"github.com/dweidenfeld/plexdrive/drive"
+	"github.com/plexdrive/plexdrive/drive"
 )
 
 // Downloader handles concurrent chunk downloads
