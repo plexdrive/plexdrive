@@ -30,7 +30,7 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 ```
 Usage of ./plexdrive mount:
   --cache-file string
-    	Path the the cache file (default "~/.plexdrive/cache.bolt")
+    	Path of the cache file (default "~/.plexdrive/cache.bolt")
   --chunk-check-threads int
     	The number of threads to use for checking chunk existence (default 2)
   --chunk-load-ahead int
