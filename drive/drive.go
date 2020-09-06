@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	. "github.com/claudetech/loggo/default"
@@ -70,7 +73,17 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 
 func (d *Client) startWatchChanges(refreshInterval time.Duration) {
 	d.checkChanges(true)
+	go d.startSignalHandler() // we don't want a race cond here, don't move to NewClient
 	for _ = range time.Tick(refreshInterval) {
+		d.checkChanges(false)
+	}
+}
+
+func (d *Client) startSignalHandler() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	for {
+		<-sigChan
 		d.checkChanges(false)
 	}
 }

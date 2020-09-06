@@ -63,6 +63,10 @@ Usage of ./plexdrive mount:
     	Displays program's version information
 ```
 
+### Signals
+* HUP: Trigger checking for changes
+* INT (Ctrl+C): Unmount and exit
+
 ### Support 
 Slack support is available on [our Slack channel](https://join.slack.com/t/plexdrive/shared_invite/MjM2MTMzMjY2MTc5LTE1MDQ2MDE4NDQtOTc0N2RiY2UxNw). 
 Feel free to ask configuration and setup questions here.
