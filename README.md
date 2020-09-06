@@ -80,7 +80,7 @@ Feel free to ask configuration and setup questions here.
 * writeback_cache
 * volume_name=myname
 * read_only
-
+* direct_io
 
 ### Root-Node-ID
 You can use the option `root-node-id` to specify a folder id that should be mounted as
