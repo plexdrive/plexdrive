@@ -45,8 +45,8 @@ func NewDownloader(threads int, client *drive.Client, storage *Storage, bufferSi
 // Download starts a new download request
 func (d *Downloader) Download(req *Request, callback DownloadCallback) {
 	d.lock.Lock()
-	_, exists := d.callbacks[req.id]
-	d.callbacks[req.id] = append(d.callbacks[req.id], callback)
+	callbacks, exists := d.callbacks[req.id]
+	d.callbacks[req.id] = append(callbacks, callback)
 	if !exists {
 		d.queue <- req
 	}
