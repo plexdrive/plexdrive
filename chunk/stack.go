@@ -10,7 +10,7 @@ type Stack struct {
 	items   *list.List
 	index   map[string]*list.Element
 	len     int
-	lock    sync.RWMutex
+	lock    sync.Mutex
 	maxSize int
 }
 
