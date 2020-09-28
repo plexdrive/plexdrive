@@ -19,11 +19,11 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
+	flag "github.com/ogier/pflag"
 	"github.com/plexdrive/plexdrive/chunk"
 	"github.com/plexdrive/plexdrive/config"
 	"github.com/plexdrive/plexdrive/drive"
 	"github.com/plexdrive/plexdrive/mount"
-	flag "github.com/ogier/pflag"
 	"golang.org/x/sys/unix"
 )
 
