@@ -12,6 +12,7 @@ import (
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	. "github.com/claudetech/loggo/default"
+	"github.com/okzk/sdnotify"
 	"github.com/plexdrive/plexdrive/chunk"
 	"github.com/plexdrive/plexdrive/drive"
 	"golang.org/x/net/context"
@@ -96,6 +97,12 @@ func Mount(
 	}
 	defer c.Close()
 
+	if err := sdnotify.Ready(); err != nil && err != sdnotify.ErrSdNotifyNoSocket {
+		Log.Errorf("Failed to notify systemd: %v", err)
+	} else {
+		Log.Debugf("Notify systemd: ready")
+	}
+
 	filesys := &FS{
 		client:       client,
 		chunkManager: chunkManager,
@@ -122,6 +129,9 @@ func Mount(
 func Unmount(mountpoint string, notify bool) error {
 	if notify {
 		Log.Infof("Unmounting path %v", mountpoint)
+	}
+	if err := sdnotify.Stopping(); nil != err {
+		Log.Debugf("Notify systemd: stopping")
 	}
 	fuse.Unmount(mountpoint)
 	return nil

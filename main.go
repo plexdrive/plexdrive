@@ -19,11 +19,11 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
+	flag "github.com/ogier/pflag"
 	"github.com/plexdrive/plexdrive/chunk"
 	"github.com/plexdrive/plexdrive/config"
 	"github.com/plexdrive/plexdrive/drive"
 	"github.com/plexdrive/plexdrive/mount"
-	flag "github.com/ogier/pflag"
 	"golang.org/x/sys/unix"
 )
 
@@ -205,14 +205,13 @@ func main() {
 
 func checkOsSignals(mountpoint string) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		for sig := range signals {
-			if sig == syscall.SIGINT {
-				if err := mount.Unmount(mountpoint, false); nil != err {
-					Log.Warningf("%v", err)
-				}
+			Log.Infof("Received signal %v, stopping mount", sig)
+			if err := mount.Unmount(mountpoint, false); nil != err {
+				Log.Warningf("%v", err)
 			}
 		}
 	}()
