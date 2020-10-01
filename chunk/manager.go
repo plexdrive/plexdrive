@@ -3,8 +3,6 @@ package chunk
 import (
 	"fmt"
 
-	. "github.com/claudetech/loggo/default"
-
 	"github.com/plexdrive/plexdrive/drive"
 )
 
@@ -60,7 +58,9 @@ func NewManager(
 		return nil, fmt.Errorf("max-chunks must be greater than 2 and bigger than the load ahead value")
 	}
 
-	downloader, err := NewDownloader(loadThreads, client, chunkSize)
+	storage := NewStorage(chunkSize, maxChunks)
+
+	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize)
 	if nil != err {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func NewManager(
 		ChunkSize:  chunkSize,
 		LoadAhead:  loadAhead,
 		downloader: downloader,
-		storage:    NewStorage(chunkSize, maxChunks),
+		storage:    storage,
 		queue:      make(chan *QueueEntry, 100),
 	}
 
@@ -212,10 +212,6 @@ func (m *Manager) checkChunk(req *Request, response chan Response) {
 				Sequence: req.sequence,
 				Bytes:    adjustResponseChunk(req, bytes),
 			}
-		}
-
-		if err := m.storage.Store(req.id, bytes); nil != err {
-			Log.Warningf("Coult not store chunk %v", req.id)
 		}
 	})
 }
