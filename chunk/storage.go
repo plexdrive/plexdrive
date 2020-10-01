@@ -67,15 +67,21 @@ func (s *Storage) Store(id string, bytes []byte) error {
 	s.lock.RUnlock()
 	s.lock.Lock()
 
+	var chunk []byte
 	deleteID := s.stack.Pop()
 	if "" != deleteID {
+		chunk = s.chunks[deleteID]
 		delete(s.chunks, deleteID)
 
 		Log.Debugf("Deleted chunk %v", deleteID)
+	} else {
+		chunk = make([]byte, s.ChunkSize)
 	}
 
-	s.chunks[id] = bytes
+	copy(chunk, bytes)
+	s.chunks[id] = chunk
 	s.stack.Push(id)
+
 	s.lock.Unlock()
 
 	return nil
