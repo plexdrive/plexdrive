@@ -205,14 +205,13 @@ func main() {
 
 func checkOsSignals(mountpoint string) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		for sig := range signals {
-			if sig == syscall.SIGINT {
-				if err := mount.Unmount(mountpoint, false); nil != err {
-					Log.Warningf("%v", err)
-				}
+			Log.Infof("Received signal %v, stopping mount", sig)
+			if err := mount.Unmount(mountpoint, false); nil != err {
+				Log.Warningf("%v", err)
 			}
 		}
 	}()
