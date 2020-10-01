@@ -60,7 +60,7 @@ func NewManager(
 		return nil, fmt.Errorf("max-chunks must be greater than 2 and bigger than the load ahead value")
 	}
 
-	downloader, err := NewDownloader(loadThreads, client)
+	downloader, err := NewDownloader(loadThreads, client, chunkSize)
 	if nil != err {
 		return nil, err
 	}
