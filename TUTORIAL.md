@@ -20,9 +20,9 @@ AssertPathIsDirectory=/mnt/plexdrive
 After=network-online.target
 
 [Service]
-Type=simple
+Type=notify
 ExecStart=/usr/bin/plexdrive mount -v 2 /mnt/plexdrive
-ExecStop=/bin/fusermount -u /mnt/plexdrive
+ExecStopPost=-/bin/fusermount -quz /mnt/plexdrive
 Restart=on-abort
 
 [Install]
