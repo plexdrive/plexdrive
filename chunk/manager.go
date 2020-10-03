@@ -192,37 +192,34 @@ func (m *Manager) thread() {
 }
 
 func (m *Manager) checkChunk(req *Request, response chan Response) {
+	if nil == response {
+		if nil == m.storage.Load(req.id) {
+			m.downloader.Download(req, nil)
+		}
+		return
+	}
+
 	if bytes := m.storage.Load(req.id); nil != bytes {
-		if nil != response {
-			response <- Response{
-				Sequence: req.sequence,
-				Bytes:    adjustResponseChunk(req, bytes),
-			}
+		response <- Response{
+			Sequence: req.sequence,
+			Bytes:    adjustResponseChunk(req, bytes),
 		}
 		return
 	}
 
 	m.downloader.Download(req, func(err error, bytes []byte) {
-		if nil != err {
-			if nil != response {
-				response <- Response{
-					Sequence: req.sequence,
-					Error:    err,
-				}
-			}
-			return
-		}
-
-		if nil != response {
-			response <- Response{
-				Sequence: req.sequence,
-				Bytes:    adjustResponseChunk(req, bytes),
-			}
+		response <- Response{
+			Sequence: req.sequence,
+			Error:    err,
+			Bytes:    adjustResponseChunk(req, bytes),
 		}
 	})
 }
 
 func adjustResponseChunk(req *Request, bytes []byte) []byte {
+	if nil == bytes {
+		return nil
+	}
 	bytesLen := int64(len(bytes))
 	sOffset := min(req.chunkOffset, bytesLen)
 	eOffset := min(req.chunkOffsetEnd, bytesLen)
