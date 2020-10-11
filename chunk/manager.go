@@ -2,6 +2,7 @@ package chunk
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/plexdrive/plexdrive/drive"
 )
@@ -41,6 +42,7 @@ type Response struct {
 
 // NewManager creates a new chunk manager
 func NewManager(
+	chunkFile string,
 	chunkSize int64,
 	loadAhead,
 	checkThreads int,
@@ -54,11 +56,23 @@ func NewManager(
 	if chunkSize%1024 != 0 {
 		return nil, fmt.Errorf("Chunk size must be divideable by 1024")
 	}
+	if chunkFile != "" {
+		pageSize := int64(os.Getpagesize())
+		if chunkSize < pageSize {
+			return nil, fmt.Errorf("Chunk size must not be < %v", pageSize)
+		}
+		if chunkSize%pageSize != 0 {
+			return nil, fmt.Errorf("Chunk size must be divideable by %v", pageSize)
+		}
+	}
 	if maxChunks < 2 || maxChunks < loadAhead {
 		return nil, fmt.Errorf("max-chunks must be greater than 2 and bigger than the load ahead value")
 	}
 
-	storage := NewStorage(chunkSize, maxChunks)
+	storage, err := NewStorage(chunkSize, maxChunks, chunkFile)
+	if nil != err {
+		return nil, err
+	}
 
 	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize)
 	if nil != err {

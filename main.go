@@ -49,6 +49,8 @@ func main() {
 	argDriveID := flag.String("drive-id", "", "The ID of the shared drive to mount (including team drives)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
 	argCacheFile := flag.String("cache-file", filepath.Join(*argConfigPath, "cache.bolt"), "Path of the cache file")
+	argChunkFile := flag.String("chunk-file", filepath.Join(*argConfigPath, "chunks.dat"), "Path of the chunk cache file")
+	argChunkMmap := flag.Bool("chunk-mmap", false, "Enable disk based chunk cache")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for downloading chunks")
 	argChunkCheckThreads := flag.Int("chunk-check-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for checking chunk existence")
@@ -123,6 +125,8 @@ func main() {
 		Log.Debugf("drive-id             : %v", *argDriveID)
 		Log.Debugf("config               : %v", *argConfigPath)
 		Log.Debugf("cache-file           : %v", *argCacheFile)
+		Log.Debugf("chunk-file           : %v", *argChunkFile)
+		Log.Debugf("chunk-mmap           : %v", *argChunkMmap)
 		Log.Debugf("chunk-size           : %v", *argChunkSize)
 		Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
 		Log.Debugf("chunk-check-threads  : %v", *argChunkCheckThreads)
@@ -146,6 +150,15 @@ func main() {
 			Log.Errorf("Could not create cache file directory")
 			Log.Debugf("%v", err)
 			os.Exit(1)
+		}
+		if *argChunkMmap {
+			if err := os.MkdirAll(filepath.Dir(*argChunkFile), 0766); nil != err {
+				Log.Errorf("Could not create chunk cache file directory")
+				Log.Debugf("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			*argChunkFile = ""
 		}
 
 		// set the global buffer configuration
@@ -180,7 +193,12 @@ func main() {
 			os.Exit(4)
 		}
 
+		if *argChunkMmap != true {
+			*argChunkFile = ""
+		}
+
 		chunkManager, err := chunk.NewManager(
+			*argChunkFile,
 			chunkSize,
 			*argChunkLoadAhead,
 			*argChunkCheckThreads,
