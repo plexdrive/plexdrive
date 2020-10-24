@@ -249,12 +249,12 @@ func (s *Storage) initChunk(index int, empty *list.List, restored *list.List) (b
 	id := chunk.ID()
 
 	if id == 0 || index >= s.loadChunks {
-		empty.PushBack(index)
+		chunk.item = empty.PushBack(index)
 		Log.Tracef("Allocate chunk %v/%v", index+1, s.MaxChunks)
 		return false, nil
 	}
 
-	restored.PushBack(index)
+	chunk.item = restored.PushBack(index)
 	Log.Tracef("Load chunk %v/%v (restored)", index+1, s.MaxChunks)
 	s.chunks[id] = index
 
@@ -296,7 +296,7 @@ func (s *Storage) Clear() error {
 func (s *Storage) Load(key string) []byte {
 	id := keyToId(key)
 	s.lock.RLock()
-	chunk, index := s.fetch(id)
+	chunk := s.fetch(id)
 	if nil == chunk {
 		Log.Tracef("Load chunk %v (missing)", key)
 		s.lock.RUnlock()
@@ -316,7 +316,7 @@ func (s *Storage) Load(key string) []byte {
 		return chunk.bytes
 	}
 	Log.Warningf("Load chunk %v (bad checksum: %08x <> %08x)", key, chunk.Checksum(), chunk.calculateChecksum())
-	s.stack.Purge(index)
+	s.stack.Purge(chunk.item)
 	return nil
 }
 
@@ -326,7 +326,7 @@ func (s *Storage) Store(key string, bytes []byte) (err error) {
 	s.lock.RLock()
 
 	// Avoid storing same chunk multiple times
-	chunk, index := s.fetch(id)
+	chunk := s.fetch(id)
 	if nil != chunk && chunk.clean {
 		Log.Tracef("Create chunk %v (exists: clean)", key)
 		s.lock.RUnlock()
@@ -344,7 +344,7 @@ func (s *Storage) Store(key string, bytes []byte) (err error) {
 		}
 		Log.Warningf("Create chunk %v(exists: overwrite)", key)
 	} else {
-		index = s.stack.Pop()
+		index := s.stack.Pop()
 		if -1 == index {
 			Log.Debugf("Create chunk %v (failed)", key)
 			return fmt.Errorf("No buffers available")
@@ -358,7 +358,7 @@ func (s *Storage) Store(key string, bytes []byte) (err error) {
 			Log.Debugf("Create chunk %v (stored)", key)
 		}
 		s.chunks[id] = index
-		s.stack.Push(index)
+		chunk.item = s.stack.Push(index)
 	}
 
 	chunk.Update(id, bytes)
@@ -367,13 +367,14 @@ func (s *Storage) Store(key string, bytes []byte) (err error) {
 }
 
 // fetch chunk and index by id
-func (s *Storage) fetch(id uint64) (*Chunk, int) {
+func (s *Storage) fetch(id uint64) *Chunk {
 	index, exists := s.chunks[id]
 	if !exists {
-		return nil, -1
+		return nil
 	}
-	s.stack.Touch(index)
-	return s.buffers[index], index
+	chunk := s.buffers[index]
+	s.stack.Touch(chunk.item)
+	return chunk
 }
 
 // keyToId converts string key to internal uint64 representation

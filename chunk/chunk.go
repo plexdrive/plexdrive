@@ -1,6 +1,7 @@
 package chunk
 
 import (
+	"container/list"
 	"encoding/binary"
 	"hash/crc32"
 )
@@ -10,6 +11,7 @@ type Chunk struct {
 	clean  bool
 	header []byte
 	bytes  []byte
+	item   *list.Element
 }
 
 func (c *Chunk) ID() uint64 {

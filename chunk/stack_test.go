@@ -5,22 +5,23 @@ import "testing"
 func TestOOB(t *testing.T) {
 	stack := NewStack(1)
 
-	stack.Push(1)
-	stack.Touch(1)
+	item := stack.Push(1)
+	stack.Touch(item)
 }
 
 func TestAddToStack(t *testing.T) {
 	stack := NewStack(1)
 
-	stack.Push(1)
-	stack.Push(2)
-	stack.Push(3)
-	stack.Push(4)
+	item1 := stack.Push(1)
+	item2 := stack.Push(2)
+	item3 := stack.Push(3)
+	item4 := stack.Push(4)
 
-	stack.Touch(1)
-	stack.Touch(3)
+	stack.Touch(item1)
+	stack.Touch(item3)
 
-	stack.Purge(4)
+	stack.Purge(item2)
+	stack.Purge(item4)
 
 	v := stack.Pop()
 	if 4 != v {
