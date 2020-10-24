@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -35,6 +36,7 @@ type Client struct {
 	rootNodeID      string
 	driveID         string
 	changesChecking bool
+	lock            sync.Mutex
 }
 
 // NewClient creates a new Google Drive client
@@ -52,9 +54,8 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 			RedirectURL: "urn:ietf:wg:oauth:2.0:oob",
 			Scopes:      []string{gdrive.DriveScope},
 		},
-		rootNodeID:      rootNodeID,
-		driveID:         driveID,
-		changesChecking: false,
+		rootNodeID: rootNodeID,
+		driveID:    driveID,
 	}
 
 	if "" == client.rootNodeID {
@@ -75,26 +76,33 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 
 func (d *Client) startWatchChanges(refreshInterval time.Duration) {
 	d.checkChanges(true)
-	go d.startSignalHandler() // we don't want a race cond here, don't move to NewClient
-	for _ = range time.Tick(refreshInterval) {
-		d.checkChanges(false)
-	}
-}
-
-func (d *Client) startSignalHandler() {
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP)
+	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	for {
-		<-sigChan
-		d.checkChanges(false)
+		select {
+		case sig := <-sigChan:
+			if sig != syscall.SIGHUP {
+				return
+			}
+			d.checkChanges(false)
+		case <-time.After(refreshInterval):
+			d.checkChanges(false)
+		}
 	}
 }
 
 func (d *Client) checkChanges(firstCheck bool) {
+	d.lock.Lock()
 	if d.changesChecking {
 		return
 	}
 	d.changesChecking = true
+	d.lock.Unlock()
+	defer func() {
+		d.lock.Lock()
+		d.changesChecking = false
+		d.lock.Unlock()
+	}()
 
 	Log.Debugf("Checking for changes")
 
@@ -182,8 +190,12 @@ func (d *Client) checkChanges(firstCheck bool) {
 			pageToken = results.NextPageToken
 			d.cache.StoreStartPageToken(pageToken)
 		} else {
-			pageToken = results.NewStartPageToken
-			d.cache.StoreStartPageToken(pageToken)
+			if pageToken != results.NewStartPageToken {
+				pageToken = results.NewStartPageToken
+				d.cache.StoreStartPageToken(pageToken)
+			} else {
+				Log.Debugf("No changes")
+			}
 			break
 		}
 	}
@@ -191,8 +203,6 @@ func (d *Client) checkChanges(firstCheck bool) {
 	if firstCheck {
 		Log.Infof("First cache build process finished!")
 	}
-
-	d.changesChecking = false
 }
 
 func (d *Client) authorize() error {
