@@ -28,6 +28,14 @@ func (c *Chunk) Checksum() uint32 {
 
 func (c *Chunk) Valid(id uint64) bool {
 	if !c.clean {
+		checksum := c.Checksum()
+		size := c.Size()
+		// check and swap older chunk metadata
+		byteSize := uint32(len(c.bytes))
+		if size != byteSize && byteSize == checksum {
+			binary.LittleEndian.PutUint32(c.header[8:], checksum)
+			binary.LittleEndian.PutUint32(c.header[12:], size)
+		}
 		c.clean = c.Checksum() == c.calculateChecksum()
 	}
 	return c.clean
