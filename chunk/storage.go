@@ -2,7 +2,6 @@ package chunk
 
 import (
 	"container/list"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -12,6 +11,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 
@@ -22,13 +22,14 @@ import (
 var ErrTimeout = errors.New("timeout")
 
 var (
-	pageSize   = int64(os.Getpagesize())
-	headerSize = 32
-	tocSize    = int64(16)
-	journalVer = uint8(2)
-	crc32Table = crc32.MakeTable(crc32.Castagnoli)
-	crc64Table = crc64.MakeTable(crc64.ECMA)
-	blankIDKey = uint64(13156847312662197100)
+	pageSize       = int64(os.Getpagesize())
+	headerSize     = int(unsafe.Sizeof(*new(chunkHeader)))
+	tocSize        = int64(unsafe.Sizeof(*new(journalHeader)))
+	journalMagic   = uint16('P'<<8 | 'D'&0xFF)
+	journalVersion = uint8(2)
+	crc32Table     = crc32.MakeTable(crc32.Castagnoli)
+	crc64Table     = crc64.MakeTable(crc64.ECMA)
+	blankIDKey     = uint64(13156847312662197100)
 )
 
 // Storage is a chunk storage
@@ -45,6 +46,15 @@ type Storage struct {
 	lastIndex  int
 	signals    chan os.Signal
 	journal    []byte
+}
+
+type journalHeader struct {
+	magic      uint16
+	version    uint8
+	headerSize uint8
+	maxChunks  uint32
+	chunkSize  uint32
+	checksum   uint32
 }
 
 // NewStorage creates a new storage
@@ -133,8 +143,8 @@ func (s *Storage) relocateJournal(currentSize, wantedSize, journalSize, journalO
 		return fmt.Errorf("Failed to validate journal header")
 	}
 
-	oldMaxChunks := int64(binary.LittleEndian.Uint32(header[4:]))
-	oldJournalOffset := s.ChunkSize * int64(oldMaxChunks)
+	h := (*journalHeader)(unsafe.Pointer(&header[0]))
+	oldJournalOffset := s.ChunkSize * int64(h.maxChunks)
 	oldJournalSize := min(journalSize, currentSize-oldJournalOffset) - tocSize
 	journal := make([]byte, journalSize, journalSize)
 
@@ -163,32 +173,28 @@ func (s *Storage) relocateJournal(currentSize, wantedSize, journalSize, journalO
 
 // checkJournal verifies the journal header
 func (s *Storage) checkJournal(journal []byte, skipMaxChunks bool) bool {
-	// check magic bytes
-	if journal[0] != 'P' || journal[1] != 'D' {
+	h := (*journalHeader)(unsafe.Pointer(&journal[0]))
+	// check magic bytes / endianess mismatch ('PD' vs 'DP')
+	if h.magic != journalMagic {
 		return false
 	}
-	version := uint8(journal[2])
-	checksum := binary.LittleEndian.Uint32(journal[12:])
-	if 0 == version || 0 == checksum {
+	if 0 == h.version || 0 == h.checksum {
 		// assume unitialized memory
 		return false
 	}
-	if checksum != crc32.Checksum(journal[:12], crc32Table) {
+	if h.checksum != crc32.Checksum(journal[:12], crc32Table) {
 		return false
 	}
-	if version != journalVer {
+	if h.version != journalVersion {
 		return false
 	}
-	header := int(journal[3])
-	if header != headerSize {
+	if h.headerSize != uint8(headerSize) {
 		return false
 	}
-	maxChunks := int(binary.LittleEndian.Uint32(journal[4:]))
-	if !skipMaxChunks && maxChunks != s.MaxChunks {
+	if !skipMaxChunks && h.maxChunks != uint32(s.MaxChunks) {
 		return false
 	}
-	chunkSize := int64(binary.LittleEndian.Uint32(journal[8:]))
-	if chunkSize != s.ChunkSize {
+	if h.chunkSize != uint32(s.ChunkSize) {
 		return false
 	}
 	return true
@@ -196,14 +202,13 @@ func (s *Storage) checkJournal(journal []byte, skipMaxChunks bool) bool {
 
 // initJournal initializes the journal
 func (s *Storage) initJournal(journal []byte) {
-	journal[0] = 'P'
-	journal[1] = 'D'
-	journal[2] = uint8(journalVer)
-	journal[3] = uint8(headerSize)
-	binary.LittleEndian.PutUint32(journal[4:], uint32(s.MaxChunks))
-	binary.LittleEndian.PutUint32(journal[8:], uint32(s.ChunkSize))
-	checksum := crc32.Checksum(journal[:12], crc32Table)
-	binary.LittleEndian.PutUint32(journal[12:], checksum)
+	h := (*journalHeader)(unsafe.Pointer(&journal[0]))
+	h.magic = journalMagic
+	h.version = journalVersion
+	h.headerSize = uint8(headerSize)
+	h.maxChunks = uint32(s.MaxChunks)
+	h.chunkSize = uint32(s.ChunkSize)
+	h.checksum = crc32.Checksum(journal[:12], crc32Table)
 }
 
 // mmapChunks mmaps buffers and loads chunk metadata
@@ -247,7 +252,7 @@ func (s *Storage) initChunk(index int, empty *list.List, restored *list.List) (b
 
 	s.buffers[index] = chunk
 
-	id := chunk.ID()
+	id := chunk.id
 	key := idToKey(id)
 
 	if blankIDKey == key || index >= s.loadChunks {
@@ -273,10 +278,10 @@ func (s *Storage) allocateChunk(index int) (*Chunk, error) {
 	}
 	unix.Madvise(bytes, syscall.MADV_SEQUENTIAL)
 	headerOffset := index * headerSize
-	header := s.journal[headerOffset : headerOffset+headerSize : headerOffset+headerSize]
+	header := (*chunkHeader)(unsafe.Pointer(&s.journal[headerOffset]))
 	chunk := Chunk{
-		header: header,
-		bytes:  bytes,
+		chunkHeader: header,
+		bytes:       bytes,
 	}
 	return &chunk, nil
 }
@@ -313,11 +318,11 @@ func (s *Storage) Load(id RequestID) []byte {
 	// Switch to write lock to avoid races on crc verification
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if chunk.Valid(key) {
+	if chunk.valid(id) {
 		Log.Debugf("Load chunk %v (verified)", id)
 		return chunk.bytes
 	}
-	Log.Warningf("Load chunk %v (bad checksum: %08x <> %08x)", id, chunk.Checksum(), chunk.calculateChecksum())
+	Log.Warningf("Load chunk %v (bad checksum: %08x <> %08x)", id, chunk.checksum, chunk.calculateChecksum())
 	s.stack.Purge(chunk.item)
 	return nil
 }
@@ -340,7 +345,7 @@ func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
 	defer s.lock.Unlock()
 
 	if nil != chunk {
-		if chunk.Valid(key) {
+		if chunk.valid(id) {
 			Log.Debugf("Create chunk %v (exists: valid)", id)
 			return nil
 		}
@@ -352,7 +357,7 @@ func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
 			return fmt.Errorf("No buffers available")
 		}
 		chunk = s.buffers[index]
-		deleteKey := idToKey(chunk.ID())
+		deleteKey := idToKey(chunk.id)
 		if blankIDKey != deleteKey {
 			delete(s.chunks, deleteKey)
 			Log.Debugf("Create chunk %v (reused)", id)
@@ -363,7 +368,7 @@ func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
 		chunk.item = s.stack.Push(index)
 	}
 
-	chunk.Update(id, bytes)
+	chunk.update(id, bytes)
 
 	return nil
 }

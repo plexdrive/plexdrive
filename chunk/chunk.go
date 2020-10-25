@@ -2,56 +2,49 @@ package chunk
 
 import (
 	"container/list"
-	"encoding/binary"
 	"hash/crc32"
 )
 
 // Chunk of memory
 type Chunk struct {
-	clean  bool
-	header []byte
-	bytes  []byte
-	item   *list.Element
+	clean bool
+	*chunkHeader
+	bytes []byte
+	item  *list.Element
 }
 
-func (c *Chunk) ID() (id RequestID) {
-	copy(id[:], c.header[:24])
-	return
+type chunkHeader struct {
+	id       RequestID
+	size     uint32
+	checksum uint32
 }
 
-func (c *Chunk) Size() uint32 {
-	return binary.LittleEndian.Uint32(c.header[24:])
-}
-
-func (c *Chunk) Checksum() uint32 {
-	return binary.LittleEndian.Uint32(c.header[28:])
-}
-
-func (c *Chunk) Valid(id uint64) bool {
+func (c *Chunk) valid(id RequestID) bool {
+	if c.id != id {
+		return false
+	}
 	if !c.clean {
-		c.clean = c.Checksum() == c.calculateChecksum()
+		c.clean = c.checksum == c.calculateChecksum()
 	}
 	return c.clean
 }
 
-func (c *Chunk) Update(id RequestID, bytes []byte) {
-	copy(c.header[:24], id[:])
-	size := uint32(copy(c.bytes, bytes))
-	binary.LittleEndian.PutUint32(c.header[24:], size)
-	checksum := c.calculateChecksum()
-	binary.LittleEndian.PutUint32(c.header[28:], checksum)
+func (c *Chunk) update(id RequestID, bytes []byte) {
+	c.id = id
+	c.size = uint32(copy(c.bytes, bytes))
+	c.checksum = c.calculateChecksum()
 	c.clean = true
 }
 
 func (c *Chunk) calculateChecksum() uint32 {
-	size := c.Size()
+	size := c.size
 	if nil == c.bytes || 0 == size {
 		return 0
 	}
 	maxSize := uint32(len(c.bytes))
 	if size > maxSize {
 		// corrupt size or truncated chunk, fix size
-		binary.LittleEndian.PutUint32(c.header[24:], maxSize)
+		c.size = maxSize
 		return crc32.Checksum(c.bytes, crc32Table)
 	}
 	return crc32.Checksum(c.bytes[:size], crc32Table)
