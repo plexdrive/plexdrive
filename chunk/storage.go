@@ -78,15 +78,17 @@ func NewStorage(chunkSize int64, maxChunks int, chunkFilePath string) (*Storage,
 			Log.Debugf("%v", err)
 			return nil, fmt.Errorf("Could not open chunk cache file")
 		}
-		stat, err := chunkFile.Stat()
+		s.ChunkFile = chunkFile
+		currentSize, err := chunkFile.Seek(0, os.SEEK_END)
 		if nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not stat chunk cache file")
+			return nil, fmt.Errorf("Chunk file is not seekable")
 		}
-		s.ChunkFile = chunkFile
-		currentSize := stat.Size()
 		wantedSize := journalOffset + journalSize
-		if currentSize != wantedSize {
+		Log.Debugf("Current chunk cache file size: %v B (wanted: %v B)", currentSize, wantedSize)
+		if err := chunkFile.Truncate(currentSize); nil != err {
+			Log.Warningf("Could not truncate chunk cache, skip resizing")
+		} else if currentSize != wantedSize {
 			if currentSize > tocSize {
 				err = s.relocateJournal(currentSize, wantedSize, journalSize, journalOffset)
 				if nil != err {
@@ -95,8 +97,7 @@ func NewStorage(chunkSize int64, maxChunks int, chunkFilePath string) (*Storage,
 					Log.Infof("Relocated chunk cache journal")
 				}
 			}
-			err = chunkFile.Truncate(wantedSize)
-			if nil != err {
+			if err := chunkFile.Truncate(wantedSize); nil != err {
 				Log.Debugf("%v", err)
 				return nil, fmt.Errorf("Could not resize chunk cache file")
 			}
@@ -151,7 +152,8 @@ func (s *Storage) relocateJournal(currentSize, wantedSize, journalSize, journalO
 
 	s.initJournal(header)
 
-	if err := s.ChunkFile.Truncate(currentSize - oldJournalSize - tocSize); nil != err {
+	sizeWithoutJournal := currentSize - oldJournalSize - tocSize
+	if err := s.ChunkFile.Truncate(sizeWithoutJournal); nil != err {
 		return fmt.Errorf("Could not truncate chunk cache journal: %v", err)
 	}
 
