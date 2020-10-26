@@ -2,10 +2,8 @@ package chunk
 
 import (
 	"container/list"
-	"errors"
 	"fmt"
 	"hash/crc32"
-	"hash/crc64"
 	"os"
 	"os/signal"
 	"sync"
@@ -18,18 +16,17 @@ import (
 	. "github.com/claudetech/loggo/default"
 )
 
-// ErrTimeout is a timeout error
-var ErrTimeout = errors.New("timeout")
-
-var (
-	pageSize       = int64(os.Getpagesize())
+const (
 	headerSize     = int(unsafe.Sizeof(*new(chunkHeader)))
 	tocSize        = int64(unsafe.Sizeof(*new(journalHeader)))
 	journalMagic   = uint16('P'<<8 | 'D'&0xFF)
 	journalVersion = uint8(2)
+)
+
+var (
+	blankRequestID RequestID
+	pageSize       = int64(os.Getpagesize())
 	crc32Table     = crc32.MakeTable(crc32.Castagnoli)
-	crc64Table     = crc64.MakeTable(crc64.ECMA)
-	blankIDKey     = uint64(13156847312662197100)
 )
 
 // Storage is a chunk storage
@@ -38,7 +35,7 @@ type Storage struct {
 	ChunkSize  int64
 	HeaderSize int64
 	MaxChunks  int
-	chunks     map[uint64]int
+	chunks     map[RequestID]int
 	stack      *Stack
 	lock       sync.RWMutex
 	buffers    []*Chunk
@@ -62,7 +59,7 @@ func NewStorage(chunkSize int64, maxChunks int, chunkFilePath string) (*Storage,
 	s := Storage{
 		ChunkSize: chunkSize,
 		MaxChunks: maxChunks,
-		chunks:    make(map[uint64]int, maxChunks),
+		chunks:    make(map[RequestID]int, maxChunks),
 		stack:     NewStack(maxChunks),
 		buffers:   make([]*Chunk, maxChunks, maxChunks),
 		signals:   make(chan os.Signal, 1),
@@ -253,9 +250,8 @@ func (s *Storage) initChunk(index int, empty *list.List, restored *list.List) (b
 	s.buffers[index] = chunk
 
 	id := chunk.id
-	key := idToKey(id)
 
-	if blankIDKey == key || index >= s.loadChunks {
+	if blankRequestID == id || index >= s.loadChunks {
 		chunk.item = empty.PushBack(index)
 		Log.Tracef("Allocate chunk %v/%v", index+1, s.MaxChunks)
 		return false, nil
@@ -263,7 +259,7 @@ func (s *Storage) initChunk(index int, empty *list.List, restored *list.List) (b
 
 	chunk.item = restored.PushBack(index)
 	Log.Tracef("Load chunk %v/%v (restored: %v)", index+1, s.MaxChunks, id)
-	s.chunks[key] = index
+	s.chunks[id] = index
 
 	return true, nil
 }
@@ -301,9 +297,8 @@ func (s *Storage) Clear() error {
 
 // Load a chunk from ram or creates it
 func (s *Storage) Load(id RequestID) []byte {
-	key := idToKey(id)
 	s.lock.RLock()
-	chunk := s.fetch(key)
+	chunk := s.fetch(id)
 	if nil == chunk {
 		Log.Tracef("Load chunk %v (missing)", id)
 		s.lock.RUnlock()
@@ -329,11 +324,10 @@ func (s *Storage) Load(id RequestID) []byte {
 
 // Store stores a chunk in the RAM and adds it to the disk storage queue
 func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
-	key := idToKey(id)
 	s.lock.RLock()
 
 	// Avoid storing same chunk multiple times
-	chunk := s.fetch(key)
+	chunk := s.fetch(id)
 	if nil != chunk && chunk.clean {
 		Log.Tracef("Create chunk %v (exists: clean)", id)
 		s.lock.RUnlock()
@@ -357,14 +351,14 @@ func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
 			return fmt.Errorf("No buffers available")
 		}
 		chunk = s.buffers[index]
-		deleteKey := idToKey(chunk.id)
-		if blankIDKey != deleteKey {
-			delete(s.chunks, deleteKey)
+		deleteID := chunk.id
+		if blankRequestID != deleteID {
+			delete(s.chunks, deleteID)
 			Log.Debugf("Create chunk %v (reused)", id)
 		} else {
 			Log.Debugf("Create chunk %v (stored)", id)
 		}
-		s.chunks[key] = index
+		s.chunks[id] = index
 		chunk.item = s.stack.Push(index)
 	}
 
@@ -374,17 +368,12 @@ func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
 }
 
 // fetch chunk and index by id
-func (s *Storage) fetch(key uint64) *Chunk {
-	index, exists := s.chunks[key]
+func (s *Storage) fetch(id RequestID) *Chunk {
+	index, exists := s.chunks[id]
 	if !exists {
 		return nil
 	}
 	chunk := s.buffers[index]
 	s.stack.Touch(chunk.item)
 	return chunk
-}
-
-// idToKey converts binary id to internal uint64 representation
-func idToKey(id RequestID) uint64 {
-	return crc64.Checksum(id[:], crc64Table)
 }
