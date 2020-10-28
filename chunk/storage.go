@@ -175,27 +175,31 @@ func (s *Storage) checkJournal(journal []byte, skipMaxChunks bool) bool {
 	h := (*journalHeader)(unsafe.Pointer(&journal[0]))
 	// check magic bytes / endianess mismatch ('PD' vs 'DP')
 	if h.magic != journalMagic {
+		Log.Debugf("Journal magic mismatch: %v != %v", h.magic, journalMagic)
 		return false
 	}
-	if 0 == h.version || 0 == h.checksum {
-		// assume unitialized memory
-		return false
-	}
-	if h.checksum != crc32.Checksum(journal[:12], crc32Table) {
+	checksum := crc32.Checksum(journal[:12], crc32Table)
+	if h.checksum != checksum {
+		Log.Debugf("Journal checksum mismatch: %08X != %08X", h.checksum, checksum)
 		return false
 	}
 	if h.version != journalVersion {
+		Log.Debugf("Journal version mismatch: %v != %v", h.version, journalVersion)
 		return false
 	}
 	if h.headerSize != uint8(headerSize) {
+		Log.Debugf("Journal chunk header size mismatch: %v != %v", h.headerSize, headerSize)
 		return false
 	}
 	if !skipMaxChunks && h.maxChunks != uint32(s.MaxChunks) {
+		Log.Debugf("Journal max chunks mismatch: %v != %v", h.maxChunks, s.MaxChunks)
 		return false
 	}
 	if h.chunkSize != uint32(s.ChunkSize) {
+		Log.Debugf("Journal chunk size mismatch: %v != %v", h.chunkSize, s.ChunkSize)
 		return false
 	}
+	Log.Debug("Journal is valid")
 	return true
 }
 
