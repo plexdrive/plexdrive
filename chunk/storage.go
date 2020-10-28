@@ -25,7 +25,6 @@ const (
 
 var (
 	blankRequestID RequestID
-	pageSize       = int64(os.Getpagesize())
 	crc32Table     = crc32.MakeTable(crc32.Castagnoli)
 )
 
@@ -68,9 +67,6 @@ func NewStorage(chunkSize int64, maxChunks int, maxMmapSize int64, chunkFilePath
 	}
 
 	journalSize := tocSize + int64(headerSize*maxChunks)
-	if rem := journalSize % pageSize; 0 != rem {
-		journalSize += pageSize - rem
-	}
 	journalOffset := chunkSize * int64(maxChunks)
 
 	// Non-empty string in chunkFilePath enables MMAP disk storage for chunks
