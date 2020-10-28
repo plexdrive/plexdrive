@@ -19,7 +19,7 @@ import (
 )
 
 // fields are the fields that should be returned by the Google Drive API
-const fields = "id, name, mimeType, modifiedTime, md5Checksum, size, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
+const fields = "id, name, mimeType, modifiedTime, md5Checksum, size, headRevisionId, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
 
 // folderMimeType is the mime type of a Google Drive folder
 const folderMimeType = "application/vnd.google-apps.folder"
@@ -429,9 +429,11 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		lastModified = time.Now()
 	}
 
-	var parents []string
-	for _, parent := range file.Parents {
-		parents = append(parents, parent)
+	var downloadURL string
+	if "" != targetFile.HeadRevisionId {
+		downloadURL = fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v/revisions/%v?alt=media", targetFile.Id, targetFile.HeadRevisionId)
+	} else {
+		downloadURL = fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id)
 	}
 
 	return &APIObject{
@@ -440,9 +442,10 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		IsDir:        targetFile.MimeType == folderMimeType,
 		LastModified: lastModified,
 		Size:         uint64(targetFile.Size),
-		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id),
-		Parents:      parents,
+		DownloadURL:  downloadURL,
+		Parents:      file.Parents,
 		CanTrash:     file.Capabilities.CanTrash,
 		MD5Checksum:  targetFile.Md5Checksum,
+		RevisionID:   targetFile.HeadRevisionId,
 	}, err
 }
