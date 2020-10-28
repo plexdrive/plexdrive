@@ -63,26 +63,23 @@ func NewManager(
 	maxChunks int,
 	ackAbuse bool) (*Manager, error) {
 
-	if chunkSize < 4096 {
-		return nil, fmt.Errorf("Chunk size must not be < 4096")
+	pageSize := int64(os.Getpagesize())
+	if chunkSize < pageSize {
+		return nil, fmt.Errorf("Chunk size must not be < %v", pageSize)
 	}
-	if chunkSize%1024 != 0 {
-		return nil, fmt.Errorf("Chunk size must be divideable by 1024")
+	if chunkSize%pageSize != 0 {
+		return nil, fmt.Errorf("Chunk size must be divideable by %v", pageSize)
 	}
-	if chunkFile != "" {
-		pageSize := int64(os.Getpagesize())
-		if chunkSize < pageSize {
-			return nil, fmt.Errorf("Chunk size must not be < %v", pageSize)
-		}
-		if chunkSize%pageSize != 0 {
-			return nil, fmt.Errorf("Chunk size must be divideable by %v", pageSize)
-		}
+	// 32-Bit: ~2GB / 64-Bit: ~8EB
+	maxMmapSize := int64(^uint(0) >> 1)
+	if chunkSize > maxMmapSize {
+		return nil, fmt.Errorf("Chunk size must be < %v", maxMmapSize)
 	}
 	if maxChunks < 2 || maxChunks < loadAhead {
 		return nil, fmt.Errorf("max-chunks must be greater than 2 and bigger than the load ahead value")
 	}
 
-	storage, err := NewStorage(chunkSize, maxChunks, chunkFile)
+	storage, err := NewStorage(chunkSize, maxChunks, maxMmapSize, chunkFile)
 	if nil != err {
 		return nil, err
 	}

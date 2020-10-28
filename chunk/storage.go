@@ -31,18 +31,20 @@ var (
 
 // Storage is a chunk storage
 type Storage struct {
-	ChunkFile  *os.File
-	ChunkSize  int64
-	HeaderSize int64
-	MaxChunks  int
-	chunks     map[RequestID]int
-	stack      *Stack
-	lock       sync.RWMutex
-	buffers    []*Chunk
-	loadChunks int
-	lastIndex  int
-	signals    chan os.Signal
-	journal    []byte
+	ChunkFile       *os.File
+	ChunkSize       int64
+	HeaderSize      int64
+	MaxChunks       int
+	chunks          map[RequestID]int
+	stack           *Stack
+	lock            sync.RWMutex
+	buffers         []*Chunk
+	loadChunks      int
+	lastIndex       int
+	signals         chan os.Signal
+	journal         []byte
+	mmapRegions     [][]byte
+	chunksPerRegion int64
 }
 
 type journalHeader struct {
@@ -55,7 +57,7 @@ type journalHeader struct {
 }
 
 // NewStorage creates a new storage
-func NewStorage(chunkSize int64, maxChunks int, chunkFilePath string) (*Storage, error) {
+func NewStorage(chunkSize int64, maxChunks int, maxMmapSize int64, chunkFilePath string) (*Storage, error) {
 	s := Storage{
 		ChunkSize: chunkSize,
 		MaxChunks: maxChunks,
@@ -110,7 +112,9 @@ func NewStorage(chunkSize int64, maxChunks int, chunkFilePath string) (*Storage,
 	if journal, err := s.mmap(journalOffset, journalSize); nil != err {
 		return nil, fmt.Errorf("Could not allocate journal: %v", err)
 	} else {
-		unix.Madvise(journal, syscall.MADV_RANDOM)
+		if err := unix.Madvise(journal, syscall.MADV_RANDOM); nil != err {
+			Log.Warningf("Madvise MADV_RANDOM for journal failed: %v", err)
+		}
 		tocOffset := journalSize - tocSize
 		header := journal[tocOffset:]
 		if valid := s.checkJournal(header, false); !valid {
@@ -122,7 +126,11 @@ func NewStorage(chunkSize int64, maxChunks int, chunkFilePath string) (*Storage,
 	// Setup sighandler
 	signal.Notify(s.signals, syscall.SIGINT, syscall.SIGTERM)
 
-	// Initialize chunks
+	// Allocate mmap regions for chunks
+	if err := s.allocateMmapRegions(maxMmapSize); nil != err {
+		return nil, err
+	}
+	// Map chunks to slices from mmap regions
 	if err := s.mmapChunks(); nil != err {
 		return nil, err
 	}
@@ -214,7 +222,36 @@ func (s *Storage) initJournal(journal []byte) {
 	h.checksum = crc32.Checksum(journal[:12], crc32Table)
 }
 
-// mmapChunks mmaps buffers and loads chunk metadata
+// allocateMmapRegions creates memory mappings to fit all chunks
+func (s *Storage) allocateMmapRegions(maxMmapSize int64) error {
+	s.chunksPerRegion = maxMmapSize / s.ChunkSize
+	regionSize := s.chunksPerRegion * s.ChunkSize
+	numRegions := int64(s.MaxChunks) / s.chunksPerRegion
+	remChunks := int64(s.MaxChunks) % s.chunksPerRegion
+	if 0 != remChunks {
+		numRegions++
+	}
+	s.mmapRegions = make([][]byte, numRegions, numRegions)
+	for i := int64(0); i < int64(len(s.mmapRegions)); i++ {
+		size := regionSize
+		if i == numRegions-1 && 0 != remChunks {
+			size = remChunks * s.ChunkSize
+		}
+		Log.Debugf("Allocate mmap region %v/%v with size %v B", i+1, numRegions, size)
+		region, err := s.mmap(i*regionSize, size)
+		if nil != err {
+			Log.Errorf("Failed to mmap region %v/%v with size %v B", i+1, numRegions, size)
+			return err
+		}
+		if err := unix.Madvise(region, syscall.MADV_SEQUENTIAL); nil != err {
+			Log.Warningf("Madvise MADV_SEQUENTIAL for region %v/%v failed: %v", i+1, numRegions, err)
+		}
+		s.mmapRegions[i] = region
+	}
+	return nil
+}
+
+// mmapChunks slices buffers from mmap regions and loads chunk metadata
 func (s *Storage) mmapChunks() error {
 	start := time.Now()
 	empty := list.New()
@@ -272,13 +309,10 @@ func (s *Storage) initChunk(index int, empty *list.List, restored *list.List) (b
 
 // allocateChunk creates a new mmap-backed chunk
 func (s *Storage) allocateChunk(index int) (*Chunk, error) {
-	Log.Tracef("Mmap chunk %v/%v", index+1, s.MaxChunks)
-	offset := int64(index) * s.ChunkSize
-	bytes, err := s.mmap(offset, s.ChunkSize)
-	if nil != err {
-		return nil, err
-	}
-	unix.Madvise(bytes, syscall.MADV_SEQUENTIAL)
+	region := int64(index) / s.chunksPerRegion
+	offset := (int64(index) - region*s.chunksPerRegion) * s.ChunkSize
+	Log.Tracef("Allocate chunk %v from region %v at offset %v", index+1, region, offset)
+	bytes := s.mmapRegions[region][offset : offset+s.ChunkSize : offset+s.ChunkSize]
 	headerOffset := index * headerSize
 	header := (*chunkHeader)(unsafe.Pointer(&s.journal[headerOffset]))
 	chunk := Chunk{
