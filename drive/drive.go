@@ -37,6 +37,8 @@ type Client struct {
 	driveID         string
 	changesChecking bool
 	lock            sync.Mutex
+	ChangedObjects  chan []*APIObject
+	NotifyFsChanges bool
 }
 
 // NewClient creates a new Google Drive client
@@ -54,8 +56,9 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 			RedirectURL: "urn:ietf:wg:oauth:2.0:oob",
 			Scopes:      []string{gdrive.DriveScope},
 		},
-		rootNodeID: rootNodeID,
-		driveID:    driveID,
+		rootNodeID:     rootNodeID,
+		driveID:        driveID,
+		ChangedObjects: make(chan []*APIObject, 1),
 	}
 
 	if "" == client.rootNodeID {
@@ -82,6 +85,7 @@ func (d *Client) startWatchChanges(refreshInterval time.Duration) {
 		select {
 		case sig := <-sigChan:
 			if sig != syscall.SIGHUP {
+				close(d.ChangedObjects)
 				return
 			}
 			d.checkChanges(false)
@@ -184,6 +188,11 @@ func (d *Client) checkChanges(firstCheck bool) {
 		if processedItems > 0 {
 			Log.Infof("Processed %v items / deleted %v items / updated %v items",
 				processedItems, deletedItems, updatedItems)
+		}
+
+		if !firstCheck && d.NotifyFsChanges && len(objects) > 0 {
+			// Notify FUSE about changed nodes
+			d.ChangedObjects <- objects
 		}
 
 		if "" != results.NextPageToken {
@@ -295,7 +304,18 @@ func (d *Client) GetRoot() (*APIObject, error) {
 		return nil, err
 	}
 
-	return d.mapFileToObject(file)
+	if file.MimeType != folderMimeType {
+		return nil, fmt.Errorf("Root node %v is not a folder (%v)", file.Id, file.MimeType)
+	}
+
+	root, err := d.mapFileToObject(file)
+	if nil != err {
+		return nil, err
+	}
+	if err := d.cache.UpdateObject(root); nil != err {
+		return root, fmt.Errorf("Failed to cache root node: %v", err)
+	}
+	return root, nil
 }
 
 // GetObject gets an object by id
