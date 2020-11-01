@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	. "github.com/claudetech/loggo/default"
 	"github.com/plexdrive/plexdrive/drive"
@@ -36,7 +39,7 @@ func NewDownloader(threads int, client *drive.Client, storage *Storage, bufferSi
 	}
 
 	for i := 0; i < threads; i++ {
-		go manager.thread()
+		go manager.thread(i)
 	}
 
 	return &manager, nil
@@ -57,8 +60,12 @@ func (d *Downloader) Download(req *Request, callback DownloadCallback) {
 	d.lock.Unlock()
 }
 
-func (d *Downloader) thread() {
-	buffer := make([]byte, d.BufferSize)
+func (d *Downloader) thread(n int) {
+	buffer, err := unix.Mmap(-1, 0, int(d.BufferSize), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_ANON|syscall.MAP_PRIVATE)
+	if nil != err {
+		Log.Warningf("Failed to mmap download buffer %v: %v", n, err)
+		buffer = make([]byte, d.BufferSize)
+	}
 	for {
 		req := <-d.queue
 		d.download(d.Client.GetNativeClient(), req, buffer)
