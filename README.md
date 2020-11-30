@@ -23,6 +23,12 @@ _If you like the project, feel free to make a small [donation via PayPal](https:
 ./plexdrive mount -c /root/.plexdrive -o allow_other /mnt/plexdrive
 ```
 
+## Installation from Source
+1. Install FUSE an Go 1.11.4 or newer on your system (use latest stable Go version if possible)
+2. Clone the project: `git clone https://github.com/plexdrive/plexdrive`
+3. Run `GO111MODULE=on go install`
+4. Run `$GOPATH/bin/plexdrive` to use the instaled version (eg. `~/go/bin/plexdrive`)
+
 ### Crypted mount with rclone
 You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypted rclone mount.
 
