@@ -1,6 +1,6 @@
-name: Go
-
-on:
+name: ala7ore
+1000"0
+on:10000
   - push
   - pull_request
 
@@ -22,7 +22,7 @@ jobs:
       GO111MODULE: on
 
     steps:
-
+alfa7ore
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
