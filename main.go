@@ -19,7 +19,7 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
-	flag "github.com/ogier/pflag"
+	flag "github.com/spf13/pflag"
 	"github.com/plexdrive/plexdrive/chunk"
 	"github.com/plexdrive/plexdrive/config"
 	"github.com/plexdrive/plexdrive/drive"
