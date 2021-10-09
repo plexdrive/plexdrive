@@ -22,14 +22,15 @@ type QueueEntry struct {
 
 // Request represents a chunk request
 type Request struct {
-	id             string
-	object         *drive.APIObject
-	offsetStart    int64
-	offsetEnd      int64
-	chunkOffset    int64
-	chunkOffsetEnd int64
-	sequence       int
-	preload        bool
+	id               string
+	object           *drive.APIObject
+	offsetStart      int64
+	offsetEnd        int64
+	chunkOffset      int64
+	chunkOffsetEnd   int64
+	sequence         int
+	preload          bool
+	acknowledgeAbuse bool
 }
 
 // Response represetns a chunk response
@@ -40,13 +41,7 @@ type Response struct {
 }
 
 // NewManager creates a new chunk manager
-func NewManager(
-	chunkSize int64,
-	loadAhead,
-	checkThreads int,
-	loadThreads int,
-	client *drive.Client,
-	maxChunks int) (*Manager, error) {
+func NewManager(chunkSize int64, loadAhead, checkThreads, loadThreads int, client *drive.Client, maxChunks int, ackAbuse bool) (*Manager, error) {
 
 	if chunkSize < 4096 {
 		return nil, fmt.Errorf("Chunk size must not be < 4096")
@@ -60,7 +55,7 @@ func NewManager(
 
 	storage := NewStorage(chunkSize, maxChunks)
 
-	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize)
+	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize, ackAbuse)
 	if nil != err {
 		return nil, err
 	}

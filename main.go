@@ -19,11 +19,11 @@ import (
 
 	"github.com/claudetech/loggo"
 	. "github.com/claudetech/loggo/default"
-	flag "github.com/spf13/pflag"
 	"github.com/plexdrive/plexdrive/chunk"
 	"github.com/plexdrive/plexdrive/config"
 	"github.com/plexdrive/plexdrive/drive"
 	"github.com/plexdrive/plexdrive/mount"
+	flag "github.com/spf13/pflag"
 	"golang.org/x/sys/unix"
 )
 
@@ -60,6 +60,7 @@ func main() {
 	argUID := flag.Int64("uid", -1, "Set the mounts UID (-1 = default permissions)")
 	argGID := flag.Int64("gid", -1, "Set the mounts GID (-1 = default permissions)")
 	argUmask := flag.Uint32("umask", 0, "Override the default file permissions")
+	argAcknowledgeAbuse := flag.Bool("acknowledge-abuse", false, "Allows files identified as abusive (malware, etc.) to be downloaded in Drive")
 	// argDownloadSpeedLimit := flag.String("speed-limit", "", "This value limits the download speed, e.g. 5M = 5MB/s per chunk (units: B, K, M, G)")
 	flag.Parse()
 
@@ -139,6 +140,7 @@ func main() {
 		Log.Debugf("UID                  : %v", uid)
 		Log.Debugf("GID                  : %v", gid)
 		Log.Debugf("umask                : %v", umask)
+		Log.Debugf("acknowledge-abuse    : %v", argAcknowledgeAbuse)
 		// Log.Debugf("speed-limit          : %v", *argDownloadSpeedLimit)
 		// version missing here
 
@@ -192,7 +194,8 @@ func main() {
 			*argChunkCheckThreads,
 			*argChunkLoadThreads,
 			client,
-			*argMaxChunks)
+			*argMaxChunks,
+			*argAcknowledgeAbuse)
 		if nil != err {
 			Log.Errorf("%v", err)
 			os.Exit(4)
