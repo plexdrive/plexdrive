@@ -13,6 +13,7 @@ type Manager struct {
 	downloader *Downloader
 	storage    *Storage
 	queue      chan *QueueEntry
+	acknowledgeAbuse bool
 }
 
 type QueueEntry struct {
@@ -55,7 +56,7 @@ func NewManager(chunkSize int64, loadAhead, checkThreads, loadThreads int, clien
 
 	storage := NewStorage(chunkSize, maxChunks)
 
-	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize, ackAbuse)
+	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize)
 	if nil != err {
 		return nil, err
 	}
@@ -66,6 +67,7 @@ func NewManager(chunkSize int64, loadAhead, checkThreads, loadThreads int, clien
 		downloader: downloader,
 		storage:    storage,
 		queue:      make(chan *QueueEntry, 100),
+		acknowledgeAbuse: ackAbuse,
 	}
 
 	if err := manager.storage.Clear(); nil != err {
@@ -131,6 +133,7 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 		chunkOffsetEnd: chunkOffset + size,
 		sequence:       sequence,
 		preload:        false,
+		acknowledgeAbuse: m.acknowledgeAbuse,
 	}
 
 	m.queue <- &QueueEntry{

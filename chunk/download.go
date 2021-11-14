@@ -21,20 +21,18 @@ type Downloader struct {
 	callbacks        map[string][]DownloadCallback
 	lock             sync.Mutex
 	storage          *Storage
-	acknowledgeAbuse bool
 }
 
 type DownloadCallback func(error, []byte)
 
 // NewDownloader creates a new download manager
-func NewDownloader(threads int, client *drive.Client, storage *Storage, bufferSize int64, ackAbuse bool) (*Downloader, error) {
+func NewDownloader(threads int, client *drive.Client, storage *Storage, bufferSize int64) (*Downloader, error) {
 	manager := Downloader{
 		Client:           client,
 		BufferSize:       bufferSize,
 		queue:            make(chan *Request, 100),
 		callbacks:        make(map[string][]DownloadCallback, 100),
 		storage:          storage,
-		acknowledgeAbuse: ackAbuse,
 	}
 
 	for i := 0; i < threads; i++ {
@@ -69,9 +67,6 @@ func (d *Downloader) thread() {
 
 func (d *Downloader) download(client *http.Client, req *Request, buffer []byte) {
 	Log.Debugf("Starting download %v (preload: %v)", req.id, req.preload)
-	if d.acknowledgeAbuse {
-		req.acknowledgeAbuse = true
-	}
 	err := downloadFromAPI(client, req, buffer, 0)
 
 	d.lock.Lock()
