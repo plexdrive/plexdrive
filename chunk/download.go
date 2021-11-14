@@ -92,15 +92,13 @@ func downloadFromAPI(client *http.Client, request *Request, buffer []byte, delay
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
+	if request.acknowledgeAbuse {
+		request.object.DownloadURL += "&acknowledgeAbuse=true"
+	}
 	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not create request object %v (%v) from API", request.object.ObjectID, request.object.Name)
-	}
-	if request.acknowledgeAbuse {
-		q := req.URL.Query()
-		q.Add("acknowledgeAbuse", "true")
-		req.URL.RawQuery = q.Encode()
 	}
 	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", request.offsetStart, request.offsetEnd-1))
 
