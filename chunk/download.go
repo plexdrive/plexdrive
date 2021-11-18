@@ -15,12 +15,12 @@ import (
 
 // Downloader handles concurrent chunk downloads
 type Downloader struct {
-	Client           *drive.Client
-	BufferSize       int64
-	queue            chan *Request
-	callbacks        map[string][]DownloadCallback
-	lock             sync.Mutex
-	storage          *Storage
+	Client     *drive.Client
+	BufferSize int64
+	queue      chan *Request
+	callbacks  map[string][]DownloadCallback
+	lock       sync.Mutex
+	storage    *Storage
 }
 
 type DownloadCallback func(error, []byte)
@@ -28,11 +28,11 @@ type DownloadCallback func(error, []byte)
 // NewDownloader creates a new download manager
 func NewDownloader(threads int, client *drive.Client, storage *Storage, bufferSize int64) (*Downloader, error) {
 	manager := Downloader{
-		Client:           client,
-		BufferSize:       bufferSize,
-		queue:            make(chan *Request, 100),
-		callbacks:        make(map[string][]DownloadCallback, 100),
-		storage:          storage,
+		Client:     client,
+		BufferSize: bufferSize,
+		queue:      make(chan *Request, 100),
+		callbacks:  make(map[string][]DownloadCallback, 100),
+		storage:    storage,
 	}
 
 	for i := 0; i < threads; i++ {
@@ -92,10 +92,11 @@ func downloadFromAPI(client *http.Client, request *Request, buffer []byte, delay
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
+	downloadURL := request.object.DownloadURL
 	if request.acknowledgeAbuse {
-		request.object.DownloadURL += "&acknowledgeAbuse=true"
+		downloadURL += "&acknowledgeAbuse=true"
 	}
-	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
+	req, err := http.NewRequest("GET", downloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not create request object %v (%v) from API", request.object.ObjectID, request.object.Name)

@@ -8,11 +8,11 @@ import (
 
 // Manager manages chunks on disk
 type Manager struct {
-	ChunkSize  int64
-	LoadAhead  int
-	downloader *Downloader
-	storage    *Storage
-	queue      chan *QueueEntry
+	ChunkSize        int64
+	LoadAhead        int
+	downloader       *Downloader
+	storage          *Storage
+	queue            chan *QueueEntry
 	acknowledgeAbuse bool
 }
 
@@ -62,11 +62,11 @@ func NewManager(chunkSize int64, loadAhead, checkThreads, loadThreads int, clien
 	}
 
 	manager := Manager{
-		ChunkSize:  chunkSize,
-		LoadAhead:  loadAhead,
-		downloader: downloader,
-		storage:    storage,
-		queue:      make(chan *QueueEntry, 100),
+		ChunkSize:        chunkSize,
+		LoadAhead:        loadAhead,
+		downloader:       downloader,
+		storage:          storage,
+		queue:            make(chan *QueueEntry, 100),
 		acknowledgeAbuse: ackAbuse,
 	}
 
@@ -125,14 +125,14 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 	id := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	request := &Request{
-		id:             id,
-		object:         object,
-		offsetStart:    offsetStart,
-		offsetEnd:      offsetEnd,
-		chunkOffset:    chunkOffset,
-		chunkOffsetEnd: chunkOffset + size,
-		sequence:       sequence,
-		preload:        false,
+		id:               id,
+		object:           object,
+		offsetStart:      offsetStart,
+		offsetEnd:        offsetEnd,
+		chunkOffset:      chunkOffset,
+		chunkOffsetEnd:   chunkOffset + size,
+		sequence:         sequence,
+		preload:          false,
 		acknowledgeAbuse: m.acknowledgeAbuse,
 	}
 
