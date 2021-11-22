@@ -8,11 +8,12 @@ import (
 
 // Manager manages chunks on disk
 type Manager struct {
-	ChunkSize  int64
-	LoadAhead  int
-	downloader *Downloader
-	storage    *Storage
-	queue      chan *QueueEntry
+	ChunkSize        int64
+	LoadAhead        int
+	downloader       *Downloader
+	storage          *Storage
+	queue            chan *QueueEntry
+	acknowledgeAbuse bool
 }
 
 type QueueEntry struct {
@@ -22,14 +23,15 @@ type QueueEntry struct {
 
 // Request represents a chunk request
 type Request struct {
-	id             string
-	object         *drive.APIObject
-	offsetStart    int64
-	offsetEnd      int64
-	chunkOffset    int64
-	chunkOffsetEnd int64
-	sequence       int
-	preload        bool
+	id               string
+	object           *drive.APIObject
+	offsetStart      int64
+	offsetEnd        int64
+	chunkOffset      int64
+	chunkOffsetEnd   int64
+	sequence         int
+	preload          bool
+	acknowledgeAbuse bool
 }
 
 // Response represetns a chunk response
@@ -40,13 +42,7 @@ type Response struct {
 }
 
 // NewManager creates a new chunk manager
-func NewManager(
-	chunkSize int64,
-	loadAhead,
-	checkThreads int,
-	loadThreads int,
-	client *drive.Client,
-	maxChunks int) (*Manager, error) {
+func NewManager(chunkSize int64, loadAhead, checkThreads, loadThreads int, client *drive.Client, maxChunks int, ackAbuse bool) (*Manager, error) {
 
 	if chunkSize < 4096 {
 		return nil, fmt.Errorf("Chunk size must not be < 4096")
@@ -66,11 +62,12 @@ func NewManager(
 	}
 
 	manager := Manager{
-		ChunkSize:  chunkSize,
-		LoadAhead:  loadAhead,
-		downloader: downloader,
-		storage:    storage,
-		queue:      make(chan *QueueEntry, 100),
+		ChunkSize:        chunkSize,
+		LoadAhead:        loadAhead,
+		downloader:       downloader,
+		storage:          storage,
+		queue:            make(chan *QueueEntry, 100),
+		acknowledgeAbuse: ackAbuse,
 	}
 
 	if err := manager.storage.Clear(); nil != err {
@@ -128,14 +125,15 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 	id := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	request := &Request{
-		id:             id,
-		object:         object,
-		offsetStart:    offsetStart,
-		offsetEnd:      offsetEnd,
-		chunkOffset:    chunkOffset,
-		chunkOffsetEnd: chunkOffset + size,
-		sequence:       sequence,
-		preload:        false,
+		id:               id,
+		object:           object,
+		offsetStart:      offsetStart,
+		offsetEnd:        offsetEnd,
+		chunkOffset:      chunkOffset,
+		chunkOffsetEnd:   chunkOffset + size,
+		sequence:         sequence,
+		preload:          false,
+		acknowledgeAbuse: m.acknowledgeAbuse,
 	}
 
 	m.queue <- &QueueEntry{

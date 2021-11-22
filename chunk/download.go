@@ -92,12 +92,15 @@ func downloadFromAPI(client *http.Client, request *Request, buffer []byte, delay
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
-	req, err := http.NewRequest("GET", request.object.DownloadURL, nil)
+	downloadURL := request.object.DownloadURL
+	if request.acknowledgeAbuse {
+		downloadURL += "&acknowledgeAbuse=true"
+	}
+	req, err := http.NewRequest("GET", downloadURL, nil)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return fmt.Errorf("Could not create request object %v (%v) from API", request.object.ObjectID, request.object.Name)
 	}
-
 	req.Header.Add("Range", fmt.Sprintf("bytes=%v-%v", request.offsetStart, request.offsetEnd-1))
 
 	Log.Tracef("Sending HTTP Request %v", req)

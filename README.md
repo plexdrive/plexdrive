@@ -35,38 +35,23 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 ## Usage
 ```
 Usage of ./plexdrive mount:
-  --cache-file string
-    	Path of the cache file (default "~/.plexdrive/cache.bolt")
-  --chunk-check-threads int
-    	The number of threads to use for checking chunk existence (default 2)
-  --chunk-load-ahead int
-    	The number of chunks that should be read ahead (default 3)
-  --chunk-load-threads int
-    	The number of threads to use for downloading chunks (default 2)
-  --chunk-size string
-    	The size of each chunk that is downloaded (units: B, K, M, G) (default "10M")
-  -c, --config string
-    	The path to the configuration directory (default "~/.plexdrive")
-  --drive-id string
-    	The ID of the shared drive to mount (including team drives)
-  -o, --fuse-options string
-    	Fuse mount options (e.g. -fuse-options allow_other,...)
-  --gid int
-    	Set the mounts GID (-1 = default permissions) (default -1)
-  --max-chunks int
-    	The maximum number of chunks to be stored in memory (default 10)
-  --refresh-interval duration
-    	The time to wait till checking for changes (default 1m0s)
-  --root-node-id string
-    	The ID of the root node to mount (use this for only mount a sub directory) (default "root")
-  --uid int
-    	Set the mounts UID (-1 = default permissions) (default -1)
-  --umask value
-    	Override the default file permissions
-  -v, --verbosity int
-    	Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
-  --version
-    	Displays program's version information
+      --acknowledge-abuse           Allows files identified as abusive (malware, etc.) to be downloaded in Drive
+      --cache-file string           Path of the cache file, defaults to cache.bolt in the configuration directory
+      --chunk-check-threads int     The number of threads to use for checking chunk existence (default 6)
+      --chunk-load-ahead int        The number of chunks that should be read ahead (default 11)
+      --chunk-load-threads int      The number of threads to use for downloading chunks (default 6)
+      --chunk-size string           The size of each chunk that is downloaded (units: B, K, M, G) (default "10M")
+  -c, --config string               The path to the configuration directory (default "~/.plexdrive")
+      --drive-id string             The ID of the shared drive to mount (including team drives)
+  -o, --fuse-options string         Fuse mount options (e.g. --fuse-options allow_other,direct_io,...)
+      --gid int                     Set the mounts GID (-1 = default permissions) (default -1)
+      --max-chunks int              The maximum number of chunks to be stored in memory (default 24)
+      --refresh-interval duration   The time to wait till checking for changes (default 1m0s)
+      --root-node-id string         The ID of the root node to mount (use this for only mount a sub directory) (default "root")
+      --uid int                     Set the mounts UID (-1 = default permissions) (default -1)
+      --umask uint32                Override the default file permissions
+  -v, --verbosity int               Set the log level (0 = error, 1 = warn, 2 = info, 3 = debug, 4 = trace)
+      --version                     Displays program's version information
 ```
 
 ### Signals
