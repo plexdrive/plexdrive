@@ -14,15 +14,17 @@ import (
 	"golang.org/x/oauth2"
 	gdrive "google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
 )
 
-// Fields are the fields that should be returned by the Google Drive API
-var Fields string
+// fields are the fields that should be returned by the Google Drive API
+const fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
 
-// init initializes the global configurations
-func init() {
-	Fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash"
-}
+// folderMimeType is the mime type of a Google Drive folder
+const folderMimeType = "application/vnd.google-apps.folder"
+
+// shortcutMimeType is the mime type of a Google Drive shortcut
+const shortcutMimeType = "application/vnd.google-apps.shortcut"
 
 // Client holds the Google Drive API connection(s)
 type Client struct {
@@ -122,14 +124,14 @@ func (d *Client) checkChanges(firstCheck bool) {
 	for {
 		query := client.Changes.
 			List(pageToken).
-			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(changeType, removed, fileId, file(%v))", Fields))).
+			Fields(googleapi.Field(fmt.Sprintf("nextPageToken, newStartPageToken, changes(changeType, removed, fileId, file(%v))", fields))).
 			PageSize(1000).
 			SupportsAllDrives(true).
 			IncludeItemsFromAllDrives(true).
 			IncludeCorpusRemovals(true)
 
 		if d.driveID != "" {
-			query = query.TeamDriveId(d.driveID)
+			query = query.DriveId(d.driveID)
 		}
 
 		results, err := query.Do()
@@ -226,7 +228,7 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("Unable to read authorization code %v", err)
 	}
 
-	tok, err := config.Exchange(oauth2.NoContext, code)
+	tok, err := config.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve token from web %v", err)
 	}
@@ -235,7 +237,7 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 
 // getClient gets a new Google Drive client
 func (d *Client) getClient() (*gdrive.Service, error) {
-	return gdrive.New(d.config.Client(d.context, d.token))
+	return gdrive.NewService(d.context, option.WithHTTPClient(d.config.Client(d.context, d.token)))
 }
 
 // GetNativeClient gets a native http client
@@ -243,10 +245,8 @@ func (d *Client) GetNativeClient() *http.Client {
 	return oauth2.NewClient(d.context, d.config.TokenSource(d.context, d.token))
 }
 
-// GetRoot gets the root node directly from the API
-func (d *Client) GetRoot() (*APIObject, error) {
-	Log.Debugf("Getting root from API")
-
+// GetFileById gets a Google Drive file by its id
+func (d *Client) GetFileById(id string) (*gdrive.File, error) {
 	client, err := d.getClient()
 	if nil != err {
 		Log.Debugf("%v", err)
@@ -254,23 +254,35 @@ func (d *Client) GetRoot() (*APIObject, error) {
 	}
 
 	file, err := client.Files.
-		Get(d.rootNodeID).
-		Fields(googleapi.Field(Fields)).
+		Get(id).
+		Fields(fields).
 		SupportsAllDrives(true).
 		Do()
 	if nil != err {
 		Log.Debugf("%v", err)
-		return nil, fmt.Errorf("Could not get object %v from API", d.rootNodeID)
+		return nil, fmt.Errorf("Could not get object %v from API", id)
 	}
 
 	// getting file size
-	if file.MimeType != "application/vnd.google-apps.folder" && 0 == file.Size {
-		res, err := client.Files.Get(d.rootNodeID).SupportsAllDrives(true).Download()
+	if 0 == file.Size && folderMimeType != file.MimeType && shortcutMimeType != file.MimeType {
+		res, err := client.Files.Get(id).SupportsAllDrives(true).Download()
 		if nil != err {
 			Log.Debugf("%v", err)
-			return nil, fmt.Errorf("Could not get file size for object %v", d.rootNodeID)
+			return nil, fmt.Errorf("Could not get file size for object %v", id)
 		}
 		file.Size = res.ContentLength
+	}
+
+	return file, nil
+}
+
+// GetRoot gets the root node directly from the API
+func (d *Client) GetRoot() (*APIObject, error) {
+	Log.Debugf("Getting root from API")
+
+	file, err := d.GetFileById(d.rootNodeID)
+	if err != nil {
+		return nil, err
 	}
 
 	return d.mapFileToObject(file)
@@ -331,13 +343,13 @@ func (d *Client) Mkdir(parent string, Name string) (*APIObject, error) {
 		return nil, fmt.Errorf("Could not get Google Drive client")
 	}
 
-	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: "application/vnd.google-apps.folder"}).SupportsAllDrives(true).Do()
+	created, err := client.Files.Create(&gdrive.File{Name: Name, Parents: []string{parent}, MimeType: folderMimeType}).SupportsAllDrives(true).Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not create object(%v) from API", Name)
 	}
 
-	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(Fields)).SupportsAllDrives(true).Do()
+	file, err := client.Files.Get(created.Id).Fields(googleapi.Field(fields)).SupportsAllDrives(true).Do()
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fmt.Errorf("Could not get object fields %v from API", created.Id)
@@ -391,7 +403,16 @@ func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, N
 func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	Log.Tracef("Converting Google Drive file: %v", file)
 
-	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
+	var err error
+	targetFile := file
+	if file.MimeType == shortcutMimeType && file.ShortcutDetails != nil {
+		targetFile, err = d.GetFileById(file.ShortcutDetails.TargetId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	lastModified, err := time.Parse(time.RFC3339, targetFile.ModifiedTime)
 	if nil != err {
 		Log.Debugf("%v", err)
 		Log.Warningf("Could not parse last modified date for object %v (%v)", file.Id, file.Name)
@@ -406,11 +427,11 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	return &APIObject{
 		ObjectID:     file.Id,
 		Name:         file.Name,
-		IsDir:        file.MimeType == "application/vnd.google-apps.folder",
+		IsDir:        targetFile.MimeType == folderMimeType,
 		LastModified: lastModified,
-		Size:         uint64(file.Size),
-		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", file.Id),
+		Size:         uint64(targetFile.Size),
+		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id),
 		Parents:      parents,
 		CanTrash:     file.Capabilities.CanTrash,
-	}, nil
+	}, err
 }
