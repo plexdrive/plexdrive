@@ -403,18 +403,16 @@ func (d *Client) Rename(object *APIObject, OldParent string, NewParent string, N
 func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	Log.Tracef("Converting Google Drive file: %v", file)
 
-	actualId := file.Id
+	var err error
+	targetFile := file
 	if file.MimeType == shortcutMimeType && file.ShortcutDetails != nil {
-		actualFile, err := d.GetFileById(file.ShortcutDetails.TargetId)
+		targetFile, err = d.GetFileById(file.ShortcutDetails.TargetId)
 		if err != nil {
 			return nil, err
 		}
-		actualId = actualFile.Id
-		file.MimeType = actualFile.MimeType
-		file.Size = actualFile.Size
 	}
 
-	lastModified, err := time.Parse(time.RFC3339, file.ModifiedTime)
+	lastModified, err := time.Parse(time.RFC3339, targetFile.ModifiedTime)
 	if nil != err {
 		Log.Debugf("%v", err)
 		Log.Warningf("Could not parse last modified date for object %v (%v)", file.Id, file.Name)
@@ -429,11 +427,11 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 	return &APIObject{
 		ObjectID:     file.Id,
 		Name:         file.Name,
-		IsDir:        file.MimeType == folderMimeType,
+		IsDir:        targetFile.MimeType == folderMimeType,
 		LastModified: lastModified,
-		Size:         uint64(file.Size),
-		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", actualId),
+		Size:         uint64(targetFile.Size),
+		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id),
 		Parents:      parents,
 		CanTrash:     file.Capabilities.CanTrash,
-	}, nil
+	}, err
 }
