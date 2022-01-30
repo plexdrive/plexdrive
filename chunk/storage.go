@@ -23,11 +23,12 @@ var ErrTimeout = errors.New("timeout")
 
 var (
 	pageSize   = int64(os.Getpagesize())
-	headerSize = 16
+	headerSize = 32
 	tocSize    = int64(16)
-	journalVer = uint8(1)
+	journalVer = uint8(2)
 	crc32Table = crc32.MakeTable(crc32.Castagnoli)
 	crc64Table = crc64.MakeTable(crc64.ECMA)
+	blankIDKey = uint64(13156847312662197100)
 )
 
 // Storage is a chunk storage
@@ -247,16 +248,17 @@ func (s *Storage) initChunk(index int, empty *list.List, restored *list.List) (b
 	s.buffers[index] = chunk
 
 	id := chunk.ID()
+	key := idToKey(id)
 
-	if id == 0 || index >= s.loadChunks {
+	if blankIDKey == key || index >= s.loadChunks {
 		chunk.item = empty.PushBack(index)
 		Log.Tracef("Allocate chunk %v/%v", index+1, s.MaxChunks)
 		return false, nil
 	}
 
 	chunk.item = restored.PushBack(index)
-	Log.Tracef("Load chunk %v/%v (restored)", index+1, s.MaxChunks)
-	s.chunks[id] = index
+	Log.Tracef("Load chunk %v/%v (restored: %v)", index+1, s.MaxChunks, id)
+	s.chunks[key] = index
 
 	return true, nil
 }
@@ -293,17 +295,17 @@ func (s *Storage) Clear() error {
 }
 
 // Load a chunk from ram or creates it
-func (s *Storage) Load(key string) []byte {
-	id := keyToId(key)
+func (s *Storage) Load(id RequestID) []byte {
+	key := idToKey(id)
 	s.lock.RLock()
-	chunk := s.fetch(id)
+	chunk := s.fetch(key)
 	if nil == chunk {
-		Log.Tracef("Load chunk %v (missing)", key)
+		Log.Tracef("Load chunk %v (missing)", id)
 		s.lock.RUnlock()
 		return nil
 	}
 	if chunk.clean {
-		Log.Tracef("Load chunk %v (clean)", key)
+		Log.Tracef("Load chunk %v (clean)", id)
 		defer s.lock.RUnlock()
 		return chunk.bytes
 	}
@@ -311,24 +313,24 @@ func (s *Storage) Load(key string) []byte {
 	// Switch to write lock to avoid races on crc verification
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if chunk.Valid(id) {
-		Log.Debugf("Load chunk %v (verified)", key)
+	if chunk.Valid(key) {
+		Log.Debugf("Load chunk %v (verified)", id)
 		return chunk.bytes
 	}
-	Log.Warningf("Load chunk %v (bad checksum: %08x <> %08x)", key, chunk.Checksum(), chunk.calculateChecksum())
+	Log.Warningf("Load chunk %v (bad checksum: %08x <> %08x)", id, chunk.Checksum(), chunk.calculateChecksum())
 	s.stack.Purge(chunk.item)
 	return nil
 }
 
 // Store stores a chunk in the RAM and adds it to the disk storage queue
-func (s *Storage) Store(key string, bytes []byte) (err error) {
-	id := keyToId(key)
+func (s *Storage) Store(id RequestID, bytes []byte) (err error) {
+	key := idToKey(id)
 	s.lock.RLock()
 
 	// Avoid storing same chunk multiple times
-	chunk := s.fetch(id)
+	chunk := s.fetch(key)
 	if nil != chunk && chunk.clean {
-		Log.Tracef("Create chunk %v (exists: clean)", key)
+		Log.Tracef("Create chunk %v (exists: clean)", id)
 		s.lock.RUnlock()
 		return nil
 	}
@@ -338,26 +340,26 @@ func (s *Storage) Store(key string, bytes []byte) (err error) {
 	defer s.lock.Unlock()
 
 	if nil != chunk {
-		if chunk.Valid(id) {
-			Log.Debugf("Create chunk %v (exists: valid)", key)
+		if chunk.Valid(key) {
+			Log.Debugf("Create chunk %v (exists: valid)", id)
 			return nil
 		}
-		Log.Warningf("Create chunk %v(exists: overwrite)", key)
+		Log.Warningf("Create chunk %v(exists: overwrite)", id)
 	} else {
 		index := s.stack.Pop()
 		if -1 == index {
-			Log.Debugf("Create chunk %v (failed)", key)
+			Log.Debugf("Create chunk %v (failed)", id)
 			return fmt.Errorf("No buffers available")
 		}
 		chunk = s.buffers[index]
-		deleteID := chunk.ID()
-		if 0 != deleteID {
-			delete(s.chunks, deleteID)
-			Log.Debugf("Create chunk %v (reused)", key)
+		deleteKey := idToKey(chunk.ID())
+		if blankIDKey != deleteKey {
+			delete(s.chunks, deleteKey)
+			Log.Debugf("Create chunk %v (reused)", id)
 		} else {
-			Log.Debugf("Create chunk %v (stored)", key)
+			Log.Debugf("Create chunk %v (stored)", id)
 		}
-		s.chunks[id] = index
+		s.chunks[key] = index
 		chunk.item = s.stack.Push(index)
 	}
 
@@ -367,8 +369,8 @@ func (s *Storage) Store(key string, bytes []byte) (err error) {
 }
 
 // fetch chunk and index by id
-func (s *Storage) fetch(id uint64) *Chunk {
-	index, exists := s.chunks[id]
+func (s *Storage) fetch(key uint64) *Chunk {
+	index, exists := s.chunks[key]
 	if !exists {
 		return nil
 	}
@@ -377,7 +379,7 @@ func (s *Storage) fetch(id uint64) *Chunk {
 	return chunk
 }
 
-// keyToId converts string key to internal uint64 representation
-func keyToId(key string) uint64 {
-	return crc64.Checksum([]byte(key), crc64Table)
+// idToKey converts binary id to internal uint64 representation
+func idToKey(id RequestID) uint64 {
+	return crc64.Checksum(id[:], crc64Table)
 }

@@ -1,10 +1,13 @@
 package chunk
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 
 	"github.com/plexdrive/plexdrive/drive"
+	// . "github.com/claudetech/loggo/default"
 )
 
 // Manager manages chunks on disk
@@ -22,9 +25,16 @@ type QueueEntry struct {
 	response chan Response
 }
 
+// RequestID is the binary identifier for a chunk request
+type RequestID [24]byte
+
+func (id RequestID) String() string {
+	return fmt.Sprintf("%032x:%v", id[:16], binary.BigEndian.Uint64(id[16:]))
+}
+
 // Request represents a chunk request
 type Request struct {
-	id               string
+	id               RequestID
 	object           *drive.APIObject
 	offsetStart      int64
 	offsetEnd        int64
@@ -108,6 +118,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	if offset > maxOffset {
 		return nil, fmt.Errorf("Tried to read past EOF of %v at offset %v", object.ObjectID, offset)
 	}
+	// Log.Infof("Request %v:%v md5:%v", object.ObjectID, offset, object.MD5Checksum)
 	if offset+size > maxOffset {
 		size = int64(object.Size) - offset
 	}
@@ -139,14 +150,19 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	return data, nil
 }
 
+func buildRequestID(object *drive.APIObject, offset int64) (id RequestID) {
+	hex.Decode(id[:], []byte(object.MD5Checksum))
+	binary.BigEndian.PutUint64(id[16:], uint64(offset))
+	return
+}
+
 func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequence int, preload bool, response chan Response) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
 	offsetEnd := offsetStart + m.ChunkSize
-	id := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	request := &Request{
-		id:               id,
+		id:               buildRequestID(object, offsetStart),
 		object:           object,
 		offsetStart:      offsetStart,
 		offsetEnd:        offsetEnd,
@@ -170,9 +186,8 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 		aheadOffsetStart := offsetStart + i
 		aheadOffsetEnd := aheadOffsetStart + m.ChunkSize
 		if uint64(aheadOffsetStart) < object.Size && uint64(aheadOffsetEnd) < object.Size {
-			id := fmt.Sprintf("%v:%v", object.ObjectID, aheadOffsetStart)
 			request := &Request{
-				id:          id,
+				id:          buildRequestID(object, aheadOffsetStart),
 				object:      object,
 				offsetStart: aheadOffsetStart,
 				offsetEnd:   aheadOffsetEnd,

@@ -19,7 +19,7 @@ import (
 )
 
 // fields are the fields that should be returned by the Google Drive API
-const fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
+const fields = "id, name, mimeType, modifiedTime, md5Checksum, size, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
 
 // folderMimeType is the mime type of a Google Drive folder
 const folderMimeType = "application/vnd.google-apps.folder"
@@ -443,5 +443,6 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id),
 		Parents:      parents,
 		CanTrash:     file.Capabilities.CanTrash,
+		MD5Checksum:  targetFile.Md5Checksum,
 	}, err
 }

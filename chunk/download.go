@@ -18,7 +18,7 @@ type Downloader struct {
 	Client     *drive.Client
 	BufferSize int64
 	queue      chan *Request
-	callbacks  map[string][]DownloadCallback
+	callbacks  map[RequestID][]DownloadCallback
 	lock       sync.Mutex
 	storage    *Storage
 }
@@ -31,7 +31,7 @@ func NewDownloader(threads int, client *drive.Client, storage *Storage, bufferSi
 		Client:     client,
 		BufferSize: bufferSize,
 		queue:      make(chan *Request, 100),
-		callbacks:  make(map[string][]DownloadCallback, 100),
+		callbacks:  make(map[RequestID][]DownloadCallback, 100),
 		storage:    storage,
 	}
 

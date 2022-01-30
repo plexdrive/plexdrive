@@ -37,6 +37,7 @@ type APIObject struct {
 	DownloadURL  string
 	Parents      []string
 	CanTrash     bool
+	MD5Checksum  string
 }
 
 // PageToken is the last change id
