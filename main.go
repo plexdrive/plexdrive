@@ -50,7 +50,7 @@ func main() {
 	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
 	argCacheFile := flag.String("cache-file", filepath.Join(*argConfigPath, "cache.bolt"), "Path of the cache file")
 	argChunkFile := flag.String("chunk-file", filepath.Join(*argConfigPath, "chunks.dat"), "Path of the chunk cache file")
-	argChunkDiskCache := flag.Bool("chunk-disk-cache", false, "Enable disk based chunk cache")
+	argChunkDiskCache := flag.Bool("chunk-disk-cache", false, "Enable disk based chunk cache to --chunk-file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for downloading chunks")
 	argChunkCheckThreads := flag.Int("chunk-check-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for checking chunk existence")

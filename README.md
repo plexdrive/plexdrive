@@ -37,6 +37,8 @@ You can use [this tutorial](TUTORIAL.md) for instruction how to mount an encrypt
 Usage of ./plexdrive mount:
       --acknowledge-abuse           Allows files identified as abusive (malware, etc.) to be downloaded in Drive
       --cache-file string           Path of the cache file, defaults to cache.bolt in the configuration directory
+      --chunk-file                  Path of the chunk cache file, defaults to chunks.dat in the configuration directory
+      --chunk-disk-cache            Enable disk based chunk cache to --chunk-file, defaults to cache chunks in memory
       --chunk-check-threads int     The number of threads to use for checking chunk existence (default 6)
       --chunk-load-ahead int        The number of chunks that should be read ahead (default 11)
       --chunk-load-threads int      The number of threads to use for downloading chunks (default 6)
