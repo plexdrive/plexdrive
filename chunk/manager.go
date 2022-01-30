@@ -1,9 +1,13 @@
 package chunk
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"os"
 
 	"github.com/plexdrive/plexdrive/drive"
+	// . "github.com/claudetech/loggo/default"
 )
 
 // Manager manages chunks on disk
@@ -21,9 +25,16 @@ type QueueEntry struct {
 	response chan Response
 }
 
+// RequestID is the binary identifier for a chunk request
+type RequestID [24]byte
+
+func (id RequestID) String() string {
+	return fmt.Sprintf("%032x:%v", id[:16], binary.BigEndian.Uint64(id[16:]))
+}
+
 // Request represents a chunk request
 type Request struct {
-	id               string
+	id               RequestID
 	object           *drive.APIObject
 	offsetStart      int64
 	offsetEnd        int64
@@ -42,19 +53,36 @@ type Response struct {
 }
 
 // NewManager creates a new chunk manager
-func NewManager(chunkSize int64, loadAhead, checkThreads, loadThreads int, client *drive.Client, maxChunks int, ackAbuse bool) (*Manager, error) {
+func NewManager(
+	chunkFile string,
+	chunkSize int64,
+	loadAhead,
+	checkThreads int,
+	loadThreads int,
+	client *drive.Client,
+	maxChunks int,
+	ackAbuse bool) (*Manager, error) {
 
-	if chunkSize < 4096 {
-		return nil, fmt.Errorf("Chunk size must not be < 4096")
+	pageSize := int64(os.Getpagesize())
+	if chunkSize < pageSize {
+		return nil, fmt.Errorf("Chunk size must not be < %v", pageSize)
 	}
-	if chunkSize%1024 != 0 {
-		return nil, fmt.Errorf("Chunk size must be divideable by 1024")
+	if chunkSize%pageSize != 0 {
+		return nil, fmt.Errorf("Chunk size must be divideable by %v", pageSize)
+	}
+	// 32-Bit: ~2GB / 64-Bit: ~8EB
+	maxMmapSize := int64(^uint(0) >> 1)
+	if chunkSize > maxMmapSize {
+		return nil, fmt.Errorf("Chunk size must be < %v", maxMmapSize)
 	}
 	if maxChunks < 2 || maxChunks < loadAhead {
 		return nil, fmt.Errorf("max-chunks must be greater than 2 and bigger than the load ahead value")
 	}
 
-	storage := NewStorage(chunkSize, maxChunks)
+	storage, err := NewStorage(chunkSize, maxChunks, maxMmapSize, chunkFile)
+	if nil != err {
+		return nil, err
+	}
 
 	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize)
 	if nil != err {
@@ -87,6 +115,7 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	if offset > maxOffset {
 		return nil, fmt.Errorf("Tried to read past EOF of %v at offset %v", object.ObjectID, offset)
 	}
+	// Log.Infof("Request %v:%v md5:%v", object.ObjectID, offset, object.MD5Checksum)
 	if offset+size > maxOffset {
 		size = int64(object.Size) - offset
 	}
@@ -118,14 +147,19 @@ func (m *Manager) GetChunk(object *drive.APIObject, offset, size int64) ([]byte,
 	return data, nil
 }
 
+func buildRequestID(object *drive.APIObject, offset int64) (id RequestID) {
+	hex.Decode(id[:], []byte(object.MD5Checksum))
+	binary.BigEndian.PutUint64(id[16:], uint64(offset))
+	return
+}
+
 func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequence int, preload bool, response chan Response) {
 	chunkOffset := offset % m.ChunkSize
 	offsetStart := offset - chunkOffset
 	offsetEnd := offsetStart + m.ChunkSize
-	id := fmt.Sprintf("%v:%v", object.ObjectID, offsetStart)
 
 	request := &Request{
-		id:               id,
+		id:               buildRequestID(object, offsetStart),
 		object:           object,
 		offsetStart:      offsetStart,
 		offsetEnd:        offsetEnd,
@@ -149,9 +183,8 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 		aheadOffsetStart := offsetStart + i
 		aheadOffsetEnd := aheadOffsetStart + m.ChunkSize
 		if uint64(aheadOffsetStart) < object.Size && uint64(aheadOffsetEnd) < object.Size {
-			id := fmt.Sprintf("%v:%v", object.ObjectID, aheadOffsetStart)
 			request := &Request{
-				id:          id,
+				id:          buildRequestID(object, aheadOffsetStart),
 				object:      object,
 				offsetStart: aheadOffsetStart,
 				offsetEnd:   aheadOffsetEnd,

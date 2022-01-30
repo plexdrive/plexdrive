@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 )
 
 // fields are the fields that should be returned by the Google Drive API
-const fields = "id, name, mimeType, modifiedTime, size, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
+const fields = "id, name, mimeType, modifiedTime, md5Checksum, size, headRevisionId, explicitlyTrashed, parents, capabilities/canTrash, shortcutDetails"
 
 // folderMimeType is the mime type of a Google Drive folder
 const folderMimeType = "application/vnd.google-apps.folder"
@@ -35,6 +36,9 @@ type Client struct {
 	rootNodeID      string
 	driveID         string
 	changesChecking bool
+	lock            sync.Mutex
+	ChangedObjects  chan []*APIObject
+	NotifyFsChanges bool
 }
 
 // NewClient creates a new Google Drive client
@@ -52,9 +56,9 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 			RedirectURL: "urn:ietf:wg:oauth:2.0:oob",
 			Scopes:      []string{gdrive.DriveScope},
 		},
-		rootNodeID:      rootNodeID,
-		driveID:         driveID,
-		changesChecking: false,
+		rootNodeID:     rootNodeID,
+		driveID:        driveID,
+		ChangedObjects: make(chan []*APIObject, 1),
 	}
 
 	if "" == client.rootNodeID {
@@ -75,26 +79,34 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 
 func (d *Client) startWatchChanges(refreshInterval time.Duration) {
 	d.checkChanges(true)
-	go d.startSignalHandler() // we don't want a race cond here, don't move to NewClient
-	for _ = range time.Tick(refreshInterval) {
-		d.checkChanges(false)
-	}
-}
-
-func (d *Client) startSignalHandler() {
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP)
+	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	for {
-		<-sigChan
-		d.checkChanges(false)
+		select {
+		case sig := <-sigChan:
+			if sig != syscall.SIGHUP {
+				close(d.ChangedObjects)
+				return
+			}
+			d.checkChanges(false)
+		case <-time.After(refreshInterval):
+			d.checkChanges(false)
+		}
 	}
 }
 
 func (d *Client) checkChanges(firstCheck bool) {
+	d.lock.Lock()
 	if d.changesChecking {
 		return
 	}
 	d.changesChecking = true
+	d.lock.Unlock()
+	defer func() {
+		d.lock.Lock()
+		d.changesChecking = false
+		d.lock.Unlock()
+	}()
 
 	Log.Debugf("Checking for changes")
 
@@ -178,12 +190,21 @@ func (d *Client) checkChanges(firstCheck bool) {
 				processedItems, deletedItems, updatedItems)
 		}
 
+		if !firstCheck && d.NotifyFsChanges && len(objects) > 0 {
+			// Notify FUSE about changed nodes
+			d.ChangedObjects <- objects
+		}
+
 		if "" != results.NextPageToken {
 			pageToken = results.NextPageToken
 			d.cache.StoreStartPageToken(pageToken)
 		} else {
-			pageToken = results.NewStartPageToken
-			d.cache.StoreStartPageToken(pageToken)
+			if pageToken != results.NewStartPageToken {
+				pageToken = results.NewStartPageToken
+				d.cache.StoreStartPageToken(pageToken)
+			} else {
+				Log.Debugf("No changes")
+			}
 			break
 		}
 	}
@@ -191,8 +212,6 @@ func (d *Client) checkChanges(firstCheck bool) {
 	if firstCheck {
 		Log.Infof("First cache build process finished!")
 	}
-
-	d.changesChecking = false
 }
 
 func (d *Client) authorize() error {
@@ -285,7 +304,18 @@ func (d *Client) GetRoot() (*APIObject, error) {
 		return nil, err
 	}
 
-	return d.mapFileToObject(file)
+	if file.MimeType != folderMimeType {
+		return nil, fmt.Errorf("Root node %v is not a folder (%v)", file.Id, file.MimeType)
+	}
+
+	root, err := d.mapFileToObject(file)
+	if nil != err {
+		return nil, err
+	}
+	if err := d.cache.UpdateObject(root); nil != err {
+		return root, fmt.Errorf("Failed to cache root node: %v", err)
+	}
+	return root, nil
 }
 
 // GetObject gets an object by id
@@ -419,9 +449,11 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		lastModified = time.Now()
 	}
 
-	var parents []string
-	for _, parent := range file.Parents {
-		parents = append(parents, parent)
+	var downloadURL string
+	if "" != targetFile.HeadRevisionId {
+		downloadURL = fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v/revisions/%v?alt=media", targetFile.Id, targetFile.HeadRevisionId)
+	} else {
+		downloadURL = fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id)
 	}
 
 	return &APIObject{
@@ -430,8 +462,10 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		IsDir:        targetFile.MimeType == folderMimeType,
 		LastModified: lastModified,
 		Size:         uint64(targetFile.Size),
-		DownloadURL:  fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%v?alt=media", targetFile.Id),
-		Parents:      parents,
+		DownloadURL:  downloadURL,
+		Parents:      file.Parents,
 		CanTrash:     file.Capabilities.CanTrash,
+		MD5Checksum:  targetFile.Md5Checksum,
+		RevisionID:   targetFile.HeadRevisionId,
 	}, err
 }

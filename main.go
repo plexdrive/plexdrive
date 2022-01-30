@@ -48,7 +48,9 @@ func main() {
 	argRootNodeID := flag.String("root-node-id", "root", "The ID of the root node to mount (use this for only mount a sub directory)")
 	argDriveID := flag.String("drive-id", "", "The ID of the shared drive to mount (including team drives)")
 	argConfigPath := flag.StringP("config", "c", filepath.Join(home, ".plexdrive"), "The path to the configuration directory")
-	argCacheFile := flag.String("cache-file", "", "Path of the cache file, defaults to cache.bolt in the configuration directory")
+	argCacheFile := flag.String("cache-file", filepath.Join(*argConfigPath, "cache.bolt"), "Path of the cache file")
+	argChunkFile := flag.String("chunk-file", filepath.Join(*argConfigPath, "chunks.dat"), "Path of the chunk cache file")
+	argChunkDiskCache := flag.Bool("chunk-disk-cache", false, "Enable disk based chunk cache to --chunk-file")
 	argChunkSize := flag.String("chunk-size", "10M", "The size of each chunk that is downloaded (units: B, K, M, G)")
 	argChunkLoadThreads := flag.Int("chunk-load-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for downloading chunks")
 	argChunkCheckThreads := flag.Int("chunk-check-threads", max(runtime.NumCPU()/2, 1), "The number of threads to use for checking chunk existence")
@@ -79,12 +81,6 @@ func main() {
 			flag.Usage()
 			fmt.Println()
 			panic(fmt.Errorf("Mountpoint not specified"))
-		}
-
-		// build default value for cache-file if it's not passed as flag
-		cacheFilePath := *argCacheFile
-		if !flag.Lookup("cache-file").Changed {
-			cacheFilePath = filepath.Join(*argConfigPath, "cache.bolt")
 		}
 
 		// calculate uid / gid
@@ -129,7 +125,9 @@ func main() {
 		Log.Debugf("root-node-id         : %v", *argRootNodeID)
 		Log.Debugf("drive-id             : %v", *argDriveID)
 		Log.Debugf("config               : %v", *argConfigPath)
-		Log.Debugf("cache-file           : %v", cacheFilePath)
+		Log.Debugf("cache-file           : %v", *argCacheFile)
+		Log.Debugf("chunk-file           : %v", *argChunkFile)
+		Log.Debugf("chunk-disk-cache     : %v", *argChunkDiskCache)
 		Log.Debugf("chunk-size           : %v", *argChunkSize)
 		Log.Debugf("chunk-load-threads   : %v", *argChunkLoadThreads)
 		Log.Debugf("chunk-check-threads  : %v", *argChunkCheckThreads)
@@ -150,10 +148,19 @@ func main() {
 			Log.Debugf("%v", err)
 			os.Exit(1)
 		}
-		if err := os.MkdirAll(filepath.Dir(cacheFilePath), 0766); nil != err {
+		if err := os.MkdirAll(filepath.Dir(*argCacheFile), 0766); nil != err {
 			Log.Errorf("Could not create cache file directory")
 			Log.Debugf("%v", err)
 			os.Exit(1)
+		}
+		if *argChunkDiskCache {
+			if err := os.MkdirAll(filepath.Dir(*argChunkFile), 0766); nil != err {
+				Log.Errorf("Could not create chunk cache file directory")
+				Log.Debugf("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			*argChunkFile = ""
 		}
 
 		// set the global buffer configuration
@@ -175,7 +182,7 @@ func main() {
 			}
 		}
 
-		cache, err := drive.NewCache(cacheFilePath, *argConfigPath, *argLogLevel > 3)
+		cache, err := drive.NewCache(*argCacheFile, *argConfigPath, *argLogLevel > 3)
 		if nil != err {
 			Log.Errorf("%v", err)
 			os.Exit(4)
@@ -188,7 +195,12 @@ func main() {
 			os.Exit(4)
 		}
 
+		if *argChunkDiskCache != true {
+			*argChunkFile = ""
+		}
+
 		chunkManager, err := chunk.NewManager(
+			*argChunkFile,
 			chunkSize,
 			*argChunkLoadAhead,
 			*argChunkCheckThreads,
