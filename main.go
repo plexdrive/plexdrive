@@ -27,6 +27,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var Version = "%VERSION%"
+
 func main() {
 	// Find users home directory
 	usr, err := user.Current()
@@ -68,7 +70,7 @@ func main() {
 
 	// display version information
 	if *argVersion {
-		fmt.Println("%VERSION%")
+		fmt.Println(Version)
 		return
 	}
 
