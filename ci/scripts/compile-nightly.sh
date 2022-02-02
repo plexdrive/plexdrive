@@ -5,6 +5,7 @@ set -xe
 export ORIGIN=$PWD
 export GOPATH=$PWD/go
 export PATH=$GOPATH/bin:$PATH
+export GO111MODULE=on
 export TS=$(date +%s)
 cd $GOPATH/src/github.com/plexdrive/plexdrive
 
@@ -12,12 +13,11 @@ cd $GOPATH/src/github.com/plexdrive/plexdrive
 export VERSION="$(cat ci/meta/version)-beta.$TS"
 echo "Got version $VERSION"
 
-sed -i.bak s/%VERSION%/$VERSION/g main.go
 echo $VERSION > $ORIGIN/metadata/version
 sed s/%VERSION%/$VERSION/g ci/meta/notification > $ORIGIN/metadata/notification
 
 # Build 
-go get -v
+go mod download
 ./ci/scripts/go-build-all
 
 mv plexdrive-* $ORIGIN/release
