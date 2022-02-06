@@ -12,12 +12,11 @@ import (
 
 // Manager manages chunks on disk
 type Manager struct {
-	ChunkSize        int64
-	LoadAhead        int
-	downloader       *Downloader
-	storage          *Storage
-	queue            chan *QueueEntry
-	acknowledgeAbuse bool
+	ChunkSize  int64
+	LoadAhead  int
+	downloader *Downloader
+	storage    *Storage
+	queue      chan *QueueEntry
 }
 
 type QueueEntry struct {
@@ -34,15 +33,14 @@ func (id RequestID) String() string {
 
 // Request represents a chunk request
 type Request struct {
-	id               RequestID
-	object           *drive.APIObject
-	offsetStart      int64
-	offsetEnd        int64
-	chunkOffset      int64
-	chunkOffsetEnd   int64
-	sequence         int
-	preload          bool
-	acknowledgeAbuse bool
+	id             RequestID
+	object         *drive.APIObject
+	offsetStart    int64
+	offsetEnd      int64
+	chunkOffset    int64
+	chunkOffsetEnd int64
+	sequence       int
+	preload        bool
 }
 
 // Response represetns a chunk response
@@ -61,7 +59,7 @@ func NewManager(
 	loadThreads int,
 	client *drive.Client,
 	maxChunks int,
-	ackAbuse bool) (*Manager, error) {
+	acknowledgeAbuse bool) (*Manager, error) {
 
 	pageSize := int64(os.Getpagesize())
 	if chunkSize < pageSize {
@@ -84,18 +82,17 @@ func NewManager(
 		return nil, err
 	}
 
-	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize)
+	downloader, err := NewDownloader(loadThreads, client, storage, chunkSize, acknowledgeAbuse)
 	if nil != err {
 		return nil, err
 	}
 
 	manager := Manager{
-		ChunkSize:        chunkSize,
-		LoadAhead:        loadAhead,
-		downloader:       downloader,
-		storage:          storage,
-		queue:            make(chan *QueueEntry, 100),
-		acknowledgeAbuse: ackAbuse,
+		ChunkSize:  chunkSize,
+		LoadAhead:  loadAhead,
+		downloader: downloader,
+		storage:    storage,
+		queue:      make(chan *QueueEntry, 100),
 	}
 
 	if err := manager.storage.Clear(); nil != err {
@@ -167,7 +164,6 @@ func (m *Manager) requestChunk(object *drive.APIObject, offset, size int64, sequ
 		chunkOffsetEnd:   chunkOffset + size,
 		sequence:         sequence,
 		preload:          false,
-		acknowledgeAbuse: m.acknowledgeAbuse,
 	}
 
 	m.queue <- &QueueEntry{
