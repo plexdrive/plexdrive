@@ -75,7 +75,7 @@ func (d *Downloader) thread(n int) {
 
 func (d *Downloader) download(client *http.Client, req *Request, buffer []byte) {
 	Log.Debugf("Starting download %v (preload: %v)", req.id, req.preload)
-	err := d.downloadFromAPI(client, req, buffer, 0)
+	err := d.downloadFromAPI(client, req, buffer, 0, false)
 
 	d.lock.Lock()
 	callbacks := d.callbacks[req.id]
@@ -94,14 +94,14 @@ func (d *Downloader) download(client *http.Client, req *Request, buffer []byte) 
 	}
 }
 
-func (d *Downloader) downloadFromAPI(client *http.Client, request *Request, buffer []byte, delay int64) error {
+func (d *Downloader) downloadFromAPI(client *http.Client, request *Request, buffer []byte, delay int64, ackAbuse bool) error {
 	// sleep if request is throttled
 	if delay > 0 {
 		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
 	downloadURL := request.object.DownloadURL
-	if d.acknowledgeAbuse {
+	if ackAbuse {
 		downloadURL += "&acknowledgeAbuse=true"
 	}
 	req, err := http.NewRequest("GET", downloadURL, nil)
@@ -138,6 +138,10 @@ func (d *Downloader) downloadFromAPI(client *http.Client, request *Request, buff
 			return fmt.Errorf("Could not read body of error")
 		}
 		body := string(bytes)
+		// if denied because of abuse, retry download with acknowledgeAbuse=true
+		if d.acknowledgeAbuse && !ackAbuse && strings.Contains(body, "cannotDownloadAbusiveFile") {
+			return d.downloadFromAPI(client, request, buffer, delay, true)
+		}
 		if strings.Contains(body, "dailyLimitExceeded") ||
 			strings.Contains(body, "userRateLimitExceeded") ||
 			strings.Contains(body, "rateLimitExceeded") ||
@@ -148,7 +152,7 @@ func (d *Downloader) downloadFromAPI(client *http.Client, request *Request, buff
 			} else {
 				delay = delay * 2
 			}
-			return d.downloadFromAPI(client, request, buffer, delay)
+			return d.downloadFromAPI(client, request, buffer, delay, ackAbuse)
 		}
 
 		// return an error if other error occurred
