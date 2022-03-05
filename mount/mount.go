@@ -388,7 +388,12 @@ func (o Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 
 // Rename renames an element
 func (o Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	obj, err := o.fs.client.GetObjectByParentAndName(o.objectID, req.OldName)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return fuse.EIO
+	}
+	obj, err := o.fs.client.GetObjectByParentAndName(parent.TargetID, req.OldName)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
@@ -399,8 +404,13 @@ func (o Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 		Log.Warningf("%v", err)
 		return fuse.EIO
 	}
+	newParent, err := destDir.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return fuse.EIO
+	}
 
-	err = o.fs.client.Rename(obj, o.objectID, destDir.objectID, req.NewName)
+	err = o.fs.client.Rename(obj, parent.TargetID, newParent.TargetID, req.NewName)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
