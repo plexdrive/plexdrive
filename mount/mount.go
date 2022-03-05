@@ -274,7 +274,12 @@ func (o Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 // ReadDirAll shows all files in the current directory
 func (o Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	objects, err := o.fs.client.GetObjectsByParent(o.objectID)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return nil, fuse.ENOENT
+	}
+	objects, err := o.fs.client.GetObjectsByParent(parent.TargetID)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fuse.ENOENT
@@ -299,7 +304,12 @@ func (o Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 // Lookup tests if a file is existent in the current directory
 func (o Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	object, err := o.fs.client.GetObjectByParentAndName(o.objectID, name)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return nil, fuse.ENOENT
+	}
+	object, err := o.fs.client.GetObjectByParentAndName(parent.TargetID, name)
 	if nil != err {
 		Log.Tracef("%v", err)
 		return nil, fuse.ENOENT

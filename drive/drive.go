@@ -467,5 +467,6 @@ func (d *Client) mapFileToObject(file *gdrive.File) (*APIObject, error) {
 		CanTrash:     file.Capabilities.CanTrash,
 		MD5Checksum:  targetFile.Md5Checksum,
 		RevisionID:   targetFile.HeadRevisionId,
+		TargetID:     targetFile.Id,
 	}, err
 }
