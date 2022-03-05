@@ -372,7 +372,12 @@ func (o Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 // Mkdir creates a new directory
 func (o Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	object, err := o.fs.client.Mkdir(o.objectID, req.Name)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return nil, fuse.EIO
+	}
+	object, err := o.fs.client.Mkdir(parent.TargetID, req.Name)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return nil, fuse.EIO
