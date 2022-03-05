@@ -350,13 +350,18 @@ func (o Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Open
 
 // Remove deletes an element
 func (o Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	object, err := o.fs.client.GetObjectByParentAndName(o.objectID, req.Name)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return fuse.EIO
+	}
+	object, err := o.fs.client.GetObjectByParentAndName(parent.TargetID, req.Name)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
 	}
 
-	err = o.fs.client.Remove(object, o.objectID)
+	err = o.fs.client.Remove(object, parent.TargetID)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
