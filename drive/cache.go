@@ -39,6 +39,7 @@ type APIObject struct {
 	CanTrash     bool
 	MD5Checksum  string
 	RevisionID   string
+	TargetID     string
 }
 
 // PageToken is the last change id

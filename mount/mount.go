@@ -274,7 +274,12 @@ func (o Object) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 // ReadDirAll shows all files in the current directory
 func (o Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	objects, err := o.fs.client.GetObjectsByParent(o.objectID)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return nil, fuse.ENOENT
+	}
+	objects, err := o.fs.client.GetObjectsByParent(parent.TargetID)
 	if nil != err {
 		Log.Debugf("%v", err)
 		return nil, fuse.ENOENT
@@ -299,7 +304,12 @@ func (o Object) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 // Lookup tests if a file is existent in the current directory
 func (o Object) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	object, err := o.fs.client.GetObjectByParentAndName(o.objectID, name)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return nil, fuse.ENOENT
+	}
+	object, err := o.fs.client.GetObjectByParentAndName(parent.TargetID, name)
 	if nil != err {
 		Log.Tracef("%v", err)
 		return nil, fuse.ENOENT
@@ -340,13 +350,18 @@ func (o Object) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.Open
 
 // Remove deletes an element
 func (o Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	object, err := o.fs.client.GetObjectByParentAndName(o.objectID, req.Name)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return fuse.EIO
+	}
+	object, err := o.fs.client.GetObjectByParentAndName(parent.TargetID, req.Name)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
 	}
 
-	err = o.fs.client.Remove(object, o.objectID)
+	err = o.fs.client.Remove(object, parent.TargetID)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
@@ -357,7 +372,12 @@ func (o Object) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 // Mkdir creates a new directory
 func (o Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	object, err := o.fs.client.Mkdir(o.objectID, req.Name)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return nil, fuse.EIO
+	}
+	object, err := o.fs.client.Mkdir(parent.TargetID, req.Name)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return nil, fuse.EIO
@@ -368,7 +388,12 @@ func (o Object) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 
 // Rename renames an element
 func (o Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	obj, err := o.fs.client.GetObjectByParentAndName(o.objectID, req.OldName)
+	parent, err := o.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return fuse.EIO
+	}
+	obj, err := o.fs.client.GetObjectByParentAndName(parent.TargetID, req.OldName)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
@@ -379,8 +404,13 @@ func (o Object) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 		Log.Warningf("%v", err)
 		return fuse.EIO
 	}
+	newParent, err := destDir.GetObject()
+	if nil != err {
+		Log.Errorf("%v", err)
+		return fuse.EIO
+	}
 
-	err = o.fs.client.Rename(obj, o.objectID, destDir.objectID, req.NewName)
+	err = o.fs.client.Rename(obj, parent.TargetID, newParent.TargetID, req.NewName)
 	if nil != err {
 		Log.Warningf("%v", err)
 		return fuse.EIO
