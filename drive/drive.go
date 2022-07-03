@@ -53,7 +53,7 @@ func NewClient(config *config.Config, cache *Cache, refreshInterval time.Duratio
 				AuthURL:  "https://accounts.google.com/o/oauth2/auth",
 				TokenURL: "https://accounts.google.com/o/oauth2/token",
 			},
-			RedirectURL: "urn:ietf:wg:oauth:2.0:oob",
+			RedirectURL: "bug",
 			Scopes:      []string{gdrive.DriveScope},
 		},
 		rootNodeID:     rootNodeID,
